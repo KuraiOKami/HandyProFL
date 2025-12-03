@@ -40,8 +40,8 @@ Enable Row Level Security and policies to allow:
 
 ## Deployment (Netlify)
 
-- Netlify config: `netlify.toml` uses `@netlify/plugin-nextjs`.
-- Build command: `npm run build`. Publish directory: `.next`.
+- The app lives in the `web` subdirectory. `netlify.toml` at repo root sets `base = "web"` so builds run there.
+- Build command: `npm run build`. Publish: `.next` (handled by `@netlify/plugin-nextjs`).
 - Add the two Supabase env vars in Netlify UI. If using SMS/email, also add any Supabase SMTP/Twilio keys as needed.
 
 ## Next steps
