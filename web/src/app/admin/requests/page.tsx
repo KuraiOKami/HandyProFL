@@ -26,10 +26,12 @@ export default async function AdminRequestsPage() {
     );
   }
 
-  const { data: requests = [] } = await supabase
+  const { data } = await supabase
     .from("service_requests")
     .select("id, user_id, service_type, preferred_date, preferred_time, details, status, estimated_minutes, created_at")
     .order("created_at", { ascending: false });
+
+  const requests = data ?? [];
 
   return (
     <div className="grid gap-6">
