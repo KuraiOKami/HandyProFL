@@ -10,6 +10,18 @@ type ServiceId = 'tv_mount' | 'assembly' | 'electrical' | 'punch';
 
 type Slot = { time: string; available: boolean };
 
+type RequestItem = {
+  service: ServiceId;
+  tvSize: string;
+  wallType: string;
+  hasMount: 'yes' | 'no';
+  assemblyType: string;
+  assemblyOther: string;
+  extraItems: string[];
+  notes: string;
+  photoNames: string[];
+};
+
 const services: Record<
   ServiceId,
   {
@@ -97,6 +109,7 @@ export default function RequestWizard() {
   const [status, setStatus] = useState<string | null>(null);
   const [error, setError] = useState<string | null>(null);
   const [submitting, setSubmitting] = useState(false);
+  const [items, setItems] = useState<RequestItem[]>([]);
 
   const dates = useMemo(() => nextDays(14), []);
   const selectedSlots = useMemo(() => availability[date] ?? defaultSlots, [date]);
@@ -117,6 +130,33 @@ export default function RequestWizard() {
     setSlot('');
     setStatus(null);
     setError(null);
+    setItems([]);
+  };
+
+  const buildCurrentItem = (): RequestItem => ({
+    service,
+    tvSize,
+    wallType,
+    hasMount,
+    assemblyType,
+    assemblyOther,
+    extraItems,
+    notes,
+    photoNames,
+  });
+
+  const resetItemFields = () => {
+    setService('tv_mount');
+    setTvSize('55"');
+    setWallType('Drywall');
+    setHasMount('yes');
+    setAssemblyType('Chair');
+    setAssemblyOther('');
+    setNotes('');
+    setExtraItems([]);
+    setNewItem('');
+    setPhotoNames([]);
+    setStep(1);
   };
 
   const onSubmit = async () => {
@@ -134,18 +174,28 @@ export default function RequestWizard() {
     setError(null);
     setStatus(null);
 
-    const details = [
-      service === 'tv_mount' ? `TV size: ${tvSize}` : null,
-      service === 'tv_mount' ? `Wall: ${wallType}` : null,
-      service === 'tv_mount' ? `Mount provided: ${hasMount === 'yes' ? 'Yes' : 'No'}` : null,
-      service === 'assembly' ? `Assembly type: ${assemblyType}` : null,
-      service === 'assembly' && assemblyType === 'Other' && assemblyOther ? `Assembly other: ${assemblyOther}` : null,
-      extraItems.length ? `Additional items: ${extraItems.join(', ')}` : null,
-      photoNames.length ? `Photos: ${photoNames.join(', ')}` : null,
-      notes ? `Notes: ${notes}` : null,
-    ]
-      .filter(Boolean)
-      .join(' | ');
+    const itemsToSave: RequestItem[] = [...items, buildCurrentItem()];
+
+    const details = itemsToSave
+      .map((item, idx) => {
+        const parts = [
+          `Item ${idx + 1}: ${services[item.service].name}`,
+          item.service === 'tv_mount' ? `TV size: ${item.tvSize}` : null,
+          item.service === 'tv_mount' ? `Wall: ${item.wallType}` : null,
+          item.service === 'tv_mount' ? `Mount provided: ${item.hasMount === 'yes' ? 'Yes' : 'No'}` : null,
+          item.service === 'assembly' ? `Assembly type: ${item.assemblyType}` : null,
+          item.service === 'assembly' && item.assemblyType === 'Other' && item.assemblyOther
+            ? `Other: ${item.assemblyOther}`
+            : null,
+          item.extraItems.length ? `Additional items: ${item.extraItems.join(', ')}` : null,
+          item.photoNames.length ? `Photos: ${item.photoNames.join(', ')}` : null,
+          item.notes ? `Notes: ${item.notes}` : null,
+        ]
+          .filter(Boolean)
+          .join(' | ');
+        return parts;
+      })
+      .join(' || ');
 
     const { error: insertError } = await supabase.from('service_requests').insert({
       user_id: session.user.id,
@@ -399,6 +449,54 @@ export default function RequestWizard() {
                     <p className="text-xs text-slate-500">
                       Upload support is coming soon—files are noted with your request for now.
                     </p>
+                  </div>
+                  <div className="grid gap-2">
+                    <div className="flex items-center justify-between">
+                      <p className="text-sm font-semibold text-slate-900">Items in this request</p>
+                      <span className="text-xs font-semibold text-indigo-700">
+                        {items.length + 1} {items.length + 1 === 1 ? 'item' : 'items'}
+                      </span>
+                    </div>
+                    <div className="grid gap-2">
+                      {[...items, buildCurrentItem()].map((item, idx) => (
+                        <div key={idx} className="rounded-lg border border-slate-200 bg-white p-3 text-sm text-slate-800">
+                          <div className="flex items-center gap-2">
+                            <span className="rounded-full bg-indigo-50 px-2 py-0.5 text-[11px] font-semibold text-indigo-700">
+                              Item {idx + 1}
+                            </span>
+                            <span className="font-semibold">{services[item.service].name}</span>
+                          </div>
+                          <p className="text-xs text-slate-600">
+                            {item.service === 'tv_mount'
+                              ? `TV ${item.tvSize} | ${item.wallType} | Mount: ${item.hasMount === 'yes' ? 'Yes' : 'No'}`
+                              : item.service === 'assembly'
+                                ? `Assembly: ${item.assemblyType}${
+                                    item.assemblyType === 'Other' && item.assemblyOther ? ` (${item.assemblyOther})` : ''
+                                  }`
+                                : 'Standard service'}
+                          </p>
+                          {item.extraItems.length > 0 && (
+                            <p className="text-xs text-slate-500">Extras: {item.extraItems.join(', ')}</p>
+                          )}
+                          {item.photoNames.length > 0 && (
+                            <p className="text-xs text-slate-500">Photos: {item.photoNames.join(', ')}</p>
+                          )}
+                          {item.notes && <p className="text-xs text-slate-500">Notes: {item.notes}</p>}
+                        </div>
+                      ))}
+                    </div>
+                    <div className="flex flex-wrap gap-2">
+                      <button
+                        type="button"
+                        onClick={() => {
+                          setItems((prev) => [...prev, buildCurrentItem()]);
+                          resetItemFields();
+                        }}
+                        className="rounded-lg border border-slate-300 px-3 py-2 text-sm font-semibold text-slate-800 hover:border-indigo-600 hover:text-indigo-700"
+                      >
+                        Add this item & start another
+                      </button>
+                    </div>
                   </div>
                   <p className="text-xs text-slate-500">
                     We’ll follow up by email/SMS to confirm and gather any photos if needed.
