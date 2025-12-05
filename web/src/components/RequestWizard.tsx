@@ -3,12 +3,13 @@
 import { useMemo, useState } from 'react';
 import { getSupabaseClient } from '@/lib/supabaseClient';
 import { useSupabaseSession } from '@/hooks/useSupabaseSession';
+import { useEffect } from 'react';
 
 type Step = 1 | 2 | 3 | 4;
 
 type ServiceId = 'tv_mount' | 'assembly' | 'electrical' | 'punch';
 
-type Slot = { time: string; available: boolean };
+type Slot = { time: string; available: boolean; startIso: string };
 
 type RequestItem = {
   service: ServiceId;
@@ -67,14 +68,12 @@ const services: Record<
 };
 
 const defaultSlots: Slot[] = [
-  { time: '9:00 AM', available: true },
-  { time: '11:00 AM', available: true },
-  { time: '1:00 PM', available: false },
-  { time: '3:00 PM', available: true },
-  { time: '5:00 PM', available: true },
+  { time: '9:00 AM', available: true, startIso: '09:00' },
+  { time: '11:00 AM', available: true, startIso: '11:00' },
+  { time: '1:00 PM', available: false, startIso: '13:00' },
+  { time: '3:00 PM', available: true, startIso: '15:00' },
+  { time: '5:00 PM', available: true, startIso: '17:00' },
 ];
-
-const availability: Record<string, Slot[]> = {};
 
 function nextDays(days = 14) {
   const out: { label: string; value: string }[] = [];
@@ -105,14 +104,56 @@ export default function RequestWizard() {
   const [newItem, setNewItem] = useState('');
   const [photoNames, setPhotoNames] = useState<string[]>([]);
   const [date, setDate] = useState('');
-  const [slot, setSlot] = useState('');
+  const [slot, setSlot] = useState<{ time: string; startIso: string } | null>(null);
   const [status, setStatus] = useState<string | null>(null);
   const [error, setError] = useState<string | null>(null);
   const [submitting, setSubmitting] = useState(false);
   const [items, setItems] = useState<RequestItem[]>([]);
+  const requiredMinutes = Math.max(30, totalMinutes || 30);
+  const requiredSlots = useMemo(() => {
+    if (!slotDurationMinutes) return 1;
+    return Math.max(1, Math.ceil(requiredMinutes / slotDurationMinutes));
+  }, [requiredMinutes, slotDurationMinutes]);
+  const totalMinutes = useMemo(() => {
+    const allItems = [...items, buildCurrentItem()];
+    const perItemMinutes = allItems.map((item) => {
+      if (item.service === 'tv_mount') {
+        if (item.tvSize === '75"+') return 90;
+        if (item.tvSize === '65"') return 75;
+        if (item.tvSize === '55"') return 60;
+        return 50;
+      }
+      if (item.service === 'assembly') {
+        switch (item.assemblyType) {
+          case 'Sofa':
+            return 90;
+          case 'Bed':
+            return 80;
+          case 'Dresser':
+            return 70;
+          case 'Patio set':
+            return 90;
+          case 'Table/Desk':
+            return 60;
+          case 'Chair':
+          case 'Lamp':
+            return 30;
+          case 'Other':
+            return 60;
+          default:
+            return 60;
+        }
+      }
+      if (item.service === 'electrical') return 60;
+      return 45; // punch list
+    });
+    return perItemMinutes.reduce((sum, n) => sum + n, 0);
+  }, [items, service, tvSize, assemblyType, assemblyOther, wallType, hasMount, extraItems, notes, photoNames]);
 
   const dates = useMemo(() => nextDays(14), []);
-  const selectedSlots = useMemo(() => availability[date] ?? defaultSlots, [date]);
+  const [availableSlots, setAvailableSlots] = useState<Record<string, Slot[]>>({});
+  const selectedSlots = useMemo(() => availableSlots[date] ?? defaultSlots, [availableSlots, date]);
+  const [slotDurationMinutes, setSlotDurationMinutes] = useState<number | null>(null);
 
   const reset = () => {
     setStep(1);
@@ -127,11 +168,41 @@ export default function RequestWizard() {
     setNewItem('');
     setPhotoNames([]);
     setDate('');
-    setSlot('');
+    setSlot(null);
     setStatus(null);
     setError(null);
     setItems([]);
   };
+
+  // Fetch available slots for selected date
+  useEffect(() => {
+    const loadSlots = async () => {
+      if (!supabase || !date) return;
+      const { data, error } = await supabase
+        .from('available_slots')
+        .select('slot_start, slot_end, is_booked')
+        .gte('slot_start', `${date}T00:00:00`)
+        .lt('slot_start', `${date}T23:59:59`)
+        .order('slot_start', { ascending: true });
+      if (error) {
+        console.error('Error loading slots', error.message);
+        return;
+      }
+      if (data && data.length) {
+        const durationMs = new Date(data[0].slot_end).getTime() - new Date(data[0].slot_start).getTime();
+        setSlotDurationMinutes(Math.max(1, Math.round(durationMs / 60000)));
+      } else {
+        setSlotDurationMinutes(60);
+      }
+      const normalized = (data ?? []).map((row) => {
+        const start = new Date(row.slot_start);
+        const time = start.toLocaleTimeString([], { hour: 'numeric', minute: '2-digit' });
+        return { time, available: !row.is_booked, startIso: row.slot_start };
+      });
+      setAvailableSlots((prev) => ({ ...prev, [date]: normalized.length ? normalized : defaultSlots }));
+    };
+    loadSlots();
+  }, [date, supabase]);
 
   const buildCurrentItem = (): RequestItem => ({
     service,
@@ -196,20 +267,35 @@ export default function RequestWizard() {
         return parts;
       })
       .join(' || ');
+    const detailsWithDuration = `${details}${details ? ' | ' : ''}Estimated minutes: ${requiredMinutes}`;
+
+    const selectedIdx = selectedSlots.findIndex(
+      (s) => s.startIso === slot?.startIso || s.time === slot?.time,
+    );
+    const chosenSlots =
+      selectedIdx >= 0 ? selectedSlots.slice(selectedIdx, selectedIdx + requiredSlots) : [];
 
     const { error: insertError } = await supabase.from('service_requests').insert({
       user_id: session.user.id,
       service_type: services[service].name,
       preferred_date: date,
-      preferred_time: slot,
-      details: details || null,
+      preferred_time: slot.time,
+      details: detailsWithDuration || null,
       status: 'pending',
+      estimated_minutes: requiredMinutes,
     });
 
     if (insertError) {
       setError(insertError.message);
       setSubmitting(false);
       return;
+    }
+
+    if (chosenSlots.length && chosenSlots.every((s) => s.startIso.includes('T'))) {
+      await supabase
+        .from('available_slots')
+        .update({ is_booked: true })
+        .in('slot_start', chosenSlots.map((s) => s.startIso));
     }
 
     setStatus('Request submitted. We will confirm your slot shortly.');
@@ -358,20 +444,34 @@ export default function RequestWizard() {
                     <p className="text-sm font-semibold text-slate-900">Pick a time</p>
                     {date ? (
                       <div className="grid grid-cols-2 gap-2">
-                        {selectedSlots.map((s) => (
-                          <button
-                            key={s.time}
-                            onClick={() => s.available && setSlot(s.time)}
-                            disabled={!s.available}
-                            className={`rounded-lg border px-3 py-2 text-sm ${
-                              slot === s.time
-                                ? 'border-indigo-600 bg-indigo-50 text-indigo-800'
-                                : 'border-slate-200 hover:border-indigo-200'
-                            } ${!s.available ? 'cursor-not-allowed bg-slate-100 text-slate-400 opacity-70' : ''}`}
-                          >
-                            {s.time}
-                          </button>
-                        ))}
+                        {selectedSlots.map((s, idx) => {
+                          const fits =
+                            slotDurationMinutes != null &&
+                            selectedSlots
+                              .slice(idx, idx + requiredSlots)
+                              .length === requiredSlots &&
+                            selectedSlots.slice(idx, idx + requiredSlots).every((slotObj) => slotObj.available);
+                          const disabled = !fits;
+                          return (
+                            <button
+                              key={s.time + s.startIso}
+                              onClick={() => !disabled && setSlot({ time: s.time, startIso: s.startIso })}
+                              disabled={disabled}
+                              className={`rounded-lg border px-3 py-2 text-sm ${
+                                slot?.time === s.time
+                                  ? 'border-indigo-600 bg-indigo-50 text-indigo-800'
+                                  : 'border-slate-200 hover:border-indigo-200'
+                              } ${
+                                disabled
+                                  ? 'cursor-not-allowed bg-slate-100 text-slate-400 opacity-70 line-through'
+                                  : ''
+                              }`}
+                            >
+                              {s.time}
+                              {fits ? '' : ' (unavailable)'}
+                            </button>
+                          );
+                        })}
                       </div>
                     ) : (
                       <p className="text-sm text-slate-600">Select a date to see available times.</p>
