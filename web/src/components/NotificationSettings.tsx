@@ -1,8 +1,8 @@
-'use client';
+"use client";
 
-import { useEffect, useMemo, useState } from 'react';
-import { useSupabaseSession } from '@/hooks/useSupabaseSession';
-import { getSupabaseClient } from '@/lib/supabaseClient';
+import { useEffect, useMemo, useState } from "react";
+import { useSupabaseSession } from "@/hooks/useSupabaseSession";
+import { getSupabaseClient } from "@/lib/supabaseClient";
 
 type Preferences = {
   email_updates: boolean;
@@ -26,19 +26,22 @@ export default function NotificationSettings() {
   const [error, setError] = useState<string | null>(null);
 
   const userId = session?.user?.id ?? null;
-  const canFetch = useMemo(() => Boolean(userId && supabase), [userId, supabase]);
+  const canFetch = useMemo(
+    () => Boolean(userId && supabase),
+    [userId, supabase]
+  );
 
   useEffect(() => {
     const load = async () => {
-      if (!canFetch) return;
+      if (!canFetch || !supabase) return;
       setLoading(true);
       setError(null);
       const { data, error: fetchError } = await supabase
-        .from('notification_preferences')
-        .select('email_updates, sms_updates, marketing')
-        .eq('user_id', userId)
+        .from("notification_preferences")
+        .select("email_updates, sms_updates, marketing")
+        .eq("user_id", userId)
         .single();
-      if (fetchError && fetchError.code !== 'PGRST116') {
+      if (fetchError && fetchError.code !== "PGRST116") {
         setError(fetchError.message);
       } else if (data) {
         setPrefs({
@@ -54,23 +57,25 @@ export default function NotificationSettings() {
 
   const save = async () => {
     if (!supabase || !userId) {
-      setError('Sign in to update preferences.');
+      setError("Sign in to update preferences.");
       return;
     }
     setSaving(true);
     setError(null);
     setStatus(null);
-    const { error: upsertError } = await supabase.from('notification_preferences').upsert({
-      user_id: userId,
-      email_updates: prefs.email_updates,
-      sms_updates: prefs.sms_updates,
-      marketing: prefs.marketing,
-      updated_at: new Date().toISOString(),
-    });
+    const { error: upsertError } = await supabase
+      .from("notification_preferences")
+      .upsert({
+        user_id: userId,
+        email_updates: prefs.email_updates,
+        sms_updates: prefs.sms_updates,
+        marketing: prefs.marketing,
+        updated_at: new Date().toISOString(),
+      });
     if (upsertError) {
       setError(upsertError.message);
     } else {
-      setStatus('Notification preferences saved.');
+      setStatus("Notification preferences saved.");
     }
     setSaving(false);
   };
@@ -79,45 +84,69 @@ export default function NotificationSettings() {
     <div className="grid gap-4 rounded-xl bg-white p-5 shadow-sm ring-1 ring-slate-200">
       <div className="flex items-center justify-between">
         <div>
-          <p className="text-xs uppercase tracking-[0.2em] text-indigo-700">Notifications</p>
+          <p className="text-xs uppercase tracking-[0.2em] text-indigo-700">
+            Notifications
+          </p>
           <h2 className="text-xl font-semibold text-slate-900">Email & SMS</h2>
-          <p className="text-sm text-slate-600">Choose how we contact you about bookings.</p>
+          <p className="text-sm text-slate-600">
+            Choose how we contact you about bookings.
+          </p>
         </div>
         <button
           onClick={save}
           disabled={saving || !session}
           className="rounded-lg bg-indigo-700 px-3 py-1.5 text-sm font-semibold text-white shadow-sm hover:bg-indigo-800 disabled:cursor-not-allowed disabled:bg-slate-300"
         >
-          {saving ? 'Saving...' : 'Save preferences'}
+          {saving ? "Saving..." : "Save preferences"}
         </button>
       </div>
-      {!session && <p className="text-sm text-amber-700">Sign in to manage notifications.</p>}
-      {loading && <p className="text-sm text-slate-600">Loading preferences...</p>}
+      {!session && (
+        <p className="text-sm text-amber-700">
+          Sign in to manage notifications.
+        </p>
+      )}
+      {loading && (
+        <p className="text-sm text-slate-600">Loading preferences...</p>
+      )}
       <div className="grid gap-3 md:grid-cols-2">
         <Toggle
           label="Email updates"
           description="Booking confirmations, schedule changes, and reminders."
           checked={prefs.email_updates}
-          onChange={(checked) => setPrefs((p) => ({ ...p, email_updates: checked }))}
+          onChange={(checked) =>
+            setPrefs((p) => ({ ...p, email_updates: checked }))
+          }
           disabled={!session}
         />
         <Toggle
           label="SMS updates"
           description="Text reminders and day-of updates."
           checked={prefs.sms_updates}
-          onChange={(checked) => setPrefs((p) => ({ ...p, sms_updates: checked }))}
+          onChange={(checked) =>
+            setPrefs((p) => ({ ...p, sms_updates: checked }))
+          }
           disabled={!session}
         />
         <Toggle
           label="Marketing"
           description="Occasional promos and tips."
           checked={prefs.marketing}
-          onChange={(checked) => setPrefs((p) => ({ ...p, marketing: checked }))}
+          onChange={(checked) =>
+            setPrefs((p) => ({ ...p, marketing: checked }))
+          }
           disabled={!session}
         />
       </div>
-      {status && <p className="rounded-md bg-green-50 px-3 py-2 text-sm text-green-800">{status}</p>}
-      {error && <p className="rounded-md bg-rose-50 px-3 py-2 text-sm text-rose-800">{error}</p>}
+      {status && (
+        <p className="rounded-md bg-green-50 px-3 py-2 text-sm text-green-800">
+          {status}
+        </p>
+      )}
+      {error && (
+        <p className="rounded-md bg-rose-50 px-3 py-2 text-sm text-rose-800">
+          {error}
+        </p>
+      )}
     </div>
   );
 }
@@ -130,7 +159,13 @@ type ToggleProps = {
   disabled?: boolean;
 };
 
-function Toggle({ label, description, checked, onChange, disabled }: ToggleProps) {
+function Toggle({
+  label,
+  description,
+  checked,
+  onChange,
+  disabled,
+}: ToggleProps) {
   return (
     <label className="flex items-start gap-3 rounded-lg border border-slate-200 bg-slate-50 px-3 py-2">
       <input

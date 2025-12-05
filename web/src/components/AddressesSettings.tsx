@@ -1,8 +1,8 @@
-'use client';
+"use client";
 
-import { FormEvent, useEffect, useMemo, useState } from 'react';
-import { useSupabaseSession } from '@/hooks/useSupabaseSession';
-import { getSupabaseClient } from '@/lib/supabaseClient';
+import { FormEvent, useEffect, useMemo, useState } from "react";
+import { useSupabaseSession } from "@/hooks/useSupabaseSession";
+import { getSupabaseClient } from "@/lib/supabaseClient";
 
 type Address = {
   id: string;
@@ -15,11 +15,11 @@ type Address = {
 };
 
 const emptyAddress = {
-  label: '',
-  street: '',
-  city: '',
-  state: '',
-  postal_code: '',
+  label: "",
+  street: "",
+  city: "",
+  state: "",
+  postal_code: "",
 };
 
 export default function AddressesSettings() {
@@ -33,7 +33,10 @@ export default function AddressesSettings() {
   const [error, setError] = useState<string | null>(null);
 
   const userId = session?.user?.id ?? null;
-  const canFetch = useMemo(() => Boolean(userId && supabase), [userId, supabase]);
+  const canFetch = useMemo(
+    () => Boolean(userId && supabase),
+    [userId, supabase]
+  );
 
   useEffect(() => {
     const load = async () => {
@@ -42,10 +45,10 @@ export default function AddressesSettings() {
       setLoading(true);
       setError(null);
       const { data, error: fetchError } = await client
-        .from('addresses')
-        .select('id, label, street, city, state, postal_code, is_primary')
-        .eq('user_id', userId)
-        .order('is_primary', { ascending: false });
+        .from("addresses")
+        .select("id, label, street, city, state, postal_code, is_primary")
+        .eq("user_id", userId)
+        .order("is_primary", { ascending: false });
       if (fetchError) {
         setError(fetchError.message);
       } else {
@@ -59,16 +62,16 @@ export default function AddressesSettings() {
   const submit = async (event: FormEvent<HTMLFormElement>) => {
     event.preventDefault();
     if (!supabase || !userId) {
-      setError('Sign in to add an address.');
+      setError("Sign in to add an address.");
       return;
     }
     const client = supabase;
     setSaving(true);
     setStatus(null);
     setError(null);
-    const { error: insertError } = await client.from('addresses').insert({
+    const { error: insertError } = await client.from("addresses").insert({
       user_id: userId,
-      label: form.label || 'Home',
+      label: form.label || "Home",
       street: form.street,
       city: form.city,
       state: form.state,
@@ -79,13 +82,13 @@ export default function AddressesSettings() {
       setError(insertError.message);
     } else {
       setForm(emptyAddress);
-      setStatus('Address saved.');
+      setStatus("Address saved.");
       // refresh
       const { data } = await client
-        .from('addresses')
-        .select('id, label, street, city, state, postal_code, is_primary')
-        .eq('user_id', userId)
-        .order('is_primary', { ascending: false });
+        .from("addresses")
+        .select("id, label, street, city, state, postal_code, is_primary")
+        .eq("user_id", userId)
+        .order("is_primary", { ascending: false });
       setAddresses(data ?? []);
     }
     setSaving(false);
@@ -96,13 +99,22 @@ export default function AddressesSettings() {
     const client = supabase;
     setSaving(true);
     setError(null);
-    await client.from('addresses').update({ is_primary: false }).eq('user_id', userId);
-    const { error: updateError } = await client.from('addresses').update({ is_primary: true }).eq('id', id);
+    await client
+      .from("addresses")
+      .update({ is_primary: false })
+      .eq("user_id", userId);
+    const { error: updateError } = await client
+      .from("addresses")
+      .update({ is_primary: true })
+      .eq("id", id);
     if (updateError) {
       setError(updateError.message);
     } else {
       setAddresses((prev) =>
-        prev.map((addr) => ({ ...addr, is_primary: addr.id === id ? true : false })),
+        prev.map((addr) => ({
+          ...addr,
+          is_primary: addr.id === id ? true : false,
+        }))
       );
     }
     setSaving(false);
@@ -113,7 +125,11 @@ export default function AddressesSettings() {
     const client = supabase;
     setSaving(true);
     setError(null);
-    const { error: deleteError } = await client.from('addresses').delete().eq('id', id).eq('user_id', userId);
+    const { error: deleteError } = await client
+      .from("addresses")
+      .delete()
+      .eq("id", id)
+      .eq("user_id", userId);
     if (deleteError) {
       setError(deleteError.message);
     } else {
@@ -126,9 +142,15 @@ export default function AddressesSettings() {
     <div className="grid gap-4 rounded-xl bg-white p-5 shadow-sm ring-1 ring-slate-200">
       <div className="flex items-center justify-between">
         <div>
-          <p className="text-xs uppercase tracking-[0.2em] text-indigo-700">Addresses</p>
-          <h2 className="text-xl font-semibold text-slate-900">Service locations</h2>
-          <p className="text-sm text-slate-600">Save multiple addresses and pick a primary.</p>
+          <p className="text-xs uppercase tracking-[0.2em] text-indigo-700">
+            Addresses
+          </p>
+          <h2 className="text-xl font-semibold text-slate-900">
+            Service locations
+          </h2>
+          <p className="text-sm text-slate-600">
+            Save multiple addresses and pick a primary.
+          </p>
         </div>
       </div>
       <form onSubmit={submit} className="grid gap-3 md:grid-cols-2 md:gap-4">
@@ -180,7 +202,9 @@ export default function AddressesSettings() {
           <input
             type="text"
             value={form.postal_code}
-            onChange={(e) => setForm((p) => ({ ...p, postal_code: e.target.value }))}
+            onChange={(e) =>
+              setForm((p) => ({ ...p, postal_code: e.target.value }))
+            }
             className="w-full rounded-lg border border-slate-300 px-3 py-2 text-slate-900 shadow-inner shadow-slate-100 focus:border-indigo-600 focus:outline-none focus:ring-2 focus:ring-indigo-100"
             placeholder="33601"
             required
@@ -192,21 +216,35 @@ export default function AddressesSettings() {
             disabled={saving || !session}
             className="rounded-lg bg-indigo-700 px-4 py-2 text-sm font-semibold text-white shadow-sm hover:bg-indigo-800 disabled:cursor-not-allowed disabled:bg-slate-300"
           >
-            {saving ? 'Saving...' : 'Add address'}
+            {saving ? "Saving..." : "Add address"}
           </button>
-          <p className="text-xs text-slate-500">Addresses save to the <code className="rounded bg-slate-100 px-1">addresses</code> table.</p>
+          <p className="text-xs text-slate-500">
+            Addresses save to the{" "}
+            <code className="rounded bg-slate-100 px-1">addresses</code> table.
+          </p>
         </div>
       </form>
 
-      {loading && <p className="text-sm text-slate-600">Loading addresses...</p>}
-      {error && <p className="rounded-md bg-rose-50 px-3 py-2 text-sm text-rose-800">{error}</p>}
+      {loading && (
+        <p className="text-sm text-slate-600">Loading addresses...</p>
+      )}
+      {error && (
+        <p className="rounded-md bg-rose-50 px-3 py-2 text-sm text-rose-800">
+          {error}
+        </p>
+      )}
 
       <div className="grid gap-3">
         {addresses.map((addr) => (
-          <div key={addr.id} className="flex flex-wrap items-center justify-between gap-3 rounded-lg border border-slate-200 p-4">
+          <div
+            key={addr.id}
+            className="flex flex-wrap items-center justify-between gap-3 rounded-lg border border-slate-200 p-4"
+          >
             <div className="grid gap-1">
               <div className="flex items-center gap-2">
-                <span className="text-sm font-semibold text-slate-900">{addr.label || 'Address'}</span>
+                <span className="text-sm font-semibold text-slate-900">
+                  {addr.label || "Address"}
+                </span>
                 {addr.is_primary && (
                   <span className="rounded-full bg-indigo-50 px-2 py-0.5 text-[11px] font-semibold uppercase tracking-wide text-indigo-700">
                     Primary
@@ -214,13 +252,15 @@ export default function AddressesSettings() {
                 )}
               </div>
               <p className="text-sm text-slate-700">
-                {[addr.street, addr.city, addr.state, addr.postal_code].filter(Boolean).join(', ')}
+                {[addr.street, addr.city, addr.state, addr.postal_code]
+                  .filter(Boolean)
+                  .join(", ")}
               </p>
             </div>
             <div className="flex gap-2">
               <button
                 onClick={() => setPrimary(addr.id)}
-                disabled={saving || addr.is_primary}
+                disabled={saving || !!addr.is_primary}
                 className="rounded-lg border border-slate-300 px-3 py-1.5 text-sm font-semibold text-slate-800 hover:border-indigo-600 hover:text-indigo-700 disabled:cursor-not-allowed disabled:opacity-60"
               >
                 Set primary
@@ -235,9 +275,15 @@ export default function AddressesSettings() {
             </div>
           </div>
         ))}
-        {!addresses.length && !loading && !error && <p className="text-sm text-slate-600">No saved addresses yet.</p>}
+        {!addresses.length && !loading && !error && (
+          <p className="text-sm text-slate-600">No saved addresses yet.</p>
+        )}
       </div>
-      {status && <p className="rounded-md bg-green-50 px-3 py-2 text-sm text-green-800">{status}</p>}
+      {status && (
+        <p className="rounded-md bg-green-50 px-3 py-2 text-sm text-green-800">
+          {status}
+        </p>
+      )}
     </div>
   );
 }
