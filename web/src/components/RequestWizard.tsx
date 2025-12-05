@@ -20,6 +20,7 @@ const services: Record<
       sizes?: string[];
       wallTypes?: string[];
       hasMount?: boolean;
+      assemblyTypes?: string[];
     };
   }
 > = {
@@ -37,6 +38,9 @@ const services: Record<
     name: 'Furniture Assembly',
     description: 'Beds, dressers, desks, patio sets, and more.',
     icon: '🛠️',
+    options: {
+      assemblyTypes: ['Chair', 'Sofa', 'Table/Desk', 'Bed', 'Dresser', 'Patio set', 'Lamp', 'Other'],
+    },
   },
   electrical: {
     name: 'Light/Fan Swap',
@@ -82,6 +86,7 @@ export default function RequestWizard() {
   const [tvSize, setTvSize] = useState('55"');
   const [wallType, setWallType] = useState('Drywall');
   const [hasMount, setHasMount] = useState<'yes' | 'no'>('yes');
+  const [assemblyType, setAssemblyType] = useState('Chair');
   const [notes, setNotes] = useState('');
   const [date, setDate] = useState('');
   const [slot, setSlot] = useState('');
@@ -98,6 +103,7 @@ export default function RequestWizard() {
     setTvSize('55"');
     setWallType('Drywall');
     setHasMount('yes');
+    setAssemblyType('Chair');
     setNotes('');
     setDate('');
     setSlot('');
@@ -124,6 +130,7 @@ export default function RequestWizard() {
       service === 'tv_mount' ? `TV size: ${tvSize}` : null,
       service === 'tv_mount' ? `Wall: ${wallType}` : null,
       service === 'tv_mount' ? `Mount provided: ${hasMount === 'yes' ? 'Yes' : 'No'}` : null,
+      service === 'assembly' ? `Assembly type: ${assemblyType}` : null,
       notes ? `Notes: ${notes}` : null,
     ]
       .filter(Boolean)
@@ -232,6 +239,21 @@ export default function RequestWizard() {
                           <Chip selected={hasMount === 'no'} onClick={() => setHasMount('no')}>
                             No
                           </Chip>
+                        </div>
+                      </div>
+                    </div>
+                  )}
+
+                  {service === 'assembly' && (
+                    <div className="md:col-span-2 grid gap-3 rounded-xl border border-slate-200 bg-slate-50 p-4">
+                      <div className="flex flex-wrap gap-3">
+                        <FieldLabel>What are we assembling?</FieldLabel>
+                        <div className="flex flex-wrap gap-2">
+                          {services.assembly.options?.assemblyTypes?.map((type) => (
+                            <Chip key={type} selected={assemblyType === type} onClick={() => setAssemblyType(type)}>
+                              {type}
+                            </Chip>
+                          ))}
                         </div>
                       </div>
                     </div>
