@@ -4,22 +4,34 @@ import { FormEvent, useEffect, useState } from 'react';
 import { getSupabaseClient } from '@/lib/supabaseClient';
 import { useSupabaseSession } from '@/hooks/useSupabaseSession';
 
-type Profile = {
-  first_name?: string | null;
-  middle_initial?: string | null;
-  last_name?: string | null;
-  phone?: string | null;
-  email?: string | null;
-  street?: string | null;
-  city?: string | null;
-  state?: string | null;
-  postal_code?: string | null;
+type ProfileRow = {
+  first_name: string;
+  middle_initial: string;
+  last_name: string;
+  phone: string;
+  email: string;
+  street: string;
+  city: string;
+  state: string;
+  postal_code: string;
+};
+
+const emptyProfile: ProfileRow = {
+  first_name: '',
+  middle_initial: '',
+  last_name: '',
+  phone: '',
+  email: '',
+  street: '',
+  city: '',
+  state: '',
+  postal_code: '',
 };
 
 export default function ProfileForm() {
   const { session, loading } = useSupabaseSession();
   const supabase = getSupabaseClient();
-  const [profile, setProfile] = useState<Profile>({});
+  const [profile, setProfile] = useState<ProfileRow>(emptyProfile);
   const [status, setStatus] = useState<string | null>(null);
   const [error, setError] = useState<string | null>(null);
   const [saving, setSaving] = useState(false);
@@ -37,13 +49,13 @@ export default function ProfileForm() {
       } else {
         setProfile({
           first_name: data?.first_name ?? '',
-          middle_initial: data?.middle_initial ?? '',
+          middle_initial: (data?.middle_initial ?? '').toUpperCase(),
           last_name: data?.last_name ?? '',
           phone: data?.phone ?? '',
           email: data?.email ?? session.user.email ?? '',
           street: data?.street ?? '',
           city: data?.city ?? '',
-          state: data?.state ?? '',
+          state: (data?.state ?? '').toUpperCase(),
           postal_code: data?.postal_code ?? '',
         });
       }
@@ -67,7 +79,7 @@ export default function ProfileForm() {
       middle_initial: profile.middle_initial,
       last_name: profile.last_name,
       phone: profile.phone,
-      email: profile.email ?? session.user.email,
+      email: profile.email || session.user.email || '',
       street: profile.street,
       city: profile.city,
       state: profile.state,
@@ -101,7 +113,7 @@ export default function ProfileForm() {
           First name
           <input
             type="text"
-            value={profile.first_name ?? ''}
+            value={profile.first_name}
             onChange={(e) => setProfile((p) => ({ ...p, first_name: e.target.value }))}
             className="w-full rounded-lg border border-slate-300 px-3 py-2 text-slate-900 shadow-inner shadow-slate-100 focus:border-indigo-600 focus:outline-none focus:ring-2 focus:ring-indigo-100"
             placeholder="Jane"
@@ -112,7 +124,7 @@ export default function ProfileForm() {
           <input
             type="text"
             maxLength={1}
-            value={profile.middle_initial ?? ''}
+            value={profile.middle_initial}
             onChange={(e) => setProfile((p) => ({ ...p, middle_initial: e.target.value.toUpperCase() }))}
             className="w-full rounded-lg border border-slate-300 px-3 py-2 text-slate-900 shadow-inner shadow-slate-100 focus:border-indigo-600 focus:outline-none focus:ring-2 focus:ring-indigo-100"
             placeholder="A"
@@ -122,7 +134,7 @@ export default function ProfileForm() {
           Last name
           <input
             type="text"
-            value={profile.last_name ?? ''}
+            value={profile.last_name}
             onChange={(e) => setProfile((p) => ({ ...p, last_name: e.target.value }))}
             className="w-full rounded-lg border border-slate-300 px-3 py-2 text-slate-900 shadow-inner shadow-slate-100 focus:border-indigo-600 focus:outline-none focus:ring-2 focus:ring-indigo-100"
             placeholder="Client"
@@ -132,7 +144,7 @@ export default function ProfileForm() {
           Phone
           <input
             type="tel"
-            value={profile.phone ?? ''}
+            value={profile.phone}
             onChange={(e) => setProfile((p) => ({ ...p, phone: e.target.value }))}
             className="w-full rounded-lg border border-slate-300 px-3 py-2 text-slate-900 shadow-inner shadow-slate-100 focus:border-indigo-600 focus:outline-none focus:ring-2 focus:ring-indigo-100"
             placeholder="+1 555 555 5555"
@@ -142,7 +154,7 @@ export default function ProfileForm() {
           Street
           <input
             type="text"
-            value={profile.street ?? ''}
+            value={profile.street}
             onChange={(e) => setProfile((p) => ({ ...p, street: e.target.value }))}
             className="w-full rounded-lg border border-slate-300 px-3 py-2 text-slate-900 shadow-inner shadow-slate-100 focus:border-indigo-600 focus:outline-none focus:ring-2 focus:ring-indigo-100"
             placeholder="123 Main St"
@@ -152,7 +164,7 @@ export default function ProfileForm() {
           City
           <input
             type="text"
-            value={profile.city ?? ''}
+            value={profile.city}
             onChange={(e) => setProfile((p) => ({ ...p, city: e.target.value }))}
             className="w-full rounded-lg border border-slate-300 px-3 py-2 text-slate-900 shadow-inner shadow-slate-100 focus:border-indigo-600 focus:outline-none focus:ring-2 focus:ring-indigo-100"
             placeholder="Tampa"
@@ -162,8 +174,8 @@ export default function ProfileForm() {
           State
           <input
             type="text"
-            value={profile.state ?? ''}
-            onChange={(e) => setProfile((p) => ({ ...p, state: e.target.value }))}
+            value={profile.state}
+            onChange={(e) => setProfile((p) => ({ ...p, state: e.target.value.toUpperCase().slice(0, 2) }))}
             className="w-full rounded-lg border border-slate-300 px-3 py-2 text-slate-900 shadow-inner shadow-slate-100 focus:border-indigo-600 focus:outline-none focus:ring-2 focus:ring-indigo-100"
             placeholder="FL"
           />
@@ -172,7 +184,7 @@ export default function ProfileForm() {
           Postal code
           <input
             type="text"
-            value={profile.postal_code ?? ''}
+            value={profile.postal_code}
             onChange={(e) => setProfile((p) => ({ ...p, postal_code: e.target.value }))}
             className="w-full rounded-lg border border-slate-300 px-3 py-2 text-slate-900 shadow-inner shadow-slate-100 focus:border-indigo-600 focus:outline-none focus:ring-2 focus:ring-indigo-100"
             placeholder="33601"
@@ -182,7 +194,7 @@ export default function ProfileForm() {
           Email for confirmations
           <input
             type="email"
-            value={profile.email ?? ''}
+            value={profile.email}
             onChange={(e) => setProfile((p) => ({ ...p, email: e.target.value }))}
             className="w-full rounded-lg border border-slate-300 px-3 py-2 text-slate-900 shadow-inner shadow-slate-100 focus:border-indigo-600 focus:outline-none focus:ring-2 focus:ring-indigo-100"
             placeholder="you@example.com"

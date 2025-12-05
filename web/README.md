@@ -25,7 +25,7 @@ Visit http://localhost:3000. Auth/login is at `/auth`, profile `/profile`, reque
 
 ## Supabase schema (minimum)
 
-- `profiles`: `id uuid primary key references auth.users`, `full_name text`, `phone text`, `address text`, `email text`, `updated_at timestamptz`
+- `profiles`: `id uuid primary key references auth.users`, `first_name text`, `middle_initial text`, `last_name text`, `phone text`, `email text`, `street text`, `city text`, `state text`, `postal_code text`, `updated_at timestamptz`
 - `service_requests`: `id uuid default uuid_generate_v4()`, `user_id uuid references auth.users`, `service_type text`, `preferred_date date`, `preferred_time text`, `details text`, `status text default 'pending'`, `created_at timestamptz default now()`
 - Optional `available_slots`: `id`, `slot_start timestamptz`, `slot_end timestamptz`, `is_booked boolean default false` for Calendly-style picker.
 
