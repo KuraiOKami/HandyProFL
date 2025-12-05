@@ -5,10 +5,15 @@ import { getSupabaseClient } from '@/lib/supabaseClient';
 import { useSupabaseSession } from '@/hooks/useSupabaseSession';
 
 type Profile = {
-  full_name?: string | null;
+  first_name?: string | null;
+  middle_initial?: string | null;
+  last_name?: string | null;
   phone?: string | null;
-  address?: string | null;
   email?: string | null;
+  street?: string | null;
+  city?: string | null;
+  state?: string | null;
+  postal_code?: string | null;
 };
 
 export default function ProfileForm() {
@@ -24,17 +29,22 @@ export default function ProfileForm() {
       if (!supabase || !session?.user) return;
       const { data, error: fetchError } = await supabase
         .from('profiles')
-        .select('full_name, phone, address, email')
+        .select('first_name, middle_initial, last_name, phone, email, street, city, state, postal_code')
         .eq('id', session.user.id)
         .single();
       if (fetchError && fetchError.code !== 'PGRST116') {
         setError(fetchError.message);
       } else {
         setProfile({
-          full_name: data?.full_name ?? '',
+          first_name: data?.first_name ?? '',
+          middle_initial: data?.middle_initial ?? '',
+          last_name: data?.last_name ?? '',
           phone: data?.phone ?? '',
-          address: data?.address ?? '',
           email: data?.email ?? session.user.email ?? '',
+          street: data?.street ?? '',
+          city: data?.city ?? '',
+          state: data?.state ?? '',
+          postal_code: data?.postal_code ?? '',
         });
       }
     };
@@ -53,10 +63,15 @@ export default function ProfileForm() {
 
     const { error: upsertError } = await supabase.from('profiles').upsert({
       id: session.user.id,
-      full_name: profile.full_name,
+      first_name: profile.first_name,
+      middle_initial: profile.middle_initial,
+      last_name: profile.last_name,
       phone: profile.phone,
-      address: profile.address,
       email: profile.email ?? session.user.email,
+      street: profile.street,
+      city: profile.city,
+      state: profile.state,
+      postal_code: profile.postal_code,
       updated_at: new Date().toISOString(),
     });
     if (upsertError) {
@@ -83,13 +98,34 @@ export default function ProfileForm() {
       </div>
       <div className="grid gap-4 md:grid-cols-2 md:gap-6">
         <label className="grid gap-1 text-sm text-slate-800">
-          Full name
+          First name
           <input
             type="text"
-            value={profile.full_name ?? ''}
-            onChange={(e) => setProfile((p) => ({ ...p, full_name: e.target.value }))}
+            value={profile.first_name ?? ''}
+            onChange={(e) => setProfile((p) => ({ ...p, first_name: e.target.value }))}
             className="w-full rounded-lg border border-slate-300 px-3 py-2 text-slate-900 shadow-inner shadow-slate-100 focus:border-indigo-600 focus:outline-none focus:ring-2 focus:ring-indigo-100"
-            placeholder="Client name"
+            placeholder="Jane"
+          />
+        </label>
+        <label className="grid gap-1 text-sm text-slate-800">
+          Middle initial
+          <input
+            type="text"
+            maxLength={1}
+            value={profile.middle_initial ?? ''}
+            onChange={(e) => setProfile((p) => ({ ...p, middle_initial: e.target.value.toUpperCase() }))}
+            className="w-full rounded-lg border border-slate-300 px-3 py-2 text-slate-900 shadow-inner shadow-slate-100 focus:border-indigo-600 focus:outline-none focus:ring-2 focus:ring-indigo-100"
+            placeholder="A"
+          />
+        </label>
+        <label className="grid gap-1 text-sm text-slate-800">
+          Last name
+          <input
+            type="text"
+            value={profile.last_name ?? ''}
+            onChange={(e) => setProfile((p) => ({ ...p, last_name: e.target.value }))}
+            className="w-full rounded-lg border border-slate-300 px-3 py-2 text-slate-900 shadow-inner shadow-slate-100 focus:border-indigo-600 focus:outline-none focus:ring-2 focus:ring-indigo-100"
+            placeholder="Client"
           />
         </label>
         <label className="grid gap-1 text-sm text-slate-800">
@@ -103,13 +139,43 @@ export default function ProfileForm() {
           />
         </label>
         <label className="grid gap-1 text-sm text-slate-800 md:col-span-2">
-          Address
+          Street
           <input
             type="text"
-            value={profile.address ?? ''}
-            onChange={(e) => setProfile((p) => ({ ...p, address: e.target.value }))}
+            value={profile.street ?? ''}
+            onChange={(e) => setProfile((p) => ({ ...p, street: e.target.value }))}
             className="w-full rounded-lg border border-slate-300 px-3 py-2 text-slate-900 shadow-inner shadow-slate-100 focus:border-indigo-600 focus:outline-none focus:ring-2 focus:ring-indigo-100"
-            placeholder="Street, city, ZIP"
+            placeholder="123 Main St"
+          />
+        </label>
+        <label className="grid gap-1 text-sm text-slate-800">
+          City
+          <input
+            type="text"
+            value={profile.city ?? ''}
+            onChange={(e) => setProfile((p) => ({ ...p, city: e.target.value }))}
+            className="w-full rounded-lg border border-slate-300 px-3 py-2 text-slate-900 shadow-inner shadow-slate-100 focus:border-indigo-600 focus:outline-none focus:ring-2 focus:ring-indigo-100"
+            placeholder="Tampa"
+          />
+        </label>
+        <label className="grid gap-1 text-sm text-slate-800">
+          State
+          <input
+            type="text"
+            value={profile.state ?? ''}
+            onChange={(e) => setProfile((p) => ({ ...p, state: e.target.value }))}
+            className="w-full rounded-lg border border-slate-300 px-3 py-2 text-slate-900 shadow-inner shadow-slate-100 focus:border-indigo-600 focus:outline-none focus:ring-2 focus:ring-indigo-100"
+            placeholder="FL"
+          />
+        </label>
+        <label className="grid gap-1 text-sm text-slate-800">
+          Postal code
+          <input
+            type="text"
+            value={profile.postal_code ?? ''}
+            onChange={(e) => setProfile((p) => ({ ...p, postal_code: e.target.value }))}
+            className="w-full rounded-lg border border-slate-300 px-3 py-2 text-slate-900 shadow-inner shadow-slate-100 focus:border-indigo-600 focus:outline-none focus:ring-2 focus:ring-indigo-100"
+            placeholder="33601"
           />
         </label>
         <label className="grid gap-1 text-sm text-slate-800 md:col-span-2">
