@@ -41,7 +41,7 @@ export default async function AdminClientsPage() {
     );
   }
 
-  const { data: clients = [], error } = await supabase
+  const { data, error } = await supabase
     .from("profiles")
     .select(
       `
@@ -61,6 +61,8 @@ export default async function AdminClientsPage() {
       `
     )
     .order("updated_at", { ascending: false });
+
+  const clients = data ?? [];
 
   return (
     <div className="grid gap-4">
