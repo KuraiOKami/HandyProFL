@@ -33,8 +33,8 @@ export default function TopNav() {
           <Link href="/requests" className="hover:text-indigo-700 transition">
             Requests
           </Link>
-          <Link href="/profile" className="hover:text-indigo-700 transition">
-            Profile
+          <Link href="/settings" className="hover:text-indigo-700 transition">
+            Settings
           </Link>
           {session ? (
             <button
