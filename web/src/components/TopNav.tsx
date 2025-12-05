@@ -36,6 +36,9 @@ export default function TopNav() {
           <Link href="/settings" className="hover:text-indigo-700 transition">
             Settings
           </Link>
+          <Link href="/admin/requests" className="hover:text-indigo-700 transition">
+            Admin
+          </Link>
           {session ? (
             <button
               onClick={handleSignOut}
