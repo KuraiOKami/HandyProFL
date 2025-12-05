@@ -10,21 +10,18 @@ if (!supabaseUrl || !supabaseKey) {
 
 export const createClient = () => {
   const cookieStore = cookies();
-  if (!supabaseUrl || !supabaseKey) return null;
+  if (!supabaseUrl || !supabaseKey) {
+    return null;
+  }
 
   return createServerClient(supabaseUrl, supabaseKey, {
     cookies: {
       get(name: string) {
-        return cookieStore.get(name);
-      },
-      getAll() {
-        return cookieStore.getAll();
+        const cookie = cookieStore.get(name);
+        return cookie ? { name: cookie.name, value: cookie.value } : undefined;
       },
       set(name: string, value: string, options: CookieOptions) {
         cookieStore.set({ name, value, ...options });
-      },
-      setAll(cookiesToSet) {
-        cookiesToSet.forEach(({ name, value, options }) => cookieStore.set({ name, value, ...options }));
       },
       remove(name: string, options: CookieOptions) {
         cookieStore.set({ name, value: '', ...options });
