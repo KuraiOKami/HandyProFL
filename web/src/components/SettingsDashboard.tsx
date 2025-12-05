@@ -4,6 +4,9 @@ import { useEffect, useMemo, useState } from "react";
 import { useSupabaseSession } from "@/hooks/useSupabaseSession";
 import { getSupabaseClient } from "@/lib/supabaseClient";
 import ProfileForm from "./ProfileForm";
+import AddressesSettings from "./AddressesSettings";
+import NotificationSettings from "./NotificationSettings";
+import SecuritySettings from "./SecuritySettings";
 
 type Request = {
   id: string;
@@ -96,6 +99,10 @@ export default function SettingsDashboard() {
         </div>
         <ProfileForm />
       </section>
+
+      <AddressesSettings />
+      <NotificationSettings />
+      <SecuritySettings />
 
       <section className="grid gap-4 rounded-xl bg-white p-5 shadow-sm ring-1 ring-slate-200">
         <div className="flex items-center justify-between">
