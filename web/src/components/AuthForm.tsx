@@ -1,6 +1,7 @@
 'use client';
 
-import { FormEvent, useState } from 'react';
+import { FormEvent, useEffect, useState } from 'react';
+import { useRouter } from 'next/navigation';
 import { getSupabaseClient } from '@/lib/supabaseClient';
 
 type Mode = 'login' | 'signup';
@@ -8,6 +9,7 @@ type AuthMethod = 'email' | 'phone';
 
 export default function AuthForm() {
   const supabase = getSupabaseClient();
+  const router = useRouter();
   const [mode, setMode] = useState<Mode>('login');
   const [method, setMethod] = useState<AuthMethod>('email');
   const [email, setEmail] = useState('');
@@ -18,6 +20,25 @@ export default function AuthForm() {
   const [message, setMessage] = useState<string | null>(null);
   const [error, setError] = useState<string | null>(null);
   const [codeSent, setCodeSent] = useState(false);
+
+  // Redirect to profile once a session exists
+  useEffect(() => {
+    if (!supabase) return;
+
+    supabase.auth.getSession().then(({ data }) => {
+      if (data.session) router.push('/profile');
+    });
+
+    const {
+      data: { subscription },
+    } = supabase.auth.onAuthStateChange((event, session) => {
+      if (event === 'SIGNED_IN' && session) {
+        router.push('/profile');
+      }
+    });
+
+    return () => subscription.unsubscribe();
+  }, [supabase, router]);
 
   const handleEmailSubmit = async (event: FormEvent<HTMLFormElement>) => {
     event.preventDefault();
