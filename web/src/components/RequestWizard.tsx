@@ -109,6 +109,41 @@ export default function RequestWizard() {
   const [error, setError] = useState<string | null>(null);
   const [submitting, setSubmitting] = useState(false);
   const [items, setItems] = useState<RequestItem[]>([]);
+  const totalMinutes = useMemo(() => {
+    const allItems = [...items, buildCurrentItem()];
+    const perItemMinutes = allItems.map((item) => {
+      if (item.service === 'tv_mount') {
+        if (item.tvSize === '75"+') return 90;
+        if (item.tvSize === '65"') return 75;
+        if (item.tvSize === '55"') return 60;
+        return 50;
+      }
+      if (item.service === 'assembly') {
+        switch (item.assemblyType) {
+          case 'Sofa':
+            return 90;
+          case 'Bed':
+            return 80;
+          case 'Dresser':
+            return 70;
+          case 'Patio set':
+            return 90;
+          case 'Table/Desk':
+            return 60;
+          case 'Chair':
+          case 'Lamp':
+            return 30;
+          case 'Other':
+            return 60;
+          default:
+            return 60;
+        }
+      }
+      if (item.service === 'electrical') return 60;
+      return 45; // punch list
+    });
+    return perItemMinutes.reduce((sum, n) => sum + n, 0);
+  }, [items, service, tvSize, assemblyType, assemblyOther, wallType, hasMount, extraItems, notes, photoNames]);
   const requiredMinutes = Math.max(30, totalMinutes || 30);
   const requiredSlots = useMemo(() => {
     if (!slotDurationMinutes) return 1;
