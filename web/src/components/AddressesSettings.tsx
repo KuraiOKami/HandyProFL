@@ -37,10 +37,11 @@ export default function AddressesSettings() {
 
   useEffect(() => {
     const load = async () => {
-      if (!canFetch) return;
+      if (!canFetch || !supabase) return;
+      const client = supabase;
       setLoading(true);
       setError(null);
-      const { data, error: fetchError } = await supabase
+      const { data, error: fetchError } = await client
         .from('addresses')
         .select('id, label, street, city, state, postal_code, is_primary')
         .eq('user_id', userId)
@@ -61,10 +62,11 @@ export default function AddressesSettings() {
       setError('Sign in to add an address.');
       return;
     }
+    const client = supabase;
     setSaving(true);
     setStatus(null);
     setError(null);
-    const { error: insertError } = await supabase.from('addresses').insert({
+    const { error: insertError } = await client.from('addresses').insert({
       user_id: userId,
       label: form.label || 'Home',
       street: form.street,
@@ -79,7 +81,7 @@ export default function AddressesSettings() {
       setForm(emptyAddress);
       setStatus('Address saved.');
       // refresh
-      const { data } = await supabase
+      const { data } = await client
         .from('addresses')
         .select('id, label, street, city, state, postal_code, is_primary')
         .eq('user_id', userId)
@@ -91,10 +93,11 @@ export default function AddressesSettings() {
 
   const setPrimary = async (id: string) => {
     if (!supabase || !userId) return;
+    const client = supabase;
     setSaving(true);
     setError(null);
-    await supabase.from('addresses').update({ is_primary: false }).eq('user_id', userId);
-    const { error: updateError } = await supabase.from('addresses').update({ is_primary: true }).eq('id', id);
+    await client.from('addresses').update({ is_primary: false }).eq('user_id', userId);
+    const { error: updateError } = await client.from('addresses').update({ is_primary: true }).eq('id', id);
     if (updateError) {
       setError(updateError.message);
     } else {
@@ -107,9 +110,10 @@ export default function AddressesSettings() {
 
   const remove = async (id: string) => {
     if (!supabase || !userId) return;
+    const client = supabase;
     setSaving(true);
     setError(null);
-    const { error: deleteError } = await supabase.from('addresses').delete().eq('id', id).eq('user_id', userId);
+    const { error: deleteError } = await client.from('addresses').delete().eq('id', id).eq('user_id', userId);
     if (deleteError) {
       setError(deleteError.message);
     } else {
