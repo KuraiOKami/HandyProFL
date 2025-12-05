@@ -8,8 +8,8 @@ if (!supabaseUrl || !supabaseKey) {
   console.warn('Missing Supabase env vars. Set NEXT_PUBLIC_SUPABASE_URL and NEXT_PUBLIC_SUPABASE_ANON_KEY.');
 }
 
-export const createClient = () => {
-  const cookieStore = cookies();
+export const createClient = async () => {
+  const cookieStore = await cookies();
   if (!supabaseUrl || !supabaseKey) {
     return null;
   }
