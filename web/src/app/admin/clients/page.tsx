@@ -1,22 +1,6 @@
 import { createClient } from "@/utils/supabase/server";
 import { redirect } from "next/navigation";
 
-type ClientRow = {
-  id: string;
-  first_name: string | null;
-  middle_initial: string | null;
-  last_name: string | null;
-  email: string | null;
-  phone: string | null;
-  street: string | null;
-  city: string | null;
-  state: string | null;
-  postal_code: string | null;
-  role?: string | null;
-  service_requests: { count: number }[];
-  addresses?: { count: number }[];
-};
-
 export default async function AdminClientsPage() {
   const supabase = await createClient();
   if (!supabase) {
@@ -55,14 +39,27 @@ export default async function AdminClientsPage() {
         city,
         state,
         postal_code,
-        role,
-        service_requests:service_requests(count),
-        addresses:addresses(count)
+        role
       `
     )
     .order("updated_at", { ascending: false });
 
   const clients = data ?? [];
+
+  const { data: reqCounts = [] } = await supabase
+    .from("service_requests")
+    .select("user_id, count:id")
+    .group("user_id");
+
+  const { data: addrCounts = [] } = await supabase
+    .from("addresses")
+    .select("user_id, count:id")
+    .group("user_id");
+
+  const requestMap = new Map<string, number>();
+  reqCounts.forEach((r: any) => requestMap.set(r.user_id, r.count));
+  const addressMap = new Map<string, number>();
+  addrCounts.forEach((a: any) => addressMap.set(a.user_id, a.count));
 
   return (
     <div className="grid gap-4">
@@ -73,7 +70,7 @@ export default async function AdminClientsPage() {
       </div>
       {error && <p className="rounded-md bg-rose-50 px-3 py-2 text-sm text-rose-800">{error.message}</p>}
       <div className="grid gap-3">
-        {clients.map((c: ClientRow) => (
+        {clients.map((c: any) => (
           <div key={c.id} className="rounded-xl border border-slate-200 bg-white p-4 shadow-sm">
             <div className="flex flex-wrap items-center justify-between gap-2">
               <div>
@@ -93,10 +90,10 @@ export default async function AdminClientsPage() {
             </p>
             <div className="mt-3 flex flex-wrap gap-3 text-xs text-slate-600">
               <span className="rounded-full bg-slate-100 px-3 py-1 font-semibold">
-                Requests: {c.service_requests?.[0]?.count ?? 0}
+                Requests: {requestMap.get(c.id) ?? 0}
               </span>
               <span className="rounded-full bg-slate-100 px-3 py-1 font-semibold">
-                Addresses: {c.addresses?.[0]?.count ?? 0}
+                Addresses: {addressMap.get(c.id) ?? 0}
               </span>
             </div>
           </div>
