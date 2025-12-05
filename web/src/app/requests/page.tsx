@@ -1,5 +1,5 @@
-import ServiceRequestForm from "@/components/ServiceRequestForm";
 import Link from "next/link";
+import RequestWizard from "@/components/RequestWizard";
 
 export default function RequestsPage() {
   return (
@@ -16,7 +16,7 @@ export default function RequestsPage() {
           Check availability
         </Link>
       </div>
-      <ServiceRequestForm />
+      <RequestWizard />
       <div className="rounded-xl border border-dashed border-slate-200 bg-white p-4 text-sm text-slate-600">
         Requests are stored in Supabase table <code className="rounded bg-slate-100 px-1 py-0.5">service_requests</code>.
         Enable row-level security to limit records to the signed-in user, and add a status column (pending/confirmed/done).
