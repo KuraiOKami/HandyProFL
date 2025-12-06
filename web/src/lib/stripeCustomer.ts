@@ -26,7 +26,20 @@ export async function getOrCreateCustomer(userId: string, email?: string) {
   }
 
   if (existing?.customer_id) {
-    return existing.customer_id;
+    try {
+      // Validate the customer still exists in Stripe (handles test/live swaps).
+      await stripe.customers.retrieve(existing.customer_id);
+      return existing.customer_id;
+    } catch (e) {
+      const code =
+        e && typeof e === 'object' && 'code' in e
+          ? // eslint-disable-next-line @typescript-eslint/no-explicit-any
+            ((e as any).code as string | undefined)
+          : undefined;
+      const isMissing = code === 'resource_missing';
+      if (!isMissing) throw e;
+      // fall through to create a fresh customer
+    }
   }
 
   const customer = await stripe.customers.create({
@@ -34,12 +47,12 @@ export async function getOrCreateCustomer(userId: string, email?: string) {
     metadata: { user_id: userId },
   });
 
-  const { error: insertError } = await client
+  const { error: upsertError } = await client
     .from('stripe_customers')
-    .insert({ user_id: userId, customer_id: customer.id });
+    .upsert({ user_id: userId, customer_id: customer.id }, { onConflict: 'user_id' });
 
-  if (insertError) {
-    throw new Error(insertError.message);
+  if (upsertError) {
+    throw new Error(upsertError.message);
   }
 
   return customer.id;
