@@ -159,11 +159,13 @@ export default function RequestWizard() {
   useEffect(() => {
     const loadSlots = async () => {
       if (!supabase || !date) return;
+      const dayStart = `${date}T09:00:00`;
+      const dayEnd = `${date}T20:00:00`; // include slots that start up to 7:59 PM (covers 7 PM start with 30m duration)
       const { data, error } = await supabase
         .from('available_slots')
         .select('slot_start, slot_end, is_booked')
-        .gte('slot_start', `${date}T00:00:00`)
-        .lt('slot_start', `${date}T23:59:59`)
+        .gte('slot_start', dayStart)
+        .lt('slot_start', dayEnd)
         .order('slot_start', { ascending: true });
       if (error) {
         console.error('Error loading slots', error.message);
@@ -173,7 +175,7 @@ export default function RequestWizard() {
         const durationMs = new Date(data[0].slot_end).getTime() - new Date(data[0].slot_start).getTime();
         setSlotDurationMinutes(Math.max(1, Math.round(durationMs / 60000)));
       } else {
-        setSlotDurationMinutes(60);
+        setSlotDurationMinutes(30);
       }
       const normalized = (data ?? []).map((row) => {
         const start = new Date(row.slot_start);
