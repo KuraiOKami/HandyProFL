@@ -27,10 +27,12 @@ export default async function AdminServicesPage() {
   }
 
   const adminClient = createServiceRoleClient() ?? supabase;
-  const { data = [], error } = await adminClient
+  const { data, error } = await adminClient
     .from("service_catalog")
     .select("id, name, base_minutes, price_cents")
     .order("name", { ascending: true });
+
+  const services = data ?? [];
 
   return (
     <div className="grid gap-4">
@@ -40,7 +42,7 @@ export default async function AdminServicesPage() {
         <p className="text-sm text-slate-600">Manage catalog, pricing, and estimated durations.</p>
       </div>
       {error && <p className="rounded-md bg-rose-50 px-3 py-2 text-sm text-rose-800">{error.message}</p>}
-      <AdminServicesTable initial={data} />
+      <AdminServicesTable initial={services} />
     </div>
   );
 }
