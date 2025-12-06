@@ -1,17 +1,21 @@
 import { stripe } from '@/lib/stripe';
-import { createServiceRoleClient } from '@/utils/supabase/server';
+import { createClient, createServiceRoleClient } from '@/utils/supabase/server';
 
 type CustomerRow = { user_id: string; customer_id: string };
 
 export async function getOrCreateCustomer(userId: string, email?: string) {
   if (!stripe) throw new Error('Stripe not configured');
 
+  // Prefer service role, but fall back to user-scoped client if service role is missing.
   const admin = createServiceRoleClient();
-  if (!admin) {
-    throw new Error('Supabase service role not configured');
+  const fallbackClient = !admin ? await createClient() : null;
+  const client = admin ?? fallbackClient;
+
+  if (!client) {
+    throw new Error('Supabase not configured');
   }
 
-  const { data: existing, error: selectError } = await admin
+  const { data: existing, error: selectError } = await client
     .from('stripe_customers')
     .select('user_id, customer_id')
     .eq('user_id', userId)
@@ -30,7 +34,7 @@ export async function getOrCreateCustomer(userId: string, email?: string) {
     metadata: { user_id: userId },
   });
 
-  const { error: insertError } = await admin
+  const { error: insertError } = await client
     .from('stripe_customers')
     .insert({ user_id: userId, customer_id: customer.id });
 

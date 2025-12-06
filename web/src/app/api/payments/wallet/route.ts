@@ -32,7 +32,8 @@ export async function GET() {
     });
   } catch (e) {
     console.error('Error listing payment methods', e);
-    return NextResponse.json({ error: 'Failed to list payment methods' }, { status: 500 });
+    const message = e instanceof Error ? e.message : 'Failed to list payment methods';
+    return NextResponse.json({ error: message }, { status: 500 });
   }
 }
 
