@@ -8,7 +8,5 @@ if (!secretKey) {
 
 export const stripe =
   secretKey != null && secretKey !== ''
-    ? new Stripe(secretKey, {
-        apiVersion: '2024-12-18',
-      })
+    ? new Stripe(secretKey)
     : null;
