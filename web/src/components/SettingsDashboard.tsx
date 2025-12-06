@@ -7,6 +7,7 @@ import ProfileForm from "./ProfileForm";
 import AddressesSettings from "./AddressesSettings";
 import NotificationSettings from "./NotificationSettings";
 import SecuritySettings from "./SecuritySettings";
+import WalletSettings from "./WalletSettings";
 
 type Request = {
   id: string;
@@ -104,26 +105,7 @@ export default function SettingsDashboard() {
       <NotificationSettings />
       <SecuritySettings />
 
-      <section className="grid gap-4 rounded-xl bg-white p-5 shadow-sm ring-1 ring-slate-200">
-        <div className="flex items-center justify-between">
-          <div>
-            <p className="text-xs uppercase tracking-[0.2em] text-indigo-700">
-              Billing
-            </p>
-            <h2 className="text-xl font-semibold text-slate-900">Wallet</h2>
-            <p className="text-sm text-slate-600">
-              Save a card for quick confirmations. (Coming soon.)
-            </p>
-          </div>
-          <button className="rounded-lg border border-slate-300 px-3 py-1.5 text-sm font-semibold text-slate-800 shadow-sm">
-            Add payment method
-          </button>
-        </div>
-        <div className="rounded-lg border border-dashed border-slate-200 bg-slate-50 p-4 text-sm text-slate-700">
-          Card storage will land here. For now, we will confirm billing after
-          scheduling.
-        </div>
-      </section>
+      <WalletSettings />
 
       <section className="grid gap-4 rounded-xl bg-white p-5 shadow-sm ring-1 ring-slate-200">
         <div className="flex items-center justify-between">
