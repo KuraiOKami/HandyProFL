@@ -18,24 +18,25 @@ type Request = {
 const statuses = ['pending', 'confirmed', 'complete', 'cancelled'];
 
 export default function AdminRequestsTable({ initial }: { initial: Request[] }) {
-  const supabase = getSupabaseClient();
   const [requests, setRequests] = useState<Request[]>(initial);
   const [savingId, setSavingId] = useState<string | null>(null);
   const [error, setError] = useState<string | null>(null);
 
   const updateRequest = async (id: string, updates: Partial<Request>) => {
-    if (!supabase) {
-      setError('Supabase not configured.');
-      return;
-    }
     setSavingId(id);
     setError(null);
-    const { error: updateError } = await supabase.from('service_requests').update(updates).eq('id', id);
-    if (updateError) {
-      setError(updateError.message);
-    } else {
-      setRequests((prev) => prev.map((r) => (r.id === id ? { ...r, ...updates } : r)));
+    const res = await fetch('/api/admin/requests/update', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ id, updates }),
+    });
+    if (!res.ok) {
+      const body = await res.json().catch(() => ({}));
+      setError(body.error || 'Failed to update request.');
+      setSavingId(null);
+      return;
     }
+    setRequests((prev) => prev.map((r) => (r.id === id ? { ...r, ...updates } : r)));
     setSavingId(null);
   };
 
