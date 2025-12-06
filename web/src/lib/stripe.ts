@@ -9,6 +9,6 @@ if (!secretKey) {
 export const stripe =
   secretKey != null && secretKey !== ''
     ? new Stripe(secretKey, {
-        apiVersion: '2023-10-16',
+        apiVersion: '2025-11-17.clover',
       })
     : null;
