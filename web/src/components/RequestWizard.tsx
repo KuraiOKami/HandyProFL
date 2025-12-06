@@ -184,22 +184,19 @@ export default function RequestWizard() {
         setSlotDurationMinutes(30);
       }
 
-      const formatter = new Intl.DateTimeFormat('en-US', {
-        timeZone: DISPLAY_TIME_ZONE,
-        hour: '2-digit',
-        minute: '2-digit',
-        hour12: false,
-      });
-
       const normalized = (data ?? [])
         .map((row) => {
           const start = new Date(row.slot_start);
-          const [hourStr, minuteStr] = formatter.format(start).split(':');
-          const hour = Number(hourStr);
-          const minute = Number(minuteStr);
-          if (hour < 9) return null;
-          if (hour > 19) return null;
-          if (hour === 19 && minute > 0) return null;
+          const parts = new Intl.DateTimeFormat('en-US', {
+            timeZone: DISPLAY_TIME_ZONE,
+            hour: '2-digit',
+            minute: '2-digit',
+            hour12: false,
+          }).formatToParts(start);
+          const hour = Number(parts.find((p) => p.type === 'hour')?.value ?? '0');
+          const minute = Number(parts.find((p) => p.type === 'minute')?.value ?? '0');
+          const withinServiceHours = hour >= 9 && (hour < 19 || (hour === 19 && minute === 0));
+          if (!withinServiceHours) return null;
 
           const time = start.toLocaleTimeString('en-US', {
             hour: 'numeric',
