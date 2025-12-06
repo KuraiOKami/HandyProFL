@@ -1,6 +1,6 @@
 'use client';
 
-import { useMemo, useState } from 'react';
+import { useCallback, useMemo, useState } from 'react';
 import { getSupabaseClient } from '@/lib/supabaseClient';
 import { useSupabaseSession } from '@/hooks/useSupabaseSession';
 import { useEffect } from 'react';
@@ -164,7 +164,7 @@ export default function RequestWizard() {
     loadSlots();
   }, [date, supabase]);
 
-  const buildCurrentItem = (): RequestItem => ({
+  const buildCurrentItem = useCallback((): RequestItem => ({
     service,
     tvSize,
     wallType,
@@ -174,7 +174,7 @@ export default function RequestWizard() {
     extraItems,
     notes,
     photoNames,
-  });
+  }), [service, tvSize, wallType, hasMount, assemblyType, assemblyOther, extraItems, notes, photoNames]);
 
   const totalMinutes = useMemo(() => {
     const allItems = [...items, buildCurrentItem()];
@@ -210,7 +210,7 @@ export default function RequestWizard() {
       return 45; // punch list
     });
     return perItemMinutes.reduce((sum, n) => sum + n, 0);
-  }, [items, service, tvSize, assemblyType, assemblyOther, wallType, hasMount, extraItems, notes, photoNames]);
+  }, [items, buildCurrentItem]);
 
   const requiredMinutes = Math.max(30, totalMinutes || 30);
 
