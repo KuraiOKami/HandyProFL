@@ -67,6 +67,8 @@ const services: Record<
   },
 };
 
+const DISPLAY_TIME_ZONE = 'America/New_York';
+
 const defaultSlots: Slot[] = [];
 
 function nextDays(days = 14) {
@@ -175,7 +177,11 @@ export default function RequestWizard() {
       }
       const normalized = (data ?? []).map((row) => {
         const start = new Date(row.slot_start);
-        const time = start.toLocaleTimeString([], { hour: 'numeric', minute: '2-digit' });
+        const time = start.toLocaleTimeString('en-US', {
+          hour: 'numeric',
+          minute: '2-digit',
+          timeZone: DISPLAY_TIME_ZONE,
+        });
         return { time, available: !row.is_booked, startIso: row.slot_start };
       });
       setAvailableSlots((prev) => ({ ...prev, [date]: normalized.length ? normalized : [] }));
