@@ -67,13 +67,7 @@ const services: Record<
   },
 };
 
-const defaultSlots: Slot[] = [
-  { time: '9:00 AM', available: true, startIso: '09:00' },
-  { time: '11:00 AM', available: true, startIso: '11:00' },
-  { time: '1:00 PM', available: false, startIso: '13:00' },
-  { time: '3:00 PM', available: true, startIso: '15:00' },
-  { time: '5:00 PM', available: true, startIso: '17:00' },
-];
+const defaultSlots: Slot[] = [];
 
 function nextDays(days = 14) {
   const out: { label: string; value: string }[] = [];
@@ -112,6 +106,7 @@ export default function RequestWizard() {
 
   const dates = useMemo(() => nextDays(14), []);
   const [availableSlots, setAvailableSlots] = useState<Record<string, Slot[]>>({});
+  const [serviceDurations, setServiceDurations] = useState<Record<string, number>>({});
   const selectedSlots = useMemo(() => availableSlots[date] ?? defaultSlots, [availableSlots, date]);
   const [slotDurationMinutes, setSlotDurationMinutes] = useState<number | null>(null);
 
@@ -133,6 +128,24 @@ export default function RequestWizard() {
     setError(null);
     setItems([]);
   };
+
+  // Load service catalog durations
+  useEffect(() => {
+    const loadDurations = async () => {
+      if (!supabase) return;
+      const { data, error } = await supabase.from('service_catalog').select('id, base_minutes');
+      if (error) {
+        console.error('Error loading service catalog', error.message);
+        return;
+      }
+      const map: Record<string, number> = {};
+      (data ?? []).forEach((row) => {
+        map[row.id] = row.base_minutes ?? 60;
+      });
+      setServiceDurations(map);
+    };
+    loadDurations();
+  }, [supabase]);
 
   // Fetch available slots for selected date
   useEffect(() => {
@@ -159,7 +172,7 @@ export default function RequestWizard() {
         const time = start.toLocaleTimeString([], { hour: 'numeric', minute: '2-digit' });
         return { time, available: !row.is_booked, startIso: row.slot_start };
       });
-      setAvailableSlots((prev) => ({ ...prev, [date]: normalized.length ? normalized : defaultSlots }));
+      setAvailableSlots((prev) => ({ ...prev, [date]: normalized.length ? normalized : [] }));
     };
     loadSlots();
   }, [date, supabase]);
@@ -176,41 +189,50 @@ export default function RequestWizard() {
     photoNames,
   }), [service, tvSize, wallType, hasMount, assemblyType, assemblyOther, extraItems, notes, photoNames]);
 
+  const getMinutesForItem = useCallback(
+    (item: RequestItem) => {
+      const id =
+        item.service === 'tv_mount'
+          ? item.tvSize === '75"+'
+            ? 'tv_mount_75'
+            : item.tvSize === '65"'
+              ? 'tv_mount_65'
+              : 'tv_mount_55'
+          : item.service === 'assembly'
+            ? item.assemblyType === 'Table/Desk'
+              ? 'assembly_table'
+              : item.assemblyType === 'Bed'
+                ? 'assembly_bed'
+                : item.assemblyType === 'Dresser'
+                  ? 'assembly_dresser'
+                  : item.assemblyType === 'Patio set'
+                    ? 'assembly_patio'
+                    : item.assemblyType === 'Sofa'
+                      ? 'assembly_sofa'
+                      : item.assemblyType === 'Chair' || item.assemblyType === 'Lamp'
+                        ? 'assembly_chair'
+                        : item.assemblyType === 'Other'
+                          ? 'assembly_other'
+                          : 'assembly_other'
+            : item.service === 'electrical'
+              ? 'electrical'
+              : 'punch';
+
+      return serviceDurations[id] ?? (item.service === 'tv_mount'
+        ? 60
+        : item.service === 'assembly'
+          ? 60
+          : item.service === 'electrical'
+            ? 60
+            : 45);
+    },
+    [serviceDurations],
+  );
+
   const totalMinutes = useMemo(() => {
     const allItems = [...items, buildCurrentItem()];
-    const perItemMinutes = allItems.map((item) => {
-      if (item.service === 'tv_mount') {
-        if (item.tvSize === '75"+') return 90;
-        if (item.tvSize === '65"') return 75;
-        if (item.tvSize === '55"') return 60;
-        return 50;
-      }
-      if (item.service === 'assembly') {
-        switch (item.assemblyType) {
-          case 'Sofa':
-            return 90;
-          case 'Bed':
-            return 80;
-          case 'Dresser':
-            return 70;
-          case 'Patio set':
-            return 90;
-          case 'Table/Desk':
-            return 60;
-          case 'Chair':
-          case 'Lamp':
-            return 30;
-          case 'Other':
-            return 60;
-          default:
-            return 60;
-        }
-      }
-      if (item.service === 'electrical') return 60;
-      return 45; // punch list
-    });
-    return perItemMinutes.reduce((sum, n) => sum + n, 0);
-  }, [items, buildCurrentItem]);
+    return allItems.map(getMinutesForItem).reduce((sum, n) => sum + n, 0);
+  }, [items, buildCurrentItem, getMinutesForItem]);
 
   const requiredMinutes = Math.max(30, totalMinutes || 30);
 
@@ -447,36 +469,40 @@ export default function RequestWizard() {
                   <div className="grid gap-3 rounded-xl border border-slate-200 p-4">
                     <p className="text-sm font-semibold text-slate-900">Pick a time</p>
                     {date ? (
-                      <div className="grid grid-cols-2 gap-2">
-                        {selectedSlots.map((s, idx) => {
-                          const fits =
-                            slotDurationMinutes != null &&
-                            selectedSlots
-                              .slice(idx, idx + requiredSlots)
-                              .length === requiredSlots &&
-                            selectedSlots.slice(idx, idx + requiredSlots).every((slotObj) => slotObj.available);
-                          const disabled = !fits;
-                          return (
-                            <button
-                              key={s.time + s.startIso}
-                              onClick={() => !disabled && setSlot({ time: s.time, startIso: s.startIso })}
-                              disabled={disabled}
-                              className={`rounded-lg border px-3 py-2 text-sm ${
-                                slot?.time === s.time
-                                  ? 'border-indigo-600 bg-indigo-50 text-indigo-800'
-                                  : 'border-slate-200 hover:border-indigo-200'
-                              } ${
-                                disabled
-                                  ? 'cursor-not-allowed bg-slate-100 text-slate-400 opacity-70 line-through'
-                                  : ''
-                              }`}
-                            >
-                              {s.time}
-                              {fits ? '' : ' (unavailable)'}
-                            </button>
-                          );
-                        })}
-                      </div>
+                      selectedSlots.length ? (
+                        <div className="grid grid-cols-2 gap-2">
+                          {selectedSlots.map((s, idx) => {
+                            const fits =
+                              slotDurationMinutes != null &&
+                              selectedSlots
+                                .slice(idx, idx + requiredSlots)
+                                .length === requiredSlots &&
+                              selectedSlots.slice(idx, idx + requiredSlots).every((slotObj) => slotObj.available);
+                            const disabled = !fits;
+                            return (
+                              <button
+                                key={s.startIso}
+                                onClick={() => !disabled && setSlot({ time: s.time, startIso: s.startIso })}
+                                disabled={disabled}
+                                className={`rounded-lg border px-3 py-2 text-sm ${
+                                  slot?.startIso === s.startIso
+                                    ? 'border-indigo-600 bg-indigo-50 text-indigo-800'
+                                    : 'border-slate-200 hover:border-indigo-200'
+                                } ${
+                                  disabled
+                                    ? 'cursor-not-allowed bg-slate-100 text-slate-400 opacity-70 line-through'
+                                    : ''
+                                }`}
+                              >
+                                {s.time}
+                                {fits ? '' : ' (unavailable)'}
+                              </button>
+                            );
+                          })}
+                        </div>
+                      ) : (
+                        <p className="text-sm text-slate-600">No slots available for this date.</p>
+                      )
                     ) : (
                       <p className="text-sm text-slate-600">Select a date to see available times.</p>
                     )}

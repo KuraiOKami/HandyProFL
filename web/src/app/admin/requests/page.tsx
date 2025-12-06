@@ -1,5 +1,5 @@
 import AdminRequestsTable from "@/components/AdminRequestsTable";
-import { createClient } from "@/utils/supabase/server";
+import { createClient, createServiceRoleClient } from "@/utils/supabase/server";
 import { redirect } from "next/navigation";
 
 export default async function AdminRequestsPage() {
@@ -26,7 +26,9 @@ export default async function AdminRequestsPage() {
     );
   }
 
-  const { data } = await supabase
+  const adminClient = createServiceRoleClient() ?? supabase;
+
+  const { data } = await adminClient
     .from("service_requests")
     .select("id, user_id, service_type, preferred_date, preferred_time, details, status, estimated_minutes, created_at")
     .order("created_at", { ascending: false });
