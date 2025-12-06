@@ -160,18 +160,15 @@ export default function RequestWizard() {
     const loadSlots = async () => {
       if (!supabase || !date) return;
 
-      const nextDay = new Date(date);
-      nextDay.setDate(nextDay.getDate() + 1);
-
-      // Pull the full day in UTC to avoid cutting off local evening hours, then filter to 9 AM–7 PM Eastern.
-      const dayStartUtc = `${date}T00:00:00Z`;
-      const dayEndUtc = `${nextDay.toISOString().slice(0, 10)}T00:00:00Z`;
+      // Pull the full day in local time, then filter to 9 AM–7 PM Eastern.
+      const dayStartLocal = `${date}T00:00:00`;
+      const dayEndLocal = `${date}T23:59:59`;
 
       const { data, error } = await supabase
         .from('available_slots')
         .select('slot_start, slot_end, is_booked')
-        .gte('slot_start', dayStartUtc)
-        .lt('slot_start', dayEndUtc)
+        .gte('slot_start', dayStartLocal)
+        .lte('slot_start', dayEndLocal)
         .order('slot_start', { ascending: true });
       if (error) {
         console.error('Error loading slots', error.message);
