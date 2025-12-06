@@ -1,11 +1,9 @@
 import { NextRequest, NextResponse } from "next/server";
-import { createClient } from "@/utils/supabase/server";
+import { createClient, createServiceRoleClient } from "@/utils/supabase/server";
 
 export async function POST(req: NextRequest) {
-  const supabase = await createClient();
-  if (!supabase) {
-    return NextResponse.json({ error: "Supabase not configured" }, { status: 500 });
-  }
+  const supabase = (await createClient()) ?? createServiceRoleClient();
+  if (!supabase) return NextResponse.json({ error: "Supabase not configured" }, { status: 500 });
 
   const {
     data: { session },

@@ -272,33 +272,34 @@ export default function RequestWizard() {
       .join(' || ');
     const detailsWithDuration = `${details}${details ? ' | ' : ''}Estimated minutes: ${requiredMinutes}`;
 
-    const selectedIdx = selectedSlots.findIndex(
-      (s) => s.startIso === slot?.startIso || s.time === slot?.time,
-    );
-    const chosenSlots =
-      selectedIdx >= 0 ? selectedSlots.slice(selectedIdx, selectedIdx + requiredSlots) : [];
+    const selectedIdx = selectedSlots.findIndex((s) => s.startIso === slot?.startIso);
+    const chosenSlots = selectedIdx >= 0 ? selectedSlots.slice(selectedIdx, selectedIdx + requiredSlots) : [];
+    const slotStartIso = chosenSlots.map((s) => s.startIso).filter(Boolean);
 
-    const { error: insertError } = await supabase.from('service_requests').insert({
-      user_id: session.user.id,
-      service_type: services[service].name,
-      preferred_date: date,
-      preferred_time: slot.time,
-      details: detailsWithDuration || null,
-      status: 'pending',
-      estimated_minutes: requiredMinutes,
-    });
-
-    if (insertError) {
-      setError(insertError.message);
+    if (!slotStartIso.length || slotStartIso.length < requiredSlots) {
+      setError('Selected time no longer available. Please pick another slot.');
       setSubmitting(false);
       return;
     }
 
-    if (chosenSlots.length && chosenSlots.every((s) => s.startIso.includes('T'))) {
-      await supabase
-        .from('available_slots')
-        .update({ is_booked: true })
-        .in('slot_start', chosenSlots.map((s) => s.startIso));
+    const res = await fetch('/api/requests/book', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({
+        user_id: session.user.id,
+        service_type: services[service].name,
+        date,
+        slots: slotStartIso,
+        required_minutes: requiredMinutes,
+        details: detailsWithDuration || null,
+      }),
+    });
+
+    if (!res.ok) {
+      const body = await res.json().catch(() => ({}));
+      setError(body.error || 'Failed to submit request.');
+      setSubmitting(false);
+      return;
     }
 
     setStatus('Request submitted. We will confirm your slot shortly.');
