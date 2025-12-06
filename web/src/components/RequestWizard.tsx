@@ -5,7 +5,7 @@ import { getSupabaseClient } from '@/lib/supabaseClient';
 import { useSupabaseSession } from '@/hooks/useSupabaseSession';
 import { useEffect } from 'react';
 
-type Step = 1 | 2 | 3 | 4;
+type Step = 1 | 2 | 3 | 4 | 5;
 
 type ServiceId = 'tv_mount' | 'assembly' | 'electrical' | 'punch';
 
@@ -107,8 +107,10 @@ export default function RequestWizard() {
   const dates = useMemo(() => nextDays(14), []);
   const [availableSlots, setAvailableSlots] = useState<Record<string, Slot[]>>({});
   const [serviceDurations, setServiceDurations] = useState<Record<string, number>>({});
+  const [servicePrices, setServicePrices] = useState<Record<string, number>>({});
   const selectedSlots = useMemo(() => availableSlots[date] ?? defaultSlots, [availableSlots, date]);
   const [slotDurationMinutes, setSlotDurationMinutes] = useState<number | null>(null);
+  const [payMethod, setPayMethod] = useState<'pay_later' | 'card_on_file'>('pay_later');
 
   const reset = () => {
     setStep(1);
@@ -127,22 +129,26 @@ export default function RequestWizard() {
     setStatus(null);
     setError(null);
     setItems([]);
+    setPayMethod('pay_later');
   };
 
   // Load service catalog durations
   useEffect(() => {
     const loadDurations = async () => {
       if (!supabase) return;
-      const { data, error } = await supabase.from('service_catalog').select('id, base_minutes');
+      const { data, error } = await supabase.from('service_catalog').select('id, base_minutes, price_cents');
       if (error) {
         console.error('Error loading service catalog', error.message);
         return;
       }
       const map: Record<string, number> = {};
+      const priceMap: Record<string, number> = {};
       (data ?? []).forEach((row) => {
         map[row.id] = row.base_minutes ?? 60;
+        priceMap[row.id] = row.price_cents ?? 0;
       });
       setServiceDurations(map);
+      setServicePrices(priceMap);
     };
     loadDurations();
   }, [supabase]);
@@ -189,45 +195,66 @@ export default function RequestWizard() {
     photoNames,
   }), [service, tvSize, wallType, hasMount, assemblyType, assemblyOther, extraItems, notes, photoNames]);
 
+  const getServiceId = (item: RequestItem) => {
+    if (item.service === 'tv_mount') {
+      if (item.tvSize === '75"+') return 'tv_mount_75';
+      if (item.tvSize === '65"') return 'tv_mount_65';
+      return 'tv_mount_55';
+    }
+    if (item.service === 'assembly') {
+      switch (item.assemblyType) {
+        case 'Table/Desk':
+          return 'assembly_table';
+        case 'Bed':
+          return 'assembly_bed';
+        case 'Dresser':
+          return 'assembly_dresser';
+        case 'Patio set':
+          return 'assembly_patio';
+        case 'Sofa':
+          return 'assembly_sofa';
+        case 'Chair':
+        case 'Lamp':
+          return 'assembly_chair';
+        case 'Other':
+        default:
+          return 'assembly_other';
+      }
+    }
+    if (item.service === 'electrical') return 'electrical';
+    return 'punch';
+  };
+
   const getMinutesForItem = useCallback(
     (item: RequestItem) => {
-      const id =
-        item.service === 'tv_mount'
-          ? item.tvSize === '75"+'
-            ? 'tv_mount_75'
-            : item.tvSize === '65"'
-              ? 'tv_mount_65'
-              : 'tv_mount_55'
-          : item.service === 'assembly'
-            ? item.assemblyType === 'Table/Desk'
-              ? 'assembly_table'
-              : item.assemblyType === 'Bed'
-                ? 'assembly_bed'
-                : item.assemblyType === 'Dresser'
-                  ? 'assembly_dresser'
-                  : item.assemblyType === 'Patio set'
-                    ? 'assembly_patio'
-                    : item.assemblyType === 'Sofa'
-                      ? 'assembly_sofa'
-                      : item.assemblyType === 'Chair' || item.assemblyType === 'Lamp'
-                        ? 'assembly_chair'
-                        : item.assemblyType === 'Other'
-                          ? 'assembly_other'
-                          : 'assembly_other'
-            : item.service === 'electrical'
-              ? 'electrical'
-              : 'punch';
+      const id = getServiceId(item);
 
-      return serviceDurations[id] ?? (item.service === 'tv_mount'
-        ? 60
-        : item.service === 'assembly'
+      return (
+        serviceDurations[id] ??
+        (item.service === 'tv_mount'
           ? 60
-          : item.service === 'electrical'
+          : item.service === 'assembly'
             ? 60
-            : 45);
+            : item.service === 'electrical'
+              ? 60
+              : 45)
+      );
     },
     [serviceDurations],
   );
+
+  const getPriceForItem = useCallback(
+    (item: RequestItem) => {
+      const id = getServiceId(item);
+      return servicePrices[id] ?? 0;
+    },
+    [servicePrices],
+  );
+
+  const totalPriceCents = useMemo(() => {
+    const allItems = [...items, buildCurrentItem()];
+    return allItems.map(getPriceForItem).reduce((sum, n) => sum + n, 0);
+  }, [items, buildCurrentItem, getPriceForItem]);
 
   const totalMinutes = useMemo(() => {
     const allItems = [...items, buildCurrentItem()];
@@ -292,7 +319,7 @@ export default function RequestWizard() {
         return parts;
       })
       .join(' || ');
-    const detailsWithDuration = `${details}${details ? ' | ' : ''}Estimated minutes: ${requiredMinutes}`;
+    const detailsWithDuration = `${details}${details ? ' | ' : ''}Estimated minutes: ${requiredMinutes} | Subtotal: ${(totalPriceCents / 100).toLocaleString(undefined, { style: 'currency', currency: 'USD' })}`;
 
     const selectedIdx = selectedSlots.findIndex((s) => s.startIso === slot?.startIso);
     const chosenSlots = selectedIdx >= 0 ? selectedSlots.slice(selectedIdx, selectedIdx + requiredSlots) : [];
@@ -326,7 +353,7 @@ export default function RequestWizard() {
 
     setStatus('Request submitted. We will confirm your slot shortly.');
     setSubmitting(false);
-    setStep(4);
+    setStep(5);
   };
 
   return (
@@ -635,6 +662,92 @@ export default function RequestWizard() {
               )}
 
               {step === 4 && (
+                <div className="grid gap-3 rounded-xl border border-slate-200 p-4">
+                  <p className="text-sm font-semibold text-slate-900">Review & payment</p>
+                  <div className="grid gap-2">
+                    <div className="flex items-center justify-between">
+                      <p className="text-sm font-semibold text-slate-900">Items</p>
+                      <span className="text-xs font-semibold text-indigo-700">
+                        {items.length + 1} {items.length + 1 === 1 ? 'item' : 'items'}
+                      </span>
+                    </div>
+                    <div className="grid gap-2">
+                      {[...items, buildCurrentItem()].map((item, idx) => (
+                        <div key={idx} className="rounded-lg border border-slate-200 bg-white p-3 text-sm text-slate-800">
+                          <div className="flex items-center justify-between">
+                            <div className="flex items-center gap-2">
+                              <span className="rounded-full bg-indigo-50 px-2 py-0.5 text-[11px] font-semibold text-indigo-700">
+                                Item {idx + 1}
+                              </span>
+                              <span className="font-semibold">{services[item.service].name}</span>
+                            </div>
+                            <span className="text-xs font-semibold text-slate-700">
+                              {(getPriceForItem(item) / 100).toLocaleString(undefined, { style: 'currency', currency: 'USD' })}
+                            </span>
+                          </div>
+                          <p className="text-xs text-slate-600">
+                            {item.service === 'tv_mount'
+                              ? `TV ${item.tvSize} | ${item.wallType} | Mount: ${item.hasMount === 'yes' ? 'Yes' : 'No'}`
+                              : item.service === 'assembly'
+                                ? `Assembly: ${item.assemblyType}${
+                                    item.assemblyType === 'Other' && item.assemblyOther ? ` (${item.assemblyOther})` : ''
+                                  }`
+                                : 'Standard service'}
+                          </p>
+                          {item.extraItems.length > 0 && (
+                            <p className="text-xs text-slate-500">Extras: {item.extraItems.join(', ')}</p>
+                          )}
+                          {item.notes && <p className="text-xs text-slate-500">Notes: {item.notes}</p>}
+                        </div>
+                      ))}
+                    </div>
+                  </div>
+                  <div className="grid gap-2 rounded-lg border border-slate-200 bg-slate-50 p-3 text-sm">
+                    <div className="flex items-center justify-between">
+                      <span className="text-slate-700">Subtotal</span>
+                      <span className="font-semibold text-slate-900">
+                        {(totalPriceCents / 100).toLocaleString(undefined, { style: 'currency', currency: 'USD' })}
+                      </span>
+                    </div>
+                    <div className="flex items-center justify-between">
+                      <span className="text-slate-700">Estimated time</span>
+                      <span className="font-semibold text-slate-900">{requiredMinutes} min</span>
+                    </div>
+                    <div className="flex items-center justify-between">
+                      <span className="text-slate-700">Selected slot</span>
+                      <span className="font-semibold text-slate-900">
+                        {date && slot ? `${date} @ ${slot.time}` : 'Not selected'}
+                      </span>
+                    </div>
+                  </div>
+                  <div className="grid gap-2 rounded-lg border border-slate-200 bg-slate-50 p-3">
+                    <p className="text-sm font-semibold text-slate-900">Payment</p>
+                    <label className="flex items-center gap-2 text-sm text-slate-800">
+                      <input
+                        type="radio"
+                        name="pay_method"
+                        checked={payMethod === 'pay_later'}
+                        onChange={() => setPayMethod('pay_later')}
+                        className="h-4 w-4 text-indigo-700 focus:ring-indigo-600"
+                      />
+                      Pay after confirmation (on-site or link)
+                    </label>
+                    <label className="flex items-center gap-2 text-sm text-slate-800 opacity-60">
+                      <input
+                        type="radio"
+                        name="pay_method"
+                        checked={payMethod === 'card_on_file'}
+                        onChange={() => setPayMethod('card_on_file')}
+                        disabled
+                        className="h-4 w-4 text-indigo-700 focus:ring-indigo-600"
+                      />
+                      Save card (coming soon)
+                    </label>
+                  </div>
+                </div>
+              )}
+
+              {step === 5 && (
                 <div className="grid gap-3 rounded-xl border border-green-200 bg-green-50 p-4">
                   <p className="text-sm font-semibold text-green-800">All set</p>
                   <p className="text-sm text-green-900">{status}</p>
@@ -649,12 +762,13 @@ export default function RequestWizard() {
 
               {error && <p className="rounded-md bg-rose-50 px-3 py-2 text-sm text-rose-800">{error}</p>}
 
-              {step < 4 && (
+              {step < 5 && (
                 <div className="flex items-center justify-between border-t border-slate-200 pt-4">
                   <div className="text-sm text-slate-600">
                     {step === 1 && 'Choose the service and options.'}
                     {step === 2 && 'Select a date and a time slot.'}
                     {step === 3 && 'Add any extra context.'}
+                    {step === 4 && 'Review subtotal and payment preference.'}
                   </div>
                   <div className="flex gap-2">
                     <button
@@ -663,15 +777,16 @@ export default function RequestWizard() {
                     >
                       {step === 1 ? 'Cancel' : 'Back'}
                     </button>
-                    {step < 3 && (
+                    {step < 4 && (
                       <button
                         onClick={() => setStep((prev) => (prev + 1) as Step)}
-                        className="rounded-lg bg-indigo-700 px-4 py-2 text-sm font-semibold text-white shadow-sm hover:bg-indigo-800"
+                        className="rounded-lg bg-indigo-700 px-4 py-2 text-sm font-semibold text-white shadow-sm hover:bg-indigo-800 disabled:cursor-not-allowed disabled:bg-slate-300"
+                        disabled={step === 2 && (!slot || selectedSlots.length === 0)}
                       >
                         Continue
                       </button>
                     )}
-                    {step === 3 && (
+                    {step === 4 && (
                       <button
                         onClick={onSubmit}
                         disabled={submitting}
@@ -696,10 +811,11 @@ function Stepper({ step }: { step: Step }) {
     { id: 1, label: 'Service' },
     { id: 2, label: 'Schedule' },
     { id: 3, label: 'Details' },
-    { id: 4, label: 'Done' },
+    { id: 4, label: 'Review' },
+    { id: 5, label: 'Done' },
   ];
   return (
-    <div className="grid grid-cols-4 gap-2 text-xs font-semibold uppercase tracking-wide text-slate-600">
+    <div className="grid grid-cols-5 gap-2 text-xs font-semibold uppercase tracking-wide text-slate-600">
       {steps.map((s) => (
         <div
           key={s.id}
