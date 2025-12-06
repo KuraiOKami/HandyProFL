@@ -177,7 +177,18 @@ export default function RequestWizard() {
   });
 
   const totalMinutes = useMemo(() => {
-    const allItems = [...items, buildCurrentItem()];
+    const currentItem: RequestItem = {
+      service,
+      tvSize,
+      wallType,
+      hasMount,
+      assemblyType,
+      assemblyOther,
+      extraItems,
+      notes,
+      photoNames,
+    };
+    const allItems = [...items, currentItem];
     const perItemMinutes = allItems.map((item) => {
       if (item.service === 'tv_mount') {
         if (item.tvSize === '75"+') return 90;

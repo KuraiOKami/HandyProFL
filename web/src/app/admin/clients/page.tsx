@@ -1,6 +1,20 @@
 import { createClient } from "@/utils/supabase/server";
 import { redirect } from "next/navigation";
 
+interface ClientProfile {
+  id: string;
+  first_name: string | null;
+  middle_initial: string | null;
+  last_name: string | null;
+  email: string | null;
+  phone: string | null;
+  street: string | null;
+  city: string | null;
+  state: string | null;
+  postal_code: string | null;
+  role: string | null;
+}
+
 export default async function AdminClientsPage() {
   const supabase = await createClient();
   if (!supabase) {
@@ -46,20 +60,24 @@ export default async function AdminClientsPage() {
 
   const clients = data ?? [];
 
-  const { data: reqCounts = [] } = await supabase
+  const { data: requests = [] } = await supabase
     .from("service_requests")
-    .select("user_id, count:id")
-    .group("user_id");
+    .select("user_id");
 
-  const { data: addrCounts = [] } = await supabase
+  const { data: addresses = [] } = await supabase
     .from("addresses")
-    .select("user_id, count:id")
-    .group("user_id");
+    .select("user_id");
 
   const requestMap = new Map<string, number>();
-  reqCounts.forEach((r: any) => requestMap.set(r.user_id, r.count));
+  (requests ?? []).forEach((r) => {
+    const userId = r.user_id as string;
+    requestMap.set(userId, (requestMap.get(userId) ?? 0) + 1);
+  });
   const addressMap = new Map<string, number>();
-  addrCounts.forEach((a: any) => addressMap.set(a.user_id, a.count));
+  (addresses ?? []).forEach((a) => {
+    const userId = a.user_id as string;
+    addressMap.set(userId, (addressMap.get(userId) ?? 0) + 1);
+  });
 
   return (
     <div className="grid gap-4">
@@ -70,7 +88,7 @@ export default async function AdminClientsPage() {
       </div>
       {error && <p className="rounded-md bg-rose-50 px-3 py-2 text-sm text-rose-800">{error.message}</p>}
       <div className="grid gap-3">
-        {clients.map((c: any) => (
+        {(clients as ClientProfile[]).map((c) => (
           <div key={c.id} className="rounded-xl border border-slate-200 bg-white p-4 shadow-sm">
             <div className="flex flex-wrap items-center justify-between gap-2">
               <div>
