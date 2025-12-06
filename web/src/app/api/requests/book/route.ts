@@ -11,7 +11,6 @@ export async function POST(req: NextRequest) {
 
   const {
     user_id,
-    items,
     required_minutes,
     date,
     slots, // array of slot_start ISO strings
@@ -19,7 +18,6 @@ export async function POST(req: NextRequest) {
     details,
   } = body as {
     user_id?: string;
-    items?: unknown[];
     required_minutes?: number;
     date?: string;
     slots?: string[];

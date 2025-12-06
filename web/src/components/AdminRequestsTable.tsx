@@ -1,7 +1,6 @@
 'use client';
 
 import { useState } from 'react';
-import { getSupabaseClient } from '@/lib/supabaseClient';
 
 type Request = {
   id: string;
