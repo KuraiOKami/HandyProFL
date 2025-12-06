@@ -43,7 +43,10 @@ export default function AdminServicesTable({ initial }: { initial: Service[] }) 
     const res = await fetch('/api/admin/services/create', {
       method: 'POST',
       headers: { 'Content-Type': 'application/json' },
-      body: JSON.stringify(newService),
+      body: JSON.stringify({
+        ...newService,
+        price_cents: newService.price_cents != null ? Math.round(Number(newService.price_cents)) : null,
+      }),
     });
     if (!res.ok) {
       const body = await res.json().catch(() => ({}));
@@ -109,16 +112,15 @@ export default function AdminServicesTable({ initial }: { initial: Service[] }) 
           />
           <div className="flex items-center gap-2">
             <input
-              type="number"
-              min={0}
-              placeholder="Price (cents)"
-              value={newService.price_cents ?? ''}
-              onChange={(e) =>
-                setNewService((p) => ({
-                  ...p,
-                  price_cents: e.target.value ? Number(e.target.value) : null,
-                }))
-              }
+              type="text"
+              inputMode="decimal"
+              placeholder="Price (e.g., 149.99)"
+              value={newService.price_cents != null ? (newService.price_cents / 100).toFixed(2) : ''}
+              onChange={(e) => {
+                const val = e.target.value;
+                const cents = val ? Math.round(parseFloat(val) * 100) : null;
+                setNewService((p) => ({ ...p, price_cents: cents ?? null }));
+              }}
               className="w-full rounded-lg border border-slate-200 px-2 py-1 text-sm"
             />
             <button
@@ -167,12 +169,17 @@ export default function AdminServicesTable({ initial }: { initial: Service[] }) 
                 </td>
                 <td className="px-3 py-2">
                   <input
-                    type="number"
-                    min={0}
-                    defaultValue={svc.price_cents ?? undefined}
-                    onBlur={(e) => updateService(svc.id, { price_cents: e.target.value ? Number(e.target.value) : null })}
+                    type="text"
+                    inputMode="decimal"
+                    defaultValue={svc.price_cents != null ? (svc.price_cents / 100).toFixed(2) : ''}
+                    onBlur={(e) => {
+                      const val = e.target.value.trim();
+                      const cents = val ? Math.round(parseFloat(val) * 100) : null;
+                      updateService(svc.id, { price_cents: cents });
+                    }}
                     disabled={savingId === svc.id}
                     className="w-28 rounded-lg border border-slate-200 px-2 py-1 text-sm"
+                    placeholder="0.00"
                   />
                 </td>
                 <td className="px-3 py-2 text-right text-xs text-slate-500">{savingId === svc.id ? 'Saving…' : ''}</td>
