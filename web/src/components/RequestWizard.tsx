@@ -449,14 +449,23 @@ export default function RequestWizard() {
         }),
       });
       const chargeBody = await chargeRes.json().catch(() => ({}));
-      if (!chargeRes.ok) {
+      const chargeStatus = (chargeBody.status as string | undefined) ?? null;
+      const paymentIntentId = (chargeBody.payment_intent_id as string | undefined) ?? null;
+      if (!chargeRes.ok || chargeStatus !== 'succeeded') {
         setStatus('Request submitted, but your card was not charged.');
-        setError(chargeBody.error || 'Card charge failed. We will confirm payment manually.');
+        setError(
+          chargeBody.error ||
+            (chargeStatus
+              ? `Card charge incomplete (status: ${chargeStatus}). We will confirm payment manually.`
+              : 'Card charge failed. We will confirm payment manually.'),
+        );
         setSubmitting(false);
         setStep(5);
         return;
       }
-      setStatus('Request submitted and card charged. See you soon!');
+      setStatus(
+        `Request submitted and card charged. Payment intent: ${paymentIntentId ?? 'created'}. See you soon!`,
+      );
     } else {
       setStatus('Request submitted. We will confirm your slot shortly.');
     }

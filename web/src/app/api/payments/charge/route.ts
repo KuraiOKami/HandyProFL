@@ -51,6 +51,17 @@ export async function POST(req: NextRequest) {
       },
     });
 
+    if (intent.status !== 'succeeded') {
+      return NextResponse.json(
+        {
+          error: `Charge not completed. Status: ${intent.status}`,
+          payment_intent_id: intent.id,
+          status: intent.status,
+        },
+        { status: 402 },
+      );
+    }
+
     return NextResponse.json({ payment_intent_id: intent.id, status: intent.status });
   } catch (e) {
     console.error('Error creating payment intent', e);
