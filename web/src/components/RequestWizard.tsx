@@ -159,13 +159,19 @@ export default function RequestWizard() {
   useEffect(() => {
     const loadSlots = async () => {
       if (!supabase || !date) return;
-      const dayStart = `${date}T09:00:00`;
-      const dayEnd = `${date}T20:00:00`; // include slots that start up to 7:59 PM (covers 7 PM start with 30m duration)
+
+      const nextDay = new Date(date);
+      nextDay.setDate(nextDay.getDate() + 1);
+
+      // Pull the full day in UTC to avoid cutting off local evening hours, then filter to 9 AM–7 PM Eastern.
+      const dayStartUtc = `${date}T00:00:00Z`;
+      const dayEndUtc = `${nextDay.toISOString().slice(0, 10)}T00:00:00Z`;
+
       const { data, error } = await supabase
         .from('available_slots')
         .select('slot_start, slot_end, is_booked')
-        .gte('slot_start', dayStart)
-        .lt('slot_start', dayEnd)
+        .gte('slot_start', dayStartUtc)
+        .lt('slot_start', dayEndUtc)
         .order('slot_start', { ascending: true });
       if (error) {
         console.error('Error loading slots', error.message);
@@ -177,15 +183,33 @@ export default function RequestWizard() {
       } else {
         setSlotDurationMinutes(30);
       }
-      const normalized = (data ?? []).map((row) => {
-        const start = new Date(row.slot_start);
-        const time = start.toLocaleTimeString('en-US', {
-          hour: 'numeric',
-          minute: '2-digit',
-          timeZone: DISPLAY_TIME_ZONE,
-        });
-        return { time, available: !row.is_booked, startIso: row.slot_start };
+
+      const formatter = new Intl.DateTimeFormat('en-US', {
+        timeZone: DISPLAY_TIME_ZONE,
+        hour: '2-digit',
+        minute: '2-digit',
+        hour12: false,
       });
+
+      const normalized = (data ?? [])
+        .map((row) => {
+          const start = new Date(row.slot_start);
+          const [hourStr, minuteStr] = formatter.format(start).split(':');
+          const hour = Number(hourStr);
+          const minute = Number(minuteStr);
+          if (hour < 9) return null;
+          if (hour > 19) return null;
+          if (hour === 19 && minute > 0) return null;
+
+          const time = start.toLocaleTimeString('en-US', {
+            hour: 'numeric',
+            minute: '2-digit',
+            timeZone: DISPLAY_TIME_ZONE,
+          });
+          return { time, available: !row.is_booked, startIso: row.slot_start };
+        })
+        .filter(Boolean) as Slot[];
+
       setAvailableSlots((prev) => ({ ...prev, [date]: normalized.length ? normalized : [] }));
     };
     loadSlots();
