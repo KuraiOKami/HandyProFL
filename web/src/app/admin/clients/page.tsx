@@ -1,4 +1,4 @@
-import { createClient } from "@/utils/supabase/server";
+import { createClient, createServiceRoleClient } from "@/utils/supabase/server";
 import { redirect } from "next/navigation";
 
 export default async function AdminClientsPage() {
@@ -25,7 +25,9 @@ export default async function AdminClientsPage() {
     );
   }
 
-  const { data, error } = await supabase
+  const adminSupabase = createServiceRoleClient() ?? supabase;
+
+  const { data, error } = await adminSupabase
     .from("profiles")
     .select(
       `
@@ -46,12 +48,12 @@ export default async function AdminClientsPage() {
 
   const clients = data ?? [];
 
-  const { data: reqCounts = [] } = await supabase
+  const { data: reqCounts = [] } = await adminSupabase
     .from("service_requests")
     .select("user_id, count:id")
     .group("user_id");
 
-  const { data: addrCounts = [] } = await supabase
+  const { data: addrCounts = [] } = await adminSupabase
     .from("addresses")
     .select("user_id, count:id")
     .group("user_id");
