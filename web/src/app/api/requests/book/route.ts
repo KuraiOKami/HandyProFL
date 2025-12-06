@@ -50,15 +50,19 @@ export async function POST(req: NextRequest) {
     return NextResponse.json({ error: "Slots unavailable" }, { status: 409 });
   }
 
-  const { error: insertError } = await client.from("service_requests").insert({
-    user_id,
-    service_type,
-    preferred_date: date,
-    preferred_time: slots[0],
-    details,
-    status: "pending",
-    estimated_minutes: required_minutes,
-  });
+  const { data: inserted, error: insertError } = await client
+    .from("service_requests")
+    .insert({
+      user_id,
+      service_type,
+      preferred_date: date,
+      preferred_time: slots[0],
+      details,
+      status: "pending",
+      estimated_minutes: required_minutes,
+    })
+    .select("id")
+    .single();
 
   if (insertError) {
     // release slots if insert fails
@@ -66,5 +70,5 @@ export async function POST(req: NextRequest) {
     return NextResponse.json({ error: insertError.message }, { status: 400 });
   }
 
-  return NextResponse.json({ ok: true });
+  return NextResponse.json({ ok: true, request_id: inserted?.id });
 }

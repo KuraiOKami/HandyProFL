@@ -1,15 +1,21 @@
 'use client';
 
-import { useCallback, useMemo, useState } from 'react';
+import { useCallback, useEffect, useMemo, useState } from 'react';
 import { getSupabaseClient } from '@/lib/supabaseClient';
 import { useSupabaseSession } from '@/hooks/useSupabaseSession';
-import { useEffect } from 'react';
 
 type Step = 1 | 2 | 3 | 4 | 5;
 
 type ServiceId = 'tv_mount' | 'assembly' | 'electrical' | 'punch';
 
 type Slot = { time: string; available: boolean; startIso: string };
+type PaymentMethod = {
+  id: string;
+  brand?: string | null;
+  last4?: string | null;
+  exp_month?: number | null;
+  exp_year?: number | null;
+};
 
 type RequestItem = {
   service: ServiceId;
@@ -113,6 +119,11 @@ export default function RequestWizard() {
   const selectedSlots = useMemo(() => availableSlots[date] ?? defaultSlots, [availableSlots, date]);
   const [slotDurationMinutes, setSlotDurationMinutes] = useState<number | null>(null);
   const [payMethod, setPayMethod] = useState<'pay_later' | 'card_on_file'>('pay_later');
+  const [paymentMethods, setPaymentMethods] = useState<PaymentMethod[]>([]);
+  const [walletLoading, setWalletLoading] = useState(false);
+  const [walletError, setWalletError] = useState<string | null>(null);
+  const [selectedPaymentMethodId, setSelectedPaymentMethodId] = useState<string | null>(null);
+  const [requestId, setRequestId] = useState<string | null>(null);
 
   const reset = () => {
     setStep(1);
@@ -132,6 +143,10 @@ export default function RequestWizard() {
     setError(null);
     setItems([]);
     setPayMethod('pay_later');
+    setPaymentMethods([]);
+    setWalletError(null);
+    setSelectedPaymentMethodId(null);
+    setRequestId(null);
   };
 
   // Load service catalog durations
@@ -294,6 +309,32 @@ export default function RequestWizard() {
     return Math.max(1, Math.ceil(requiredMinutes / slotDurationMinutes));
   }, [requiredMinutes, slotDurationMinutes]);
 
+  const hasPaymentMethods = paymentMethods.length > 0;
+
+  const loadPaymentMethods = useCallback(async () => {
+    if (!session) return;
+    setWalletLoading(true);
+    setWalletError(null);
+    const res = await fetch('/api/payments/wallet');
+    const body = await res.json().catch(() => ({}));
+    if (!res.ok) {
+      setWalletError(body.error || 'Unable to load saved cards.');
+      setPaymentMethods([]);
+      setWalletLoading(false);
+      return;
+    }
+    const methods = (body.payment_methods as PaymentMethod[] | undefined) ?? [];
+    setPaymentMethods(methods);
+    setSelectedPaymentMethodId(methods[0]?.id ?? null);
+    setWalletLoading(false);
+  }, [session]);
+
+  useEffect(() => {
+    if (step === 4 && session) {
+      loadPaymentMethods();
+    }
+  }, [step, session, loadPaymentMethods]);
+
   const resetItemFields = () => {
     setService('tv_mount');
     setTvSize('55"');
@@ -317,6 +358,20 @@ export default function RequestWizard() {
       setError('Select a date and time slot.');
       setStep(2);
       return;
+    }
+    if (payMethod === 'card_on_file') {
+      if (!hasPaymentMethods) {
+        setError('Add a card in Settings > Wallet first.');
+        return;
+      }
+      if (!selectedPaymentMethodId) {
+        setError('Select a saved card to charge.');
+        return;
+      }
+      if (totalPriceCents <= 0) {
+        setError('Total must be greater than $0. Update the request items.');
+        return;
+      }
     }
 
     setSubmitting(true);
@@ -357,27 +412,55 @@ export default function RequestWizard() {
       return;
     }
 
-    const res = await fetch('/api/requests/book', {
-      method: 'POST',
-      headers: { 'Content-Type': 'application/json' },
-      body: JSON.stringify({
-        user_id: session.user.id,
-        service_type: services[service].name,
-        date,
-        slots: slotStartIso,
-        required_minutes: requiredMinutes,
-        details: detailsWithDuration || null,
-      }),
-    });
+    let newRequestId = requestId;
+    if (!newRequestId) {
+      const res = await fetch('/api/requests/book', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({
+          user_id: session.user.id,
+          service_type: services[service].name,
+          date,
+          slots: slotStartIso,
+          required_minutes: requiredMinutes,
+          details: detailsWithDuration || null,
+        }),
+      });
 
-    if (!res.ok) {
       const body = await res.json().catch(() => ({}));
-      setError(body.error || 'Failed to submit request.');
-      setSubmitting(false);
-      return;
+      if (!res.ok) {
+        setError(body.error || 'Failed to submit request.');
+        setSubmitting(false);
+        return;
+      }
+      newRequestId = (body.request_id as string | undefined) ?? null;
+      setRequestId(newRequestId);
     }
 
-    setStatus('Request submitted. We will confirm your slot shortly.');
+    if (payMethod === 'card_on_file' && selectedPaymentMethodId) {
+      const chargeRes = await fetch('/api/payments/charge', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({
+          amount_cents: totalPriceCents,
+          currency: 'usd',
+          payment_method_id: selectedPaymentMethodId,
+          request_id: newRequestId,
+        }),
+      });
+      const chargeBody = await chargeRes.json().catch(() => ({}));
+      if (!chargeRes.ok) {
+        setStatus('Request submitted, but your card was not charged.');
+        setError(chargeBody.error || 'Card charge failed. We will confirm payment manually.');
+        setSubmitting(false);
+        setStep(5);
+        return;
+      }
+      setStatus('Request submitted and card charged. See you soon!');
+    } else {
+      setStatus('Request submitted. We will confirm your slot shortly.');
+    }
+
     setSubmitting(false);
     setStep(5);
   };
@@ -747,7 +830,17 @@ export default function RequestWizard() {
                     </div>
                   </div>
                   <div className="grid gap-2 rounded-lg border border-slate-200 bg-slate-50 p-3">
-                    <p className="text-sm font-semibold text-slate-900">Payment</p>
+                    <div className="flex items-center justify-between">
+                      <p className="text-sm font-semibold text-slate-900">Payment</p>
+                      <button
+                        type="button"
+                        onClick={loadPaymentMethods}
+                        disabled={walletLoading}
+                        className="text-xs font-semibold text-indigo-700 hover:text-indigo-800 disabled:cursor-not-allowed disabled:opacity-60"
+                      >
+                        {walletLoading ? 'Refreshing…' : 'Refresh cards'}
+                      </button>
+                    </div>
                     <label className="flex items-center gap-2 text-sm text-slate-800">
                       <input
                         type="radio"
@@ -758,17 +851,61 @@ export default function RequestWizard() {
                       />
                       Pay after confirmation (on-site or link)
                     </label>
-                    <label className="flex items-center gap-2 text-sm text-slate-800 opacity-60">
+                    <label
+                      className={`flex items-center gap-2 text-sm text-slate-800 ${!hasPaymentMethods ? 'opacity-60' : ''}`}
+                    >
                       <input
                         type="radio"
                         name="pay_method"
                         checked={payMethod === 'card_on_file'}
                         onChange={() => setPayMethod('card_on_file')}
-                        disabled
+                        disabled={!hasPaymentMethods}
                         className="h-4 w-4 text-indigo-700 focus:ring-indigo-600"
                       />
-                      Save card (coming soon)
+                      Charge a saved card now
                     </label>
+                    {walletError && (
+                      <p className="rounded-md bg-rose-50 px-3 py-2 text-xs text-rose-800">{walletError}</p>
+                    )}
+                    {payMethod === 'card_on_file' && (
+                      <div className="grid gap-2 rounded-lg border border-slate-200 bg-white p-3 text-sm">
+                        {hasPaymentMethods ? (
+                          paymentMethods.map((pm) => (
+                            <label
+                              key={pm.id}
+                              className={`flex items-center justify-between gap-3 rounded-lg border px-3 py-2 ${
+                                selectedPaymentMethodId === pm.id
+                                  ? 'border-indigo-600 bg-indigo-50'
+                                  : 'border-slate-200'
+                              }`}
+                            >
+                              <div className="flex flex-col">
+                                <span className="text-sm font-semibold text-slate-900">
+                                  {pm.brand ? pm.brand.toUpperCase() : 'Card'} •••• {pm.last4 ?? '••••'}
+                                </span>
+                                <span className="text-xs text-slate-600">
+                                  Expires {pm.exp_month ?? '??'}/{pm.exp_year ?? '??'}
+                                </span>
+                              </div>
+                              <input
+                                type="radio"
+                                name="selected_payment_method"
+                                checked={selectedPaymentMethodId === pm.id}
+                                onChange={() => setSelectedPaymentMethodId(pm.id)}
+                                className="h-4 w-4 text-indigo-700 focus:ring-indigo-600"
+                              />
+                            </label>
+                          ))
+                        ) : (
+                          <p className="text-sm text-slate-700">
+                            No saved cards. Add one in <a href="/settings" className="text-indigo-700 underline">Settings → Wallet</a>.
+                          </p>
+                        )}
+                        <p className="text-xs text-slate-500">
+                          We charge your card now to lock in the booking. Payment is processed securely via Stripe.
+                        </p>
+                      </div>
+                    )}
                   </div>
                 </div>
               )}
