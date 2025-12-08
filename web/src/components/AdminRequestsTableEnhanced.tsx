@@ -105,7 +105,7 @@ export default function AdminRequestsTableEnhanced({ initial }: { initial: Reque
         }
       }
       setSelectedIds(new Set());
-    } catch (err) {
+    } catch {
       setError('Bulk action failed for some requests.');
     } finally {
       setBulkActionLoading(false);
