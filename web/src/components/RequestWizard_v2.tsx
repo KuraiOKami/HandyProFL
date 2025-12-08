@@ -350,7 +350,7 @@ function DetailsStep({
           </button>
         </div>
       </div>
-      <p className="text-xs text-slate-500">We'll follow up by email/SMS to confirm and gather any photos if needed.</p>
+      <p className="text-xs text-slate-500">We&apos;ll follow up by email/SMS to confirm and gather any photos if needed.</p>
     </div>
   );
 }
