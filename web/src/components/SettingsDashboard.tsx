@@ -8,6 +8,7 @@ import AddressesSettings from "./AddressesSettings";
 import NotificationSettings from "./NotificationSettings";
 import SecuritySettings from "./SecuritySettings";
 import WalletSettings from "./WalletSettings";
+import BillingHistory from "./BillingHistory";
 
 type Request = {
   id: string;
@@ -106,6 +107,7 @@ export default function SettingsDashboard() {
       <SecuritySettings />
 
       <WalletSettings />
+      <BillingHistory />
 
       <section className="grid gap-4 rounded-xl bg-white p-5 shadow-sm ring-1 ring-slate-200">
         <div className="flex items-center justify-between">
