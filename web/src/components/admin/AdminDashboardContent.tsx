@@ -51,7 +51,7 @@ export default function AdminDashboardContent() {
           newClientsCount: newClientsCount ?? 0,
           error: null,
         });
-      } catch (err) {
+      } catch {
         setStats(prev => ({ ...prev, error: 'Failed to load stats' }));
       } finally {
         setLoading(false);
