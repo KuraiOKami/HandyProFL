@@ -40,7 +40,7 @@ export default function NotificationSettings() {
         .from("notification_preferences")
         .select("email_updates, sms_updates, marketing")
         .eq("user_id", userId)
-        .single();
+        .maybeSingle();
       if (fetchError && fetchError.code !== "PGRST116") {
         setError(fetchError.message);
       } else if (data) {

@@ -1,3 +1,5 @@
+import BillingHistory from "@/components/BillingHistory";
+
 export default function AdminBillingPage() {
   return (
     <div className="grid gap-4">
@@ -6,9 +8,7 @@ export default function AdminBillingPage() {
         <h1 className="text-3xl font-semibold text-slate-900">Billing</h1>
         <p className="text-sm text-slate-600">Invoices, payments, and saved payment methods.</p>
       </div>
-      <div className="rounded-xl border border-dashed border-slate-200 bg-slate-50 p-5 text-sm text-slate-700">
-        TODO: Integrate with Stripe for invoices/receipts and show balances.
-      </div>
+      <BillingHistory />
     </div>
   );
 }
