@@ -252,7 +252,7 @@ export default function AdminSettingsContent() {
           setSyncStatus(syncData);
         }
       }
-    } catch (err) {
+    } catch {
       setSyncMessage('Failed to sync calendar');
     } finally {
       setSyncing(false);

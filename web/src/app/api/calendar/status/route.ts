@@ -3,12 +3,15 @@
  * Returns Google Calendar connection status
  */
 
-import { NextRequest, NextResponse } from 'next/server';
+import { NextResponse } from 'next/server';
 import { createClient } from '@/utils/supabase/server';
 
-export async function GET(request: NextRequest) {
+export async function GET() {
   try {
     const supabase = await createClient();
+    if (!supabase) {
+      return NextResponse.json({ connected: false, error: 'Configuration error' }, { status: 500 });
+    }
 
     // Get current user
     const { data: { user }, error: userError } = await supabase.auth.getUser();
