@@ -29,7 +29,7 @@ export async function GET() {
     const { data: invoices } = await stripe.invoices.list({
       customer: customerId,
       limit: 15,
-      expand: ['data.charge'],
+      expand: ['data.payments.payment.charge'],
     });
 
     const openAmountCents = invoices.reduce((sum, invoice) => {
@@ -40,10 +40,18 @@ export async function GET() {
     }, 0);
 
     const normalizedInvoices = invoices.map((invoice) => {
-      const charge =
-        typeof invoice.charge === 'string'
-          ? null
-          : (invoice.charge as Stripe.Charge | null | undefined);
+      // In Stripe v20+, receipt_url is accessed via payments.data[].payment.charge
+      let receiptUrl: string | null = null;
+      const payments = invoice.payments?.data;
+      if (payments && payments.length > 0) {
+        for (const paymentEntry of payments) {
+          const charge = paymentEntry.payment?.charge;
+          if (typeof charge === 'object' && charge?.receipt_url) {
+            receiptUrl = charge.receipt_url;
+            break;
+          }
+        }
+      }
 
       return {
         id: invoice.id,
@@ -57,7 +65,7 @@ export async function GET() {
         due_date: invoice.due_date ?? null,
         hosted_invoice_url: invoice.hosted_invoice_url ?? null,
         invoice_pdf: invoice.invoice_pdf ?? null,
-        receipt_url: charge?.receipt_url ?? null,
+        receipt_url: receiptUrl,
       };
     });
 
