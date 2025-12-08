@@ -1,5 +1,39 @@
+import AdminDashboardTabbed from "@/components/AdminDashboardTabbed";
+import { createClient } from "@/utils/supabase/server";
 import { redirect } from "next/navigation";
 
-export default function AdminRootPage() {
-  redirect("/admin/dashboard");
+export default async function AdminRootPage() {
+  const supabase = await createClient();
+  if (!supabase) {
+    return <div className="rounded-xl border border-dashed border-slate-200 bg-slate-50 p-5 text-sm">Supabase not configured.</div>;
+  }
+
+  const {
+    data: { session },
+  } = await supabase.auth.getSession();
+
+  if (!session) {
+    redirect("/auth");
+  }
+
+  const { data: profile } = await supabase.from("profiles").select("role").eq("id", session.user.id).single();
+
+  if (profile?.role !== "admin") {
+    return (
+      <div className="rounded-xl border border-dashed border-slate-200 bg-slate-50 p-5 text-sm text-slate-700">
+        Admin access required.
+      </div>
+    );
+  }
+
+  return (
+    <div className="grid gap-6">
+      <div>
+        <p className="text-xs uppercase tracking-[0.2em] text-indigo-700">Admin</p>
+        <h1 className="text-3xl font-semibold text-slate-900">Control Panel</h1>
+        <p className="text-sm text-slate-600">Manage all aspects of your handyman business.</p>
+      </div>
+      <AdminDashboardTabbed />
+    </div>
+  );
 }
