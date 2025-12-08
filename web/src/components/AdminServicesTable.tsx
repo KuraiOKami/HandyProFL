@@ -99,7 +99,7 @@ export default function AdminServicesTable({ initial }: { initial: Service[] }) 
           <input
             type="text"
             placeholder="Name"
-            value={newService.name}
+            value={newService.name ?? ''}
             onChange={(e) => setNewService((p) => ({ ...p, name: e.target.value }))}
             className="w-full rounded-lg border border-slate-200 px-2 py-1 text-sm"
           />
