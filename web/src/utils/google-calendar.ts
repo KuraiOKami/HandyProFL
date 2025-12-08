@@ -3,7 +3,7 @@
  * Handles OAuth, availability sync, and event creation
  */
 
-import { google, calendar_v3 } from 'googleapis';
+import { google } from 'googleapis';
 import { createClient } from '@/utils/supabase/server';
 
 export interface CalendarCredentials {
@@ -26,6 +26,9 @@ export interface AvailabilitySlot {
  */
 export async function getCalendarClient(userId: string) {
   const supabase = await createClient();
+  if (!supabase) {
+    throw new Error('Supabase client not configured');
+  }
 
   // Fetch credentials from database
   const { data: creds, error } = await supabase
@@ -171,9 +174,12 @@ export async function syncSlotsToDatabase(
   endDate: Date
 ): Promise<{ created: number; updated: number; deleted: number }> {
   const supabase = await createClient();
+  if (!supabase) {
+    throw new Error('Supabase client not configured');
+  }
   let created = 0;
-  let updated = 0;
-  let deleted = 0;
+  const updated = 0;
+  const deleted = 0;
 
   try {
     // Delete existing Google Calendar slots in the date range
@@ -378,6 +384,9 @@ export async function handleOAuthCallback(
 
   // Store credentials in database
   const supabase = await createClient();
+  if (!supabase) {
+    throw new Error('Supabase client not configured');
+  }
   const { error } = await supabase
     .from('google_calendar_credentials')
     .upsert({

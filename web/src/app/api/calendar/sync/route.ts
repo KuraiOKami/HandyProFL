@@ -10,6 +10,9 @@ import { generateAvailableSlots, syncSlotsToDatabase } from '@/utils/google-cale
 export async function POST(request: NextRequest) {
   try {
     const supabase = await createClient();
+    if (!supabase) {
+      return NextResponse.json({ error: 'Configuration error' }, { status: 500 });
+    }
 
     // Get current user
     const { data: { user }, error: userError } = await supabase.auth.getUser();
@@ -92,9 +95,12 @@ export async function POST(request: NextRequest) {
 /**
  * GET /api/calendar/sync - Get last sync status
  */
-export async function GET(request: NextRequest) {
+export async function GET() {
   try {
     const supabase = await createClient();
+    if (!supabase) {
+      return NextResponse.json({ error: 'Configuration error' }, { status: 500 });
+    }
 
     // Get current user
     const { data: { user }, error: userError } = await supabase.auth.getUser();

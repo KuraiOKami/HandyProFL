@@ -28,6 +28,11 @@ export async function GET(request: NextRequest) {
   try {
     // Get current user
     const supabase = await createClient();
+    if (!supabase) {
+      return NextResponse.redirect(
+        new URL('/admin/settings?calendar_error=configuration_error', request.url)
+      );
+    }
     const { data: { user }, error: userError } = await supabase.auth.getUser();
 
     if (userError || !user) {
