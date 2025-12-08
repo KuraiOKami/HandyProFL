@@ -8,11 +8,13 @@ import AdminRequestDetailView, {
 } from "@/components/admin/AdminRequestDetailView";
 import { createClient, createServiceRoleClient } from "@/utils/supabase/server";
 
-type PageProps = {
-  params: { id: string };
-};
+type PageProps = Readonly<{
+  params: Promise<{ id: string }>;
+}>;
 
 export default async function AdminRequestDetailPage({ params }: PageProps) {
+  const { id } = await params;
+
   const supabase = await createClient();
   if (!supabase) {
     return (
@@ -50,7 +52,7 @@ export default async function AdminRequestDetailPage({ params }: PageProps) {
     .select(
       "id, user_id, service_type, preferred_date, preferred_time, details, status, estimated_minutes, created_at",
     )
-    .eq("id", params.id)
+    .eq("id", id)
     .maybeSingle();
 
   if (requestError && requestError.code !== "PGRST116") {
