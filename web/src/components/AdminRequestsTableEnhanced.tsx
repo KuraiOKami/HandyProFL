@@ -1,5 +1,6 @@
 'use client';
 
+import Link from 'next/link';
 import { useMemo, useState } from 'react';
 
 type Request = {
@@ -273,9 +274,17 @@ export default function AdminRequestsTableEnhanced({ initial }: { initial: Reque
                       {req.status || 'pending'}
                     </span>
                   </div>
-                  <p className="text-xs text-slate-500">
-                    {req.preferred_date || 'Date'} @ {req.preferred_time || 'Time'} | Est: {req.estimated_minutes ?? '—'} min
-                  </p>
+                  <div className="flex items-center gap-3">
+                    <p className="text-xs text-slate-500">
+                      {req.preferred_date || 'Date'} @ {req.preferred_time || 'Time'} | Est: {req.estimated_minutes ?? '—'} min
+                    </p>
+                    <Link
+                      href={`/admin/requests/${req.id}`}
+                      className="text-xs font-semibold text-indigo-700 hover:text-indigo-800 hover:underline"
+                    >
+                      Open
+                    </Link>
+                  </div>
                 </div>
                 <p className="text-xs text-slate-500">User: {req.user_id || 'Unknown'}</p>
                 <p className="text-sm text-slate-800">{req.details || 'No details.'}</p>

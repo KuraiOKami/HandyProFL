@@ -1,5 +1,6 @@
 'use client';
 
+import Link from 'next/link';
 import { useEffect, useState } from 'react';
 
 type CalendarEvent = {
@@ -174,19 +175,20 @@ export default function AdminScheduleContent() {
                       </div>
                       <div className="space-y-1">
                         {dayEvents.slice(0, 3).map((event) => (
-                          <div
+                          <Link
                             key={event.id}
-                            className={`truncate rounded px-1.5 py-0.5 text-xs font-medium ${
+                            href={`/admin/requests/${event.id}`}
+                            className={`block truncate rounded px-1.5 py-0.5 text-xs font-medium transition ${
                               event.status === 'confirmed'
-                                ? 'bg-green-100 text-green-800'
+                                ? 'bg-green-100 text-green-800 hover:bg-green-200'
                                 : event.status === 'pending'
-                                  ? 'bg-amber-100 text-amber-800'
-                                  : 'bg-slate-100 text-slate-700'
+                                  ? 'bg-amber-100 text-amber-800 hover:bg-amber-200'
+                                  : 'bg-slate-100 text-slate-700 hover:bg-slate-200'
                             }`}
                             title={`${event.service_type} - ${event.preferred_time} (${event.status})`}
                           >
                             {event.preferred_time} {event.service_type}
-                          </div>
+                          </Link>
                         ))}
                         {dayEvents.length > 3 && (
                           <div className="text-xs font-semibold text-indigo-700">+{dayEvents.length - 3} more</div>
