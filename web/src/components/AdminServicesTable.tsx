@@ -4,7 +4,7 @@ import { useState } from 'react';
 
 type Service = {
   id: string;
-  name: string;
+  name: string | null;
   base_minutes: number | null;
   price_cents?: number | null;
 };
@@ -151,7 +151,7 @@ export default function AdminServicesTable({ initial }: { initial: Service[] }) 
                 <td className="px-3 py-2">
                   <input
                     type="text"
-                    defaultValue={svc.name}
+                    defaultValue={svc.name ?? ''}
                     onBlur={(e) => updateService(svc.id, { name: e.target.value })}
                     disabled={savingId === svc.id}
                     className="w-full rounded-lg border border-slate-200 px-2 py-1 text-sm"
