@@ -1,4 +1,4 @@
-import AdminRequestsTable from "@/components/AdminRequestsTable";
+import AdminRequestsTableEnhanced from "@/components/AdminRequestsTableEnhanced";
 import { createClient, createServiceRoleClient } from "@/utils/supabase/server";
 import { redirect } from "next/navigation";
 
@@ -40,9 +40,9 @@ export default async function AdminRequestsPage() {
       <div>
         <p className="text-xs uppercase tracking-[0.2em] text-indigo-700">Admin</p>
         <h1 className="text-3xl font-semibold text-slate-900">Requests</h1>
-        <p className="text-sm text-slate-600">View and manage all client requests.</p>
+        <p className="text-sm text-slate-600">Search, filter, and manage all client requests.</p>
       </div>
-      <AdminRequestsTable initial={requests} />
+      <AdminRequestsTableEnhanced initial={requests} />
     </div>
   );
 }
