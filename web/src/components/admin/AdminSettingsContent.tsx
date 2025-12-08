@@ -12,6 +12,29 @@ type CompanySettings = {
   apiKeyLabel: string;
 };
 
+type CalendarStatus = {
+  connected: boolean;
+  calendar_id?: string;
+  token_expiry?: string;
+  is_expired?: boolean;
+  last_updated?: string;
+  message?: string;
+};
+
+type SyncStatus = {
+  last_sync: {
+    synced_at: string;
+    sync_start_date: string;
+    sync_end_date: string;
+    slots_created: number;
+    slots_updated: number;
+    slots_deleted: number;
+    status: string;
+    error_message?: string;
+  } | null;
+  message?: string;
+};
+
 type Profile = {
   id: string;
   first_name: string | null;
@@ -67,6 +90,11 @@ export default function AdminSettingsContent() {
   const [roleSavingId, setRoleSavingId] = useState<string | null>(null);
   const [integrationStatus, setIntegrationStatus] = useState<IntegrationStatus | null>(null);
   const [integrationError, setIntegrationError] = useState<string | null>(null);
+  const [calendarStatus, setCalendarStatus] = useState<CalendarStatus | null>(null);
+  const [calendarLoading, setCalendarLoading] = useState(false);
+  const [syncStatus, setSyncStatus] = useState<SyncStatus | null>(null);
+  const [syncing, setSyncing] = useState(false);
+  const [syncMessage, setSyncMessage] = useState<string | null>(null);
 
   // Load persisted company settings locally (browser only)
   useEffect(() => {
@@ -125,6 +153,41 @@ export default function AdminSettingsContent() {
     loadIntegrationStatus();
   }, []);
 
+  // Fetch Google Calendar status
+  useEffect(() => {
+    const loadCalendarStatus = async () => {
+      setCalendarLoading(true);
+      try {
+        const res = await fetch('/api/calendar/status');
+        if (res.ok) {
+          const data = await res.json();
+          setCalendarStatus(data);
+        }
+      } catch (err) {
+        console.error('Failed to load calendar status:', err);
+      } finally {
+        setCalendarLoading(false);
+      }
+    };
+    loadCalendarStatus();
+  }, []);
+
+  // Fetch last sync status
+  useEffect(() => {
+    const loadSyncStatus = async () => {
+      try {
+        const res = await fetch('/api/calendar/sync');
+        if (res.ok) {
+          const data = await res.json();
+          setSyncStatus(data);
+        }
+      } catch (err) {
+        console.error('Failed to load sync status:', err);
+      }
+    };
+    loadSyncStatus();
+  }, []);
+
   const admins = useMemo(() => profiles.filter((p) => p.role === 'admin'), [profiles]);
   const team = useMemo(() => profiles.filter((p) => p.role !== 'admin'), [profiles]);
 
@@ -154,6 +217,45 @@ export default function AdminSettingsContent() {
       setRolesError('Failed to update role');
     } finally {
       setRoleSavingId(null);
+    }
+  };
+
+  const connectCalendar = () => {
+    window.location.href = '/api/calendar/connect';
+  };
+
+  const syncCalendar = async () => {
+    setSyncing(true);
+    setSyncMessage(null);
+    try {
+      const res = await fetch('/api/calendar/sync', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({
+          // Sync next 30 days by default
+          start_date: new Date().toISOString(),
+          end_date: new Date(Date.now() + 30 * 24 * 60 * 60 * 1000).toISOString(),
+          slot_duration_minutes: 30,
+        }),
+      });
+
+      const data = await res.json();
+
+      if (!res.ok) {
+        setSyncMessage(data.error || 'Failed to sync calendar');
+      } else {
+        setSyncMessage(`Successfully synced ${data.stats.total_slots} slots (${data.stats.available_slots} available)`);
+        // Refresh sync status
+        const syncRes = await fetch('/api/calendar/sync');
+        if (syncRes.ok) {
+          const syncData = await syncRes.json();
+          setSyncStatus(syncData);
+        }
+      }
+    } catch (err) {
+      setSyncMessage('Failed to sync calendar');
+    } finally {
+      setSyncing(false);
     }
   };
 
@@ -424,6 +526,137 @@ export default function AdminSettingsContent() {
             </p>
           </div>
         </div>
+      </div>
+
+      {/* Google Calendar Integration */}
+      <div className="grid gap-4 rounded-xl border border-slate-200 bg-white p-5 shadow-sm">
+        <div className="flex flex-wrap items-start justify-between gap-3">
+          <div>
+            <h3 className="text-lg font-semibold text-slate-900">Google Calendar Sync</h3>
+            <p className="text-sm text-slate-600">
+              Sync your availability and automatically create calendar events for bookings.
+            </p>
+          </div>
+          {calendarStatus?.connected ? (
+            <Badge ok={!calendarStatus.is_expired} label={calendarStatus.is_expired ? 'Token expired' : 'Connected'} />
+          ) : (
+            <Badge ok={false} label="Not connected" />
+          )}
+        </div>
+
+        {calendarLoading && <p className="text-sm text-slate-600">Loading calendar status...</p>}
+
+        {!calendarLoading && !calendarStatus?.connected && (
+          <div className="rounded-lg border border-dashed border-indigo-200 bg-indigo-50 p-4">
+            <p className="text-sm font-semibold text-indigo-900">Connect your Google Calendar</p>
+            <p className="mt-1 text-xs text-indigo-700">
+              Automatically sync your availability and create events when clients book appointments.
+            </p>
+            <button
+              onClick={connectCalendar}
+              className="mt-3 rounded-lg bg-indigo-700 px-4 py-2 text-sm font-semibold text-white hover:bg-indigo-800"
+            >
+              Connect Google Calendar
+            </button>
+          </div>
+        )}
+
+        {!calendarLoading && calendarStatus?.connected && (
+          <div className="grid gap-3">
+            <div className="rounded-lg border border-slate-200 bg-slate-50 p-3">
+              <p className="text-xs font-semibold uppercase tracking-[0.12em] text-slate-700">Connection Details</p>
+              <div className="mt-2 space-y-1 text-sm text-slate-700">
+                <p>
+                  <span className="font-semibold">Calendar ID:</span> {calendarStatus.calendar_id || 'Primary'}
+                </p>
+                {calendarStatus.token_expiry && (
+                  <p>
+                    <span className="font-semibold">Token Expires:</span>{' '}
+                    {new Date(calendarStatus.token_expiry).toLocaleString()}
+                  </p>
+                )}
+                {calendarStatus.last_updated && (
+                  <p>
+                    <span className="font-semibold">Last Updated:</span>{' '}
+                    {new Date(calendarStatus.last_updated).toLocaleString()}
+                  </p>
+                )}
+              </div>
+            </div>
+
+            {syncStatus?.last_sync && (
+              <div className="rounded-lg border border-slate-200 bg-slate-50 p-3">
+                <p className="text-xs font-semibold uppercase tracking-[0.12em] text-slate-700">Last Sync</p>
+                <div className="mt-2 space-y-1 text-sm text-slate-700">
+                  <p>
+                    <span className="font-semibold">Synced:</span>{' '}
+                    {new Date(syncStatus.last_sync.synced_at).toLocaleString()}
+                  </p>
+                  <p>
+                    <span className="font-semibold">Date Range:</span> {syncStatus.last_sync.sync_start_date} to{' '}
+                    {syncStatus.last_sync.sync_end_date}
+                  </p>
+                  <p>
+                    <span className="font-semibold">Slots Created:</span> {syncStatus.last_sync.slots_created}
+                  </p>
+                  <p>
+                    <span className="font-semibold">Status:</span>{' '}
+                    <span
+                      className={
+                        syncStatus.last_sync.status === 'success' ? 'text-green-700 font-semibold' : 'text-rose-700 font-semibold'
+                      }
+                    >
+                      {syncStatus.last_sync.status}
+                    </span>
+                  </p>
+                  {syncStatus.last_sync.error_message && (
+                    <p className="text-rose-700">
+                      <span className="font-semibold">Error:</span> {syncStatus.last_sync.error_message}
+                    </p>
+                  )}
+                </div>
+              </div>
+            )}
+
+            <div className="flex flex-wrap items-center gap-3">
+              <button
+                onClick={syncCalendar}
+                disabled={syncing || calendarStatus.is_expired}
+                className="rounded-lg bg-indigo-700 px-4 py-2 text-sm font-semibold text-white hover:bg-indigo-800 disabled:cursor-not-allowed disabled:opacity-60"
+              >
+                {syncing ? 'Syncing...' : 'Sync Availability Now'}
+              </button>
+              <button
+                onClick={connectCalendar}
+                className="rounded-lg border border-slate-300 px-4 py-2 text-sm font-semibold text-slate-700 hover:border-indigo-600 hover:text-indigo-700"
+              >
+                Reconnect Calendar
+              </button>
+            </div>
+
+            {syncMessage && (
+              <div
+                className={`rounded-lg border p-3 text-sm ${
+                  syncMessage.includes('Success') || syncMessage.includes('synced')
+                    ? 'border-green-200 bg-green-50 text-green-800'
+                    : 'border-rose-200 bg-rose-50 text-rose-800'
+                }`}
+              >
+                {syncMessage}
+              </div>
+            )}
+
+            <div className="rounded-lg border border-amber-200 bg-amber-50 p-3">
+              <p className="text-xs font-semibold text-amber-900">How it works</p>
+              <ul className="mt-2 space-y-1 text-xs text-amber-800">
+                <li>• Syncing reads your Google Calendar busy times and creates available slots in the database</li>
+                <li>• When clients book appointments, events are automatically created in your Google Calendar</li>
+                <li>• Sync runs for the next 30 days by default with 30-minute time slots</li>
+                <li>• Business hours are 9 AM - 7 PM ET, weekdays only</li>
+              </ul>
+            </div>
+          </div>
+        )}
       </div>
     </section>
   );
