@@ -1,7 +1,6 @@
 'use client';
 
 import { useEffect, useState } from 'react';
-import { getSupabaseClient } from '@/lib/supabaseClient';
 
 type ClientProfile = {
   id: string;
@@ -26,44 +25,37 @@ export default function AdminClientsContent() {
 
   useEffect(() => {
     const loadClients = async () => {
-      const supabase = getSupabaseClient();
-      if (!supabase) {
-        setError('Supabase not configured');
+      try {
+        const res = await fetch('/api/admin/clients');
+
+        if (!res.ok) {
+          const body = await res.json().catch(() => ({}));
+          setError(body.error || 'Failed to load clients');
+          setLoading(false);
+          return;
+        }
+
+        const { clients, requestCounts, addressCounts } = await res.json();
+        setClients(clients ?? []);
+
+        // Convert counts to maps
+        const reqMap = new Map<string, number>();
+        Object.entries(requestCounts || {}).forEach(([userId, count]) => {
+          reqMap.set(userId, count as number);
+        });
+        setRequestMap(reqMap);
+
+        const addrMap = new Map<string, number>();
+        Object.entries(addressCounts || {}).forEach(([userId, count]) => {
+          addrMap.set(userId, count as number);
+        });
+        setAddressMap(addrMap);
+
         setLoading(false);
-        return;
-      }
-
-      const { data, error: fetchError } = await supabase
-        .from('profiles')
-        .select('id, first_name, middle_initial, last_name, email, phone, street, city, state, postal_code, role')
-        .order('updated_at', { ascending: false });
-
-      if (fetchError) {
-        setError(fetchError.message);
+      } catch {
+        setError('Failed to load clients');
         setLoading(false);
-        return;
       }
-
-      setClients(data ?? []);
-
-      // Fetch service requests and addresses counts
-      const { data: serviceRequests = [] } = await supabase.from('service_requests').select('user_id');
-      const { data: addresses = [] } = await supabase.from('addresses').select('user_id');
-
-      // Build count maps
-      const reqMap = new Map<string, number>();
-      (serviceRequests as { user_id: string }[]).forEach((r) => {
-        reqMap.set(r.user_id, (reqMap.get(r.user_id) ?? 0) + 1);
-      });
-      setRequestMap(reqMap);
-
-      const addrMap = new Map<string, number>();
-      (addresses as { user_id: string }[]).forEach((a) => {
-        addrMap.set(a.user_id, (addrMap.get(a.user_id) ?? 0) + 1);
-      });
-      setAddressMap(addrMap);
-
-      setLoading(false);
     };
 
     loadClients();
