@@ -12,6 +12,23 @@ async function requireUser() {
   return { user: data.user };
 }
 
+type ChargeSummary = {
+  id: string;
+  amount: number;
+  currency: string | null;
+  status: Stripe.Charge.Status | null;
+  created: number | null;
+  description: string | null;
+  receipt_url: string | null;
+  invoice: string | null;
+  payment_method_details?: {
+    brand?: string | null;
+    last4?: string | null;
+    exp_month?: number | null;
+    exp_year?: number | null;
+  };
+};
+
 export async function GET() {
   if (!stripe) return NextResponse.json({ error: 'Stripe not configured' }, { status: 500 });
 
@@ -30,6 +47,11 @@ export async function GET() {
       customer: customerId,
       limit: 15,
       expand: ['data.payments.payment.charge'],
+    });
+
+    const { data: charges } = await stripe.charges.list({
+      customer: customerId,
+      limit: 15,
     });
 
     const openAmountCents = invoices.reduce((sum, invoice) => {
@@ -74,7 +96,25 @@ export async function GET() {
       balance_cents: (customer as Stripe.Customer).balance ?? 0,
       currency: (customer as Stripe.Customer).currency ?? normalizedInvoices[0]?.currency ?? 'usd',
       open_amount_cents: openAmountCents,
+      livemode: (customer as Stripe.Customer).livemode ?? null,
+      invoice_count: normalizedInvoices.length,
       invoices: normalizedInvoices,
+      charges: charges.map<ChargeSummary>((charge) => ({
+        id: charge.id,
+        amount: charge.amount ?? 0,
+        currency: charge.currency ?? (customer as Stripe.Customer).currency ?? 'usd',
+        status: charge.status ?? null,
+        created: charge.created ?? null,
+        description: charge.description ?? null,
+        receipt_url: charge.receipt_url ?? null,
+        invoice: typeof charge.invoice === 'string' ? charge.invoice : charge.invoice?.id ?? null,
+        payment_method_details: {
+          brand: charge.payment_method_details?.card?.brand ?? null,
+          last4: charge.payment_method_details?.card?.last4 ?? null,
+          exp_month: charge.payment_method_details?.card?.exp_month ?? null,
+          exp_year: charge.payment_method_details?.card?.exp_year ?? null,
+        },
+      })),
     });
   } catch (e) {
     console.error('Error loading invoices', e);

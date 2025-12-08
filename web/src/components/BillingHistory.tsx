@@ -24,7 +24,27 @@ type InvoiceResponse = {
   currency: string | null;
   open_amount_cents: number;
   invoices: Invoice[];
+  charges?: Charge[];
+  livemode: boolean | null;
+  invoice_count?: number;
   error?: string;
+};
+
+type Charge = {
+  id: string;
+  amount: number;
+  currency: string | null;
+  status: string | null;
+  created: number | null;
+  description: string | null;
+  receipt_url: string | null;
+  invoice: string | null;
+  payment_method_details?: {
+    brand?: string | null;
+    last4?: string | null;
+    exp_month?: number | null;
+    exp_year?: number | null;
+  };
 };
 
 const formatMoney = (cents: number, currency?: string | null) => {
@@ -188,10 +208,92 @@ export default function BillingHistory() {
               Shared with Stripe for receipts and payments.
             </p>
           </div>
+          <div className="grid gap-2 rounded-lg border border-slate-200 bg-slate-50 p-4">
+            <p className="text-xs uppercase tracking-[0.2em] text-slate-600">
+              Stripe mode
+            </p>
+            <p className="text-sm font-semibold text-slate-900">
+              {data?.livemode == null ? "—" : data.livemode ? "Live" : "Test"}
+            </p>
+            <p className="text-xs text-slate-600">
+              Make sure this matches where your invoices live.
+            </p>
+          </div>
         </div>
       )}
 
       <div className="grid gap-3">
+        {!loading && !error && data?.charges && (
+          <div className="rounded-lg border border-slate-200 bg-slate-50 p-4">
+            <div className="flex flex-wrap items-center justify-between gap-2">
+              <div>
+                <p className="text-xs uppercase tracking-[0.2em] text-slate-600">
+                  Recent charges
+                </p>
+                <p className="text-sm text-slate-600">
+                  PaymentIntents/charges for this customer (most recent 15).
+                </p>
+              </div>
+              <p className="text-xs text-slate-600">
+                Mode: {data.livemode == null ? "—" : data.livemode ? "Live" : "Test"}
+              </p>
+            </div>
+            <div className="mt-3 grid gap-3">
+              {data.charges.length === 0 && (
+                <p className="text-sm text-slate-700">
+                  No charges yet for this customer in this mode.
+                </p>
+              )}
+              {data.charges.map((charge) => (
+                <div
+                  key={charge.id}
+                  className="flex flex-wrap items-center justify-between gap-3 rounded-lg border border-slate-200 bg-white px-4 py-3"
+                >
+                  <div className="grid gap-1">
+                    <div className="flex flex-wrap items-center gap-2">
+                      <span className="rounded-full border border-slate-200 bg-slate-50 px-2.5 py-1 text-[11px] font-semibold uppercase tracking-wide text-slate-700">
+                        {charge.status ?? "—"}
+                      </span>
+                      <p className="text-sm font-semibold text-slate-900">
+                        {formatMoney(charge.amount, charge.currency ?? currency)}
+                      </p>
+                      <p className="text-xs text-slate-600">{formatDate(charge.created)}</p>
+                    </div>
+                    <p className="text-xs text-slate-600">
+                      {charge.payment_method_details?.brand
+                        ? `${charge.payment_method_details.brand.toUpperCase()} •••• ${
+                            charge.payment_method_details.last4 ?? "••••"
+                          }`
+                        : "Payment method unknown"}
+                    </p>
+                    {charge.invoice && (
+                      <p className="text-xs text-slate-500">Invoice: {charge.invoice}</p>
+                    )}
+                    {charge.description && (
+                      <p className="text-xs text-slate-500">Description: {charge.description}</p>
+                    )}
+                  </div>
+                  <div className="flex flex-wrap items-center gap-2 text-sm">
+                    {charge.receipt_url && (
+                      <a
+                        href={charge.receipt_url}
+                        target="_blank"
+                        rel="noreferrer"
+                        className="text-indigo-700 underline underline-offset-4"
+                      >
+                        Receipt
+                      </a>
+                    )}
+                    {!charge.receipt_url && (
+                      <p className="text-xs text-slate-500">No receipt link</p>
+                    )}
+                  </div>
+                </div>
+              ))}
+            </div>
+          </div>
+        )}
+
         {loading && (
           <p className="text-sm text-slate-600">Loading invoices...</p>
         )}
