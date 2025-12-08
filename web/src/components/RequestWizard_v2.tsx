@@ -1,14 +1,11 @@
 'use client';
 
-import { lazy, Suspense, useCallback, useEffect } from 'react';
-import { useRequestWizard, services, type RequestItem } from '@/hooks/useRequestWizard';
+import { useCallback, useEffect } from 'react';
+import { useRequestWizard, services, type RequestItem, type Step } from '@/hooks/useRequestWizard';
 import WizardProgress from './wizard/WizardProgress';
 import ServiceSelector from './wizard/ServiceSelector';
 import SchedulingPicker from './wizard/SchedulingPicker';
 import PaymentMethodSelector from './wizard/PaymentMethodSelector';
-
-// Lazy load payment components since they're only needed in step 4
-const PaymentReview = lazy(() => import('./wizard/PaymentMethodSelector'));
 
 const DISPLAY_TIME_ZONE = 'America/New_York';
 
@@ -67,7 +64,7 @@ export default function RequestWizardV2() {
 
       wizard.setAvailableSlots((prev) => ({ ...prev, [selectedDate]: normalized.length ? normalized : [] }));
     },
-    [wizard.supabase, wizard.setAvailableSlots, wizard.setSlotDurationMinutes],
+    [wizard],
   );
 
   // Load payment methods when reaching step 4
@@ -75,7 +72,7 @@ export default function RequestWizardV2() {
     if (wizard.step === 4 && wizard.session) {
       wizard.loadPaymentMethods();
     }
-  }, [wizard.step, wizard.session, wizard.loadPaymentMethods]);
+  }, [wizard]);
 
   return (
     <div className="grid gap-4">
@@ -201,14 +198,14 @@ export default function RequestWizardV2() {
                   </div>
                   <div className="flex gap-2">
                     <button
-                      onClick={() => (wizard.step === 1 ? wizard.setOpen(false) : wizard.setStep((prev) => (prev - 1) as any))}
+                      onClick={() => (wizard.step === 1 ? wizard.setOpen(false) : wizard.setStep((prev) => (prev - 1) as Step))}
                       className="rounded-lg border border-slate-300 px-4 py-2 text-sm font-semibold text-slate-800 hover:border-indigo-600 hover:text-indigo-700"
                     >
                       {wizard.step === 1 ? 'Cancel' : 'Back'}
                     </button>
                     {wizard.step < 4 && (
                       <button
-                        onClick={() => wizard.setStep((prev) => (prev + 1) as any)}
+                        onClick={() => wizard.setStep((prev) => (prev + 1) as Step)}
                         className="rounded-lg bg-indigo-700 px-4 py-2 text-sm font-semibold text-white shadow-sm hover:bg-indigo-800 disabled:cursor-not-allowed disabled:bg-slate-300"
                         disabled={wizard.step === 2 && (!wizard.slot || Object.keys(wizard.availableSlots).length === 0)}
                       >
@@ -359,6 +356,14 @@ function DetailsStep({
 }
 
 // ReviewStep Component
+type PaymentMethodType = {
+  id: string;
+  brand?: string | null;
+  last4?: string | null;
+  exp_month?: number | null;
+  exp_year?: number | null;
+};
+
 type ReviewStepProps = {
   items: RequestItem[];
   getPriceForItem: (item: RequestItem) => number;
@@ -368,7 +373,7 @@ type ReviewStepProps = {
   slot: { time: string; startIso: string } | null;
   payMethod: 'pay_later' | 'card_on_file';
   onPayMethodChange: (method: 'pay_later' | 'card_on_file') => void;
-  paymentMethods: any[];
+  paymentMethods: PaymentMethodType[];
   selectedPaymentMethodId: string | null;
   onSelectPaymentMethod: (id: string) => void;
   walletLoading: boolean;

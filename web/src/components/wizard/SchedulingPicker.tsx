@@ -12,8 +12,6 @@ type SchedulingPickerProps = {
   requiredSlots: number;
 };
 
-const DISPLAY_TIME_ZONE = 'America/New_York';
-
 function nextDays(days = 14) {
   const out: { label: string; value: string }[] = [];
   const formatter = new Intl.DateTimeFormat('en-US', { weekday: 'short', month: 'short', day: 'numeric' });
