@@ -37,7 +37,7 @@ export default function TopNav() {
             Settings
           </Link>
           {session?.user && (
-            <Link href="/admin/requests" className="hover:text-indigo-700 transition">
+            <Link href="/admin" className="hover:text-indigo-700 transition">
               Admin
             </Link>
           )}
