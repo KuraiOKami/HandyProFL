@@ -38,7 +38,6 @@ type Charge = {
   created: number | null;
   description: string | null;
   receipt_url: string | null;
-  invoice: string | null;
   payment_method_details?: {
     brand?: string | null;
     last4?: string | null;
@@ -266,9 +265,6 @@ export default function BillingHistory() {
                           }`
                         : "Payment method unknown"}
                     </p>
-                    {charge.invoice && (
-                      <p className="text-xs text-slate-500">Invoice: {charge.invoice}</p>
-                    )}
                     {charge.description && (
                       <p className="text-xs text-slate-500">Description: {charge.description}</p>
                     )}

@@ -20,7 +20,6 @@ type ChargeSummary = {
   created: number | null;
   description: string | null;
   receipt_url: string | null;
-  invoice: string | null;
   payment_method_details?: {
     brand?: string | null;
     last4?: string | null;
@@ -107,7 +106,6 @@ export async function GET() {
         created: charge.created ?? null,
         description: charge.description ?? null,
         receipt_url: charge.receipt_url ?? null,
-        invoice: typeof charge.invoice === 'string' ? charge.invoice : charge.invoice?.id ?? null,
         payment_method_details: {
           brand: charge.payment_method_details?.card?.brand ?? null,
           last4: charge.payment_method_details?.card?.last4 ?? null,
