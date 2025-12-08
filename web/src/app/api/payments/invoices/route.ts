@@ -45,7 +45,9 @@ export async function GET() {
     const { data: invoices } = await stripe.invoices.list({
       customer: customerId,
       limit: 15,
-      expand: ['data.payments.payment.charge'],
+      // In Stripe v20, invoices expose payments -> payment -> charge.
+      // Expand that to surface receipt URLs.
+      expand: ['data.payments.data.payment.charge'],
     });
 
     const { data: charges } = await stripe.charges.list({
@@ -61,16 +63,20 @@ export async function GET() {
     }, 0);
 
     const normalizedInvoices = invoices.map((invoice) => {
-      // In Stripe v20+, receipt_url is accessed via payments.data[].payment.charge
+      // Stripe v20+: receipt is reachable via payments.data[].payment.charge
+      type InvoiceWithPayments = Stripe.Invoice & {
+        payments?: { data?: Array<{ payment?: { charge?: string | Stripe.Charge | null } }> };
+      };
+      const payments = (invoice as InvoiceWithPayments).payments?.data ?? [];
       let receiptUrl: string | null = null;
-      const payments = invoice.payments?.data;
-      if (payments && payments.length > 0) {
-        for (const paymentEntry of payments) {
-          const charge = paymentEntry.payment?.charge;
-          if (typeof charge === 'object' && charge?.receipt_url) {
-            receiptUrl = charge.receipt_url;
-            break;
-          }
+      for (const paymentEntry of payments) {
+        const charge =
+          paymentEntry.payment?.charge && typeof paymentEntry.payment.charge === 'object'
+            ? (paymentEntry.payment.charge as Stripe.Charge)
+            : null;
+        if (charge?.receipt_url) {
+          receiptUrl = charge.receipt_url;
+          break;
         }
       }
 
