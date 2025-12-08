@@ -1,4 +1,4 @@
-import SettingsDashboard from "@/components/SettingsDashboard";
+import SettingsDashboardTabbed from "@/components/SettingsDashboardTabbed";
 
 export default function SettingsPage() {
   return (
@@ -6,9 +6,9 @@ export default function SettingsPage() {
       <div>
         <p className="text-xs uppercase tracking-[0.2em] text-indigo-700">Account</p>
         <h1 className="text-3xl font-semibold text-slate-900">Settings</h1>
-        <p className="text-sm text-slate-600">Profile, wallet, and your booking requests in one place.</p>
+        <p className="text-sm text-slate-600">Manage your profile, wallet, billing, and booking requests.</p>
       </div>
-      <SettingsDashboard />
+      <SettingsDashboardTabbed />
     </div>
   );
 }
