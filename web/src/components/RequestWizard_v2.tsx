@@ -87,22 +87,22 @@ export default function RequestWizardV2() {
       </button>
 
       {wizard.open && (
-        <div className="fixed inset-0 z-40 flex items-center justify-center bg-slate-900/40 px-4 py-8">
-          <div className="relative w-full max-w-4xl rounded-2xl bg-white shadow-2xl ring-1 ring-slate-200">
-            <div className="flex items-center justify-between border-b border-slate-200 px-6 py-4">
+        <div className="fixed inset-0 z-40 flex items-start sm:items-center justify-center bg-slate-900/40 px-2 py-4 sm:px-4 sm:py-8 overflow-y-auto">
+          <div className="relative w-full max-w-4xl rounded-2xl bg-white shadow-2xl ring-1 ring-slate-200 my-auto">
+            <div className="flex items-center justify-between border-b border-slate-200 px-4 py-3 sm:px-6 sm:py-4">
               <div>
                 <p className="text-xs uppercase tracking-[0.2em] text-indigo-700">Request</p>
-                <h2 className="text-xl font-semibold text-slate-900">Book a handyman visit</h2>
+                <h2 className="text-lg sm:text-xl font-semibold text-slate-900">Book a handyman visit</h2>
               </div>
               <button
                 onClick={() => wizard.setOpen(false)}
-                className="rounded-full border border-slate-200 px-3 py-1 text-sm font-semibold text-slate-700 hover:border-indigo-600 hover:text-indigo-700"
+                className="rounded-full border border-slate-200 px-3 py-1 text-xs sm:text-sm font-semibold text-slate-700 hover:border-indigo-600 hover:text-indigo-700"
               >
                 Close
               </button>
             </div>
 
-            <div className="grid gap-4 px-6 py-5">
+            <div className="grid gap-4 px-4 py-4 sm:px-6 sm:py-5">
               <WizardProgress currentStep={wizard.step} />
 
               {wizard.step === 1 && (
@@ -189,24 +189,24 @@ export default function RequestWizardV2() {
               {wizard.error && <p className="rounded-md bg-rose-50 px-3 py-2 text-sm text-rose-800">{wizard.error}</p>}
 
               {wizard.step < 5 && (
-                <div className="flex items-center justify-between border-t border-slate-200 pt-4">
-                  <div className="text-sm text-slate-600">
+                <div className="flex flex-col sm:flex-row items-start sm:items-center justify-between gap-3 border-t border-slate-200 pt-4">
+                  <div className="text-xs sm:text-sm text-slate-600">
                     {wizard.step === 1 && 'Choose the service and options.'}
                     {wizard.step === 2 && 'Select a date and a time slot.'}
                     {wizard.step === 3 && 'Add any extra context.'}
                     {wizard.step === 4 && 'Review subtotal and payment preference.'}
                   </div>
-                  <div className="flex gap-2">
+                  <div className="flex gap-2 w-full sm:w-auto">
                     <button
                       onClick={() => (wizard.step === 1 ? wizard.setOpen(false) : wizard.setStep((prev) => (prev - 1) as Step))}
-                      className="rounded-lg border border-slate-300 px-4 py-2 text-sm font-semibold text-slate-800 hover:border-indigo-600 hover:text-indigo-700"
+                      className="flex-1 sm:flex-initial rounded-lg border border-slate-300 px-4 py-2.5 text-sm font-semibold text-slate-800 hover:border-indigo-600 hover:text-indigo-700"
                     >
                       {wizard.step === 1 ? 'Cancel' : 'Back'}
                     </button>
                     {wizard.step < 4 && (
                       <button
                         onClick={() => wizard.setStep((prev) => (prev + 1) as Step)}
-                        className="rounded-lg bg-indigo-700 px-4 py-2 text-sm font-semibold text-white shadow-sm hover:bg-indigo-800 disabled:cursor-not-allowed disabled:bg-slate-300"
+                        className="flex-1 sm:flex-initial rounded-lg bg-indigo-700 px-4 py-2.5 text-sm font-semibold text-white shadow-sm hover:bg-indigo-800 disabled:cursor-not-allowed disabled:bg-slate-300"
                         disabled={wizard.step === 2 && (!wizard.slot || Object.keys(wizard.availableSlots).length === 0)}
                       >
                         Continue
@@ -216,7 +216,7 @@ export default function RequestWizardV2() {
                       <button
                         onClick={wizard.onSubmit}
                         disabled={wizard.submitting}
-                        className="rounded-lg bg-indigo-700 px-4 py-2 text-sm font-semibold text-white shadow-sm hover:bg-indigo-800 disabled:cursor-not-allowed disabled:bg-slate-300"
+                        className="flex-1 sm:flex-initial rounded-lg bg-indigo-700 px-4 py-2.5 text-sm font-semibold text-white shadow-sm hover:bg-indigo-800 disabled:cursor-not-allowed disabled:bg-slate-300"
                       >
                         {wizard.submitting ? 'Submitting...' : 'Submit request'}
                       </button>
