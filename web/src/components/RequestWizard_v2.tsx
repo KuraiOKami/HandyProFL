@@ -1,6 +1,6 @@
 'use client';
 
-import { useCallback, useEffect } from 'react';
+import { useCallback } from 'react';
 import { useRequestWizard, services, type RequestItem, type Step } from '@/hooks/useRequestWizard';
 import WizardProgress from './wizard/WizardProgress';
 import ServiceSelector from './wizard/ServiceSelector';
@@ -67,13 +67,6 @@ export default function RequestWizardV2() {
     [wizard],
   );
 
-  // Load payment methods when reaching step 4
-  useEffect(() => {
-    if (wizard.step === 4 && wizard.session) {
-      wizard.loadPaymentMethods();
-    }
-  }, [wizard]);
-
   return (
     <div className="grid gap-4">
       <button
@@ -139,10 +132,6 @@ export default function RequestWizardV2() {
                 <DetailsStep
                   notes={wizard.notes}
                   onNotesChange={wizard.setNotes}
-                  extraItems={wizard.extraItems}
-                  onExtraItemsChange={wizard.setExtraItems}
-                  newItem={wizard.newItem}
-                  onNewItemChange={wizard.setNewItem}
                   photoNames={wizard.photoNames}
                   onPhotoNamesChange={wizard.setPhotoNames}
                   items={wizard.items}
@@ -162,14 +151,6 @@ export default function RequestWizardV2() {
                   requiredMinutes={wizard.requiredMinutes}
                   date={wizard.date}
                   slot={wizard.slot}
-                  payMethod={wizard.payMethod}
-                  onPayMethodChange={wizard.setPayMethod}
-                  paymentMethods={wizard.paymentMethods}
-                  selectedPaymentMethodId={wizard.selectedPaymentMethodId}
-                  onSelectPaymentMethod={wizard.setSelectedPaymentMethodId}
-                  walletLoading={wizard.walletLoading}
-                  walletError={wizard.walletError}
-                  onRefreshCards={wizard.loadPaymentMethods}
                 />
               )}
 
@@ -236,10 +217,6 @@ export default function RequestWizardV2() {
 type DetailsStepProps = {
   notes: string;
   onNotesChange: (notes: string) => void;
-  extraItems: string[];
-  onExtraItemsChange: (items: string[]) => void;
-  newItem: string;
-  onNewItemChange: (item: string) => void;
   photoNames: string[];
   onPhotoNamesChange: (names: string[]) => void;
   items: RequestItem[];
@@ -250,10 +227,6 @@ type DetailsStepProps = {
 function DetailsStep({
   notes,
   onNotesChange,
-  extraItems,
-  onExtraItemsChange,
-  newItem,
-  onNewItemChange,
   photoNames,
   onPhotoNamesChange,
   items,
@@ -265,47 +238,6 @@ function DetailsStep({
   return (
     <div className="grid gap-3 rounded-xl border border-slate-200 p-4">
       <p className="text-sm font-semibold text-slate-900">Details</p>
-      <div className="grid gap-2 rounded-lg border border-slate-200 bg-slate-50 p-3">
-        <div className="flex items-center justify-between">
-          <p className="text-sm font-semibold text-slate-900">Extra items</p>
-          <button
-            onClick={() => {
-              if (!newItem.trim()) return;
-              onExtraItemsChange([...extraItems, newItem.trim()]);
-              onNewItemChange('');
-            }}
-            className="rounded-lg bg-indigo-700 px-3 py-1.5 text-xs font-semibold text-white shadow-sm hover:bg-indigo-800"
-            type="button"
-          >
-            Add item
-          </button>
-        </div>
-        <input
-          type="text"
-          value={newItem}
-          onChange={(e) => onNewItemChange(e.target.value)}
-          className="w-full rounded-lg border border-slate-300 px-3 py-2 text-slate-900 shadow-inner shadow-slate-100 focus:border-indigo-600 focus:outline-none focus:ring-2 focus:ring-indigo-100"
-          placeholder="e.g., additional chair, side table"
-        />
-        <div className="flex flex-wrap gap-2">
-          {extraItems.map((item, idx) => (
-            <span
-              key={idx}
-              className="flex items-center gap-2 rounded-full border border-slate-200 bg-white px-3 py-1 text-xs font-semibold text-slate-800"
-            >
-              {item}
-              <button
-                type="button"
-                onClick={() => onExtraItemsChange(extraItems.filter((_, i) => i !== idx))}
-                className="text-slate-500 hover:text-rose-600"
-              >
-                ✕
-              </button>
-            </span>
-          ))}
-          {!extraItems.length && <span className="text-xs text-slate-500">No extra items added yet.</span>}
-        </div>
-      </div>
       <textarea
         value={notes}
         onChange={(e) => onNotesChange(e.target.value)}
@@ -356,14 +288,6 @@ function DetailsStep({
 }
 
 // ReviewStep Component
-type PaymentMethodType = {
-  id: string;
-  brand?: string | null;
-  last4?: string | null;
-  exp_month?: number | null;
-  exp_year?: number | null;
-};
-
 type ReviewStepProps = {
   items: RequestItem[];
   getPriceForItem: (item: RequestItem) => number;
@@ -371,14 +295,6 @@ type ReviewStepProps = {
   requiredMinutes: number;
   date: string;
   slot: { time: string; startIso: string } | null;
-  payMethod: 'pay_later' | 'card_on_file';
-  onPayMethodChange: (method: 'pay_later' | 'card_on_file') => void;
-  paymentMethods: PaymentMethodType[];
-  selectedPaymentMethodId: string | null;
-  onSelectPaymentMethod: (id: string) => void;
-  walletLoading: boolean;
-  walletError: string | null;
-  onRefreshCards: () => void;
 };
 
 function ReviewStep({
@@ -388,14 +304,6 @@ function ReviewStep({
   requiredMinutes,
   date,
   slot,
-  payMethod,
-  onPayMethodChange,
-  paymentMethods,
-  selectedPaymentMethodId,
-  onSelectPaymentMethod,
-  walletLoading,
-  walletError,
-  onRefreshCards,
 }: ReviewStepProps) {
   return (
     <div className="grid gap-3 rounded-xl border border-slate-200 p-4">
@@ -454,16 +362,7 @@ function ReviewStep({
           </span>
         </div>
       </div>
-      <PaymentMethodSelector
-        payMethod={payMethod}
-        onPayMethodChange={onPayMethodChange}
-        paymentMethods={paymentMethods}
-        selectedPaymentMethodId={selectedPaymentMethodId}
-        onSelectPaymentMethod={onSelectPaymentMethod}
-        walletLoading={walletLoading}
-        walletError={walletError}
-        onRefreshCards={onRefreshCards}
-      />
+      <PaymentMethodSelector />
     </div>
   );
 }

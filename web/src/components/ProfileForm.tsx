@@ -209,7 +209,6 @@ export default function ProfileForm() {
         >
           {saving ? 'Saving...' : 'Save profile'}
         </button>
-        <p className="text-xs text-slate-500">Syncs to Supabase table <code className="rounded bg-slate-100 px-1 py-0.5">profiles</code>.</p>
       </div>
       {status && <p className="rounded-md bg-green-50 px-3 py-2 text-sm text-green-800">{status}</p>}
       {error && <p className="rounded-md bg-rose-50 px-3 py-2 text-sm text-rose-800">{error}</p>}

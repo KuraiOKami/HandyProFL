@@ -160,16 +160,11 @@ export default function AvailabilityGrid() {
 
   return (
     <div className="rounded-xl bg-white p-5 shadow-sm ring-1 ring-slate-200">
-      <div className="flex items-center justify-between">
-        <div>
-          <h2 className="text-lg font-semibold text-slate-900">Calendar-style scheduling</h2>
-          <p className="text-sm text-slate-600">
-            Pick a slot to book your appointment. Times shown in Eastern Time (ET).
-          </p>
-        </div>
-        <span className="rounded-full bg-slate-100 px-3 py-1 text-xs font-semibold text-slate-700">
-          Client view
-        </span>
+      <div>
+        <h2 className="text-lg font-semibold text-slate-900">Available times</h2>
+        <p className="text-sm text-slate-600">
+          Pick a slot to book your appointment. Times shown in Eastern Time (ET).
+        </p>
       </div>
       <div className="mt-4 grid gap-4 md:grid-cols-2 lg:grid-cols-4">
         {availability.map((day) => (

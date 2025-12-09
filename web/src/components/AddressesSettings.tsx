@@ -218,10 +218,6 @@ export default function AddressesSettings() {
           >
             {saving ? "Saving..." : "Add address"}
           </button>
-          <p className="text-xs text-slate-500">
-            Addresses save to the{" "}
-            <code className="rounded bg-slate-100 px-1">addresses</code> table.
-          </p>
         </div>
       </form>
 

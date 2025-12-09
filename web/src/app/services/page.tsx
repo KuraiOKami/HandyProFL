@@ -1,18 +1,12 @@
 import { coreServices } from "@/lib/services";
-import Link from "next/link";
 
 export default function ServicesPage() {
   return (
     <div className="grid gap-6">
-      <div className="flex items-center justify-between">
-        <div>
-          <p className="text-xs uppercase tracking-[0.2em] text-indigo-700">Handyman menu</p>
-          <h1 className="text-3xl font-semibold text-slate-900">Services we handle</h1>
-          <p className="text-sm text-slate-600">Book online and get confirmations via email/SMS.</p>
-        </div>
-        <Link href="/requests" className="rounded-full bg-indigo-700 px-4 py-2 text-sm font-semibold text-white shadow-sm hover:bg-indigo-800">
-          Request a service
-        </Link>
+      <div>
+        <p className="text-xs uppercase tracking-[0.2em] text-indigo-700">Handyman menu</p>
+        <h1 className="text-3xl font-semibold text-slate-900">Services we handle</h1>
+        <p className="text-sm text-slate-600">Book online and get confirmations via email/SMS.</p>
       </div>
       <div className="grid gap-4 md:grid-cols-2">
         {coreServices.map((service) => (
