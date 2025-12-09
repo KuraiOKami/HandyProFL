@@ -36,13 +36,29 @@ export async function GET() {
   }
 
   // Fetch service requests and addresses counts
-  const { data: serviceRequests = [] } = await adminSupabase.from('service_requests').select('user_id');
+  const { data: serviceRequests = [] } = await adminSupabase
+    .from('service_requests')
+    .select('user_id, status, created_at')
+    .order('created_at', { ascending: false });
   const { data: addresses = [] } = await adminSupabase.from('addresses').select('user_id');
 
   // Build count maps
   const requestCounts: Record<string, number> = {};
-  (serviceRequests as { user_id: string }[]).forEach((r) => {
+  const openRequestCounts: Record<string, number> = {};
+  const lastInteractions: Record<string, string> = {};
+
+  (serviceRequests as { user_id: string; status: string | null; created_at: string | null }[]).forEach((r) => {
     requestCounts[r.user_id] = (requestCounts[r.user_id] ?? 0) + 1;
+
+    // Track open requests using common active statuses
+    if (r.status === 'pending' || r.status === 'confirmed') {
+      openRequestCounts[r.user_id] = (openRequestCounts[r.user_id] ?? 0) + 1;
+    }
+
+    // Track last interaction as the latest service request timestamp
+    if (r.created_at && !lastInteractions[r.user_id]) {
+      lastInteractions[r.user_id] = r.created_at;
+    }
   });
 
   const addressCounts: Record<string, number> = {};
@@ -54,5 +70,7 @@ export async function GET() {
     clients: clients ?? [],
     requestCounts,
     addressCounts,
+    openRequestCounts,
+    lastInteractions,
   });
 }
