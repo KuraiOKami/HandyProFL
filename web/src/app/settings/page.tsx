@@ -1,3 +1,4 @@
+import SettingsDashboard from "@/components/SettingsDashboard";
 import SettingsDashboardTabbed from "@/components/SettingsDashboardTabbed";
 
 export default function SettingsPage() {
@@ -8,7 +9,13 @@ export default function SettingsPage() {
         <h1 className="text-3xl font-semibold text-slate-900">Settings</h1>
         <p className="text-sm text-slate-600">Manage your profile, wallet, billing, and booking requests.</p>
       </div>
-      <SettingsDashboardTabbed />
+      {/* Mobile: stacked sections to avoid horizontal scroll; Desktop: tabbed experience */}
+      <div className="md:hidden">
+        <SettingsDashboard />
+      </div>
+      <div className="hidden md:block">
+        <SettingsDashboardTabbed />
+      </div>
     </div>
   );
 }
