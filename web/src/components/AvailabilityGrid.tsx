@@ -1,6 +1,6 @@
 'use client';
 
-import { useState, useEffect } from 'react';
+import { useCallback, useEffect, useState } from 'react';
 import { createClient } from '@/utils/supabase/browser';
 
 interface TimeSlot {
@@ -29,11 +29,7 @@ export default function AvailabilityGrid() {
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
 
-  useEffect(() => {
-    loadAvailability();
-  }, []);
-
-  async function loadAvailability() {
+  const loadAvailability = useCallback(async () => {
     try {
       setLoading(true);
       setError(null);
@@ -75,9 +71,13 @@ export default function AvailabilityGrid() {
     } finally {
       setLoading(false);
     }
-  }
+  }, [groupSlotsByDay]);
 
-  function groupSlotsByDay(slots: TimeSlot[]): DaySlots[] {
+  useEffect(() => {
+    loadAvailability();
+  }, [loadAvailability]);
+
+  const groupSlotsByDay = useCallback((slots: TimeSlot[]): DaySlots[] => {
     const dayMap = new Map<string, DaySlots>();
 
     slots.forEach((slot) => {
@@ -115,7 +115,7 @@ export default function AvailabilityGrid() {
     });
 
     return Array.from(dayMap.values()).slice(0, 4); // Show first 4 days
-  }
+  }, []);
 
   function getDayLabel(date: Date): string {
     const today = new Date();

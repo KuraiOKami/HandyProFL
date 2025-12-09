@@ -481,31 +481,34 @@ export default function RequestWizard() {
           setOpen(true);
           reset();
         }}
-        className="inline-flex items-center justify-center rounded-lg bg-indigo-700 px-5 py-3 text-sm font-semibold text-white shadow-md shadow-indigo-200 transition hover:bg-indigo-800"
+        className="inline-flex w-full items-center justify-center rounded-lg bg-indigo-700 px-5 py-3 text-sm font-semibold text-white shadow-md shadow-indigo-200 transition hover:bg-indigo-800 sm:w-auto"
       >
         Start a request
       </button>
 
       {open && (
-        <div className="fixed inset-0 z-40 flex items-center justify-center bg-slate-900/40 px-4 py-8">
-          <div className="relative w-full max-w-4xl rounded-2xl bg-white shadow-2xl ring-1 ring-slate-200">
-            <div className="flex items-center justify-between border-b border-slate-200 px-6 py-4">
-              <div>
-                <p className="text-xs uppercase tracking-[0.2em] text-indigo-700">Request</p>
-                <h2 className="text-xl font-semibold text-slate-900">Book a handyman visit</h2>
+        <div className="fixed inset-0 z-40 overflow-y-auto bg-slate-900/50 backdrop-blur-sm">
+          <div className="mx-auto flex min-h-full w-full max-w-4xl flex-col p-3 sm:p-4">
+            <div className="relative flex flex-col overflow-hidden rounded-2xl bg-white shadow-2xl ring-1 ring-slate-200">
+              <div className="sticky top-0 z-10 flex flex-wrap items-center justify-between gap-3 border-b border-slate-200 bg-white/95 px-4 py-3 backdrop-blur sm:px-6 sm:py-4">
+                <div>
+                  <p className="text-xs uppercase tracking-[0.2em] text-indigo-700">Request</p>
+                  <h2 className="text-xl font-semibold text-slate-900">Book a handyman visit</h2>
+                </div>
+                <button
+                  onClick={() => {
+                    setOpen(false);
+                  }}
+                  className="rounded-full border border-slate-200 px-3 py-1 text-sm font-semibold text-slate-700 hover:border-indigo-600 hover:text-indigo-700"
+                >
+                  Close
+                </button>
               </div>
-              <button
-                onClick={() => {
-                  setOpen(false);
-                }}
-                className="rounded-full border border-slate-200 px-3 py-1 text-sm font-semibold text-slate-700 hover:border-indigo-600 hover:text-indigo-700"
-              >
-                Close
-              </button>
-            </div>
 
-            <div className="grid gap-4 px-6 py-5">
-              <Stepper step={step} />
+              <div className="grid gap-4 px-4 py-4 sm:px-6 sm:py-5">
+                <div className="-mx-2 overflow-x-auto px-2 pb-2">
+                  <Stepper step={step} />
+                </div>
 
               {step === 1 && (
                 <div className="grid gap-4 md:grid-cols-2">
@@ -935,24 +938,24 @@ export default function RequestWizard() {
               {error && <p className="rounded-md bg-rose-50 px-3 py-2 text-sm text-rose-800">{error}</p>}
 
               {step < 5 && (
-                <div className="flex items-center justify-between border-t border-slate-200 pt-4">
+                <div className="sticky bottom-0 left-0 right-0 -mx-4 flex flex-col gap-3 border-t border-slate-200 bg-white/95 px-4 py-3 backdrop-blur sm:static sm:m-0 sm:border-0 sm:bg-transparent sm:p-0">
                   <div className="text-sm text-slate-600">
                     {step === 1 && 'Choose the service and options.'}
                     {step === 2 && 'Select a date and a time slot.'}
                     {step === 3 && 'Add any extra context.'}
                     {step === 4 && 'Review subtotal and payment preference.'}
                   </div>
-                  <div className="flex gap-2">
+                  <div className="flex flex-wrap gap-2">
                     <button
                       onClick={() => (step === 1 ? setOpen(false) : setStep((prev) => (prev - 1) as Step))}
-                      className="rounded-lg border border-slate-300 px-4 py-2 text-sm font-semibold text-slate-800 hover:border-indigo-600 hover:text-indigo-700"
+                      className="w-full rounded-lg border border-slate-300 px-4 py-2 text-sm font-semibold text-slate-800 hover:border-indigo-600 hover:text-indigo-700 sm:w-auto"
                     >
                       {step === 1 ? 'Cancel' : 'Back'}
                     </button>
                     {step < 4 && (
                       <button
                         onClick={() => setStep((prev) => (prev + 1) as Step)}
-                        className="rounded-lg bg-indigo-700 px-4 py-2 text-sm font-semibold text-white shadow-sm hover:bg-indigo-800 disabled:cursor-not-allowed disabled:bg-slate-300"
+                        className="w-full rounded-lg bg-indigo-700 px-4 py-2 text-sm font-semibold text-white shadow-sm hover:bg-indigo-800 disabled:cursor-not-allowed disabled:bg-slate-300 sm:w-auto"
                         disabled={step === 2 && (!slot || selectedSlots.length === 0)}
                       >
                         Continue
@@ -962,7 +965,7 @@ export default function RequestWizard() {
                       <button
                         onClick={onSubmit}
                         disabled={submitting}
-                        className="rounded-lg bg-indigo-700 px-4 py-2 text-sm font-semibold text-white shadow-sm hover:bg-indigo-800 disabled:cursor-not-allowed disabled:bg-slate-300"
+                        className="w-full rounded-lg bg-indigo-700 px-4 py-2 text-sm font-semibold text-white shadow-sm hover:bg-indigo-800 disabled:cursor-not-allowed disabled:bg-slate-300 sm:w-auto"
                       >
                         {submitting ? 'Submitting...' : 'Submit request'}
                       </button>
@@ -972,6 +975,7 @@ export default function RequestWizard() {
               )}
             </div>
           </div>
+        </div>
         </div>
       )}
     </div>
