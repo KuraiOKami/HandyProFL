@@ -200,7 +200,7 @@ export default function BillingHistory() {
             <p className="text-xs uppercase tracking-[0.2em] text-slate-600">
               Customer ID
             </p>
-            <p className="text-sm font-semibold text-slate-900">
+            <p className="break-words text-sm font-semibold text-slate-900">
               {data?.customer_id ?? "—"}
             </p>
             <p className="text-xs text-slate-600">
@@ -354,7 +354,7 @@ export default function BillingHistory() {
                 {invoice.hosted_invoice_url && (
                   <a
                     href={invoice.hosted_invoice_url}
-                    className="text-indigo-700 underline underline-offset-4"
+                    className="break-all text-indigo-700 underline underline-offset-4"
                     target="_blank"
                     rel="noreferrer"
                   >
@@ -364,7 +364,7 @@ export default function BillingHistory() {
                 {invoice.invoice_pdf && (
                   <a
                     href={invoice.invoice_pdf}
-                    className="text-indigo-700 underline underline-offset-4"
+                    className="break-all text-indigo-700 underline underline-offset-4"
                     target="_blank"
                     rel="noreferrer"
                   >
@@ -374,7 +374,7 @@ export default function BillingHistory() {
                 {invoice.receipt_url && (
                   <a
                     href={invoice.receipt_url}
-                    className="text-indigo-700 underline underline-offset-4"
+                    className="break-all text-indigo-700 underline underline-offset-4"
                     target="_blank"
                     rel="noreferrer"
                   >

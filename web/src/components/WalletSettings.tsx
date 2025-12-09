@@ -277,7 +277,7 @@ export default function WalletSettings() {
                         ? `${pm.exp_month}/${pm.exp_year}`
                         : "—"}
                     </p>
-                    <p className="text-[11px] uppercase tracking-wide text-slate-500">
+                    <p className="break-words text-[11px] uppercase tracking-wide text-slate-500">
                       {pm.id}
                     </p>
                   </div>
