@@ -149,26 +149,28 @@ export default function RequestWizard() {
     setRequestId(null);
   };
 
-  // Load service catalog durations
+  // Load service catalog durations (server API so anon/mobile sees prices)
   useEffect(() => {
     const loadDurations = async () => {
-      if (!supabase) return;
-      const { data, error } = await supabase.from('service_catalog').select('id, base_minutes, price_cents');
-      if (error) {
-        console.error('Error loading service catalog', error.message);
+      const res = await fetch('/api/catalog/services');
+      const body = await res.json().catch(() => null);
+      if (!res.ok || !body?.services) {
+        console.error('Error loading service catalog', body?.error ?? 'unknown error');
         return;
       }
       const map: Record<string, number> = {};
       const priceMap: Record<string, number> = {};
-      (data ?? []).forEach((row) => {
-        map[row.id] = row.base_minutes ?? 60;
-        priceMap[row.id] = row.price_cents ?? 0;
-      });
+      (body.services as Array<{ id: string; base_minutes?: number | null; price_cents?: number | null }>).forEach(
+        (row) => {
+          map[row.id] = row.base_minutes ?? 60;
+          priceMap[row.id] = row.price_cents ?? 0;
+        },
+      );
       setServiceDurations(map);
       setServicePrices(priceMap);
     };
     loadDurations();
-  }, [supabase]);
+  }, []);
 
   // Fetch available slots for selected date
   useEffect(() => {
