@@ -29,7 +29,11 @@ export default function AvailabilityGrid() {
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
 
-  const loadAvailability = useCallback(async () => {
+  useEffect(() => {
+    loadAvailability();
+  }, []);
+
+  async function loadAvailability() {
     try {
       setLoading(true);
       setError(null);
@@ -71,13 +75,9 @@ export default function AvailabilityGrid() {
     } finally {
       setLoading(false);
     }
-  }, [groupSlotsByDay]);
+  }
 
-  useEffect(() => {
-    loadAvailability();
-  }, [loadAvailability]);
-
-  const groupSlotsByDay = useCallback((slots: TimeSlot[]): DaySlots[] => {
+  function groupSlotsByDay(slots: TimeSlot[]): DaySlots[] {
     const dayMap = new Map<string, DaySlots>();
 
     slots.forEach((slot) => {
@@ -115,7 +115,7 @@ export default function AvailabilityGrid() {
     });
 
     return Array.from(dayMap.values()).slice(0, 4); // Show first 4 days
-  }, []);
+  }
 
   function getDayLabel(date: Date): string {
     const today = new Date();
