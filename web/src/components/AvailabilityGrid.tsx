@@ -29,6 +29,46 @@ export default function AvailabilityGrid() {
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
 
+  const groupSlotsByDay = useCallback((slots: TimeSlot[]): DaySlots[] => {
+    const dayMap = new Map<string, DaySlots>();
+
+    slots.forEach((slot) => {
+      const slotDate = new Date(slot.slot_start);
+      const dateKey = slotDate.toISOString().split('T')[0];
+
+      if (!dayMap.has(dateKey)) {
+        const dayLabel = getDayLabel(slotDate);
+        const dateLabel = slotDate.toLocaleDateString('en-US', {
+          weekday: 'short',
+          month: 'short',
+          day: 'numeric',
+        });
+
+        dayMap.set(dateKey, {
+          day: dayLabel,
+          date: dateLabel,
+          fullDate: dateKey,
+          slots: [],
+        });
+      }
+
+      const day = dayMap.get(dateKey)!;
+      day.slots.push({
+        time: slotDate.toLocaleTimeString('en-US', {
+          hour: 'numeric',
+          minute: '2-digit',
+          hour12: true,
+          timeZone: 'America/New_York',
+        }),
+        startIso: slot.slot_start,
+        endIso: slot.slot_end,
+        isBooked: slot.is_booked,
+      });
+    });
+
+    return Array.from(dayMap.values()).slice(0, 4); // Show first 4 days
+  }, []);
+
   const loadAvailability = useCallback(async () => {
     try {
       setLoading(true);
@@ -76,46 +116,6 @@ export default function AvailabilityGrid() {
   useEffect(() => {
     loadAvailability();
   }, [loadAvailability]);
-
-  const groupSlotsByDay = useCallback((slots: TimeSlot[]): DaySlots[] => {
-    const dayMap = new Map<string, DaySlots>();
-
-    slots.forEach((slot) => {
-      const slotDate = new Date(slot.slot_start);
-      const dateKey = slotDate.toISOString().split('T')[0];
-
-      if (!dayMap.has(dateKey)) {
-        const dayLabel = getDayLabel(slotDate);
-        const dateLabel = slotDate.toLocaleDateString('en-US', {
-          weekday: 'short',
-          month: 'short',
-          day: 'numeric',
-        });
-
-        dayMap.set(dateKey, {
-          day: dayLabel,
-          date: dateLabel,
-          fullDate: dateKey,
-          slots: [],
-        });
-      }
-
-      const day = dayMap.get(dateKey)!;
-      day.slots.push({
-        time: slotDate.toLocaleTimeString('en-US', {
-          hour: 'numeric',
-          minute: '2-digit',
-          hour12: true,
-          timeZone: 'America/New_York',
-        }),
-        startIso: slot.slot_start,
-        endIso: slot.slot_end,
-        isBooked: slot.is_booked,
-      });
-    });
-
-    return Array.from(dayMap.values()).slice(0, 4); // Show first 4 days
-  }, []);
 
   function getDayLabel(date: Date): string {
     const today = new Date();
