@@ -40,6 +40,11 @@ export default function AvailabilityGrid() {
 
       const supabase = createClient();
 
+      if (!supabase) {
+        setError('Configuration error. Please try again later.');
+        return;
+      }
+
       // Get next 7 days of slots
       const today = new Date();
       today.setHours(0, 0, 0, 0);
