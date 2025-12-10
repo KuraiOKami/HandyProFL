@@ -5,6 +5,7 @@ import { CardElement, Elements, useElements, useStripe } from '@stripe/react-str
 import { loadStripe } from '@stripe/stripe-js';
 import { getSupabaseClient } from '@/lib/supabaseClient';
 import { useSupabaseSession } from '@/hooks/useSupabaseSession';
+import { serviceCatalog } from '@/lib/services';
 
 type Step = 1 | 2 | 3 | 4 | 5;
 
@@ -29,6 +30,7 @@ type RequestItem = {
   extraItems: string[];
   notes: string;
   photoNames: string[];
+  catalogServiceId?: string | null;
 };
 
 export const services: Record<
@@ -153,6 +155,41 @@ const RequestWizard = forwardRef<RequestWizardHandle>((_props, ref) => {
   const [cardStatus, setCardStatus] = useState<string | null>(null);
   const [cardError, setCardError] = useState<string | null>(null);
   const [preparingCard, setPreparingCard] = useState(false);
+  const [catalogServiceId, setCatalogServiceId] = useState<string | null>(null);
+  const [serviceSearch, setServiceSearch] = useState('');
+
+  const formatPrice = (cents: number) => `$${Math.max(0, cents / 100).toFixed(0)}`;
+
+  const catalogMap = useMemo(
+    () =>
+      serviceCatalog.reduce<Record<string, (typeof serviceCatalog)[number]>>((acc, item) => {
+        acc[item.id] = item;
+        return acc;
+      }, {}),
+    [],
+  );
+
+  const deriveBaseService = useCallback(
+    (catalogId: string | null) => {
+      if (!catalogId) return 'punch' as ServiceId;
+      const catalogItem = catalogMap[catalogId];
+      if (catalogId.startsWith('tv_mount') || catalogItem?.category === 'TV & Media') return 'tv_mount';
+      if (catalogId.startsWith('assembly') || catalogItem?.category === 'Assembly') return 'assembly';
+      if (catalogItem?.category === 'Electrical & Lighting') return 'electrical';
+      return 'punch';
+    },
+    [catalogMap],
+  );
+
+  const selectedCatalogItem = useMemo(() => (catalogServiceId ? catalogMap[catalogServiceId] : null), [catalogServiceId, catalogMap]);
+
+  const filteredCatalog = useMemo(() => {
+    const term = serviceSearch.trim().toLowerCase();
+    if (!term) return serviceCatalog.slice(0, 12);
+    return serviceCatalog
+      .filter((item) => item.name.toLowerCase().includes(term) || item.category.toLowerCase().includes(term))
+      .slice(0, 12);
+  }, [serviceSearch]);
 
   const reset = useCallback((svc?: ServiceId) => {
     setStep(1);
@@ -181,6 +218,8 @@ const RequestWizard = forwardRef<RequestWizardHandle>((_props, ref) => {
     setCardStatus(null);
     setCardError(null);
     setPreparingCard(false);
+    setCatalogServiceId(null);
+    setServiceSearch('');
   }, []);
 
   const startRequest = useCallback((svc?: ServiceId) => {
@@ -195,6 +234,11 @@ const RequestWizard = forwardRef<RequestWizardHandle>((_props, ref) => {
     }),
     [startRequest],
   );
+
+  const chooseCatalogService = (id: string) => {
+    setCatalogServiceId(id);
+    setService(deriveBaseService(id));
+  };
 
   // Load service catalog durations (server API so anon/mobile sees prices)
   useEffect(() => {
@@ -283,9 +327,11 @@ const RequestWizard = forwardRef<RequestWizardHandle>((_props, ref) => {
     extraItems,
     notes,
     photoNames,
-  }), [service, tvSize, wallType, hasMount, assemblyType, assemblyOther, extraItems, notes, photoNames]);
+    catalogServiceId,
+  }), [service, tvSize, wallType, hasMount, assemblyType, assemblyOther, extraItems, notes, photoNames, catalogServiceId]);
 
   const getServiceId = (item: RequestItem) => {
+    if (item.catalogServiceId) return item.catalogServiceId;
     if (item.service === 'tv_mount') {
       if (item.tvSize === '75"+') return 'tv_mount_75';
       if (item.tvSize === '65"') return 'tv_mount_65';
@@ -339,6 +385,16 @@ const RequestWizard = forwardRef<RequestWizardHandle>((_props, ref) => {
       return servicePrices[id] ?? 0;
     },
     [servicePrices],
+  );
+
+  const getServiceLabel = useCallback(
+    (item: RequestItem) => {
+      if (item.catalogServiceId) {
+        return catalogMap[item.catalogServiceId]?.name ?? 'Service request';
+      }
+      return services[item.service].name;
+    },
+    [catalogMap],
   );
 
   const totalPriceCents = useMemo(() => {
@@ -436,6 +492,7 @@ const RequestWizard = forwardRef<RequestWizardHandle>((_props, ref) => {
     setNewItem('');
     setPhotoNames([]);
     setStep(1);
+    setCatalogServiceId(null);
   };
 
   const onSubmit = async () => {
@@ -481,11 +538,14 @@ const RequestWizard = forwardRef<RequestWizardHandle>((_props, ref) => {
     setStatus(null);
 
     const itemsToSave: RequestItem[] = [...items, buildCurrentItem()];
+    const primaryItem = itemsToSave[0];
+    const primaryLabel = primaryItem ? getServiceLabel(primaryItem) : services[service].name;
 
     const details = itemsToSave
       .map((item, idx) => {
+        const label = getServiceLabel(item);
         const parts = [
-          `Item ${idx + 1}: ${services[item.service].name}`,
+          `Item ${idx + 1}: ${label}`,
           item.service === 'tv_mount' ? `TV size: ${item.tvSize}` : null,
           item.service === 'tv_mount' ? `Wall: ${item.wallType}` : null,
           item.service === 'tv_mount' ? `Mount provided: ${item.hasMount === 'yes' ? 'Yes' : 'No'}` : null,
@@ -521,7 +581,7 @@ const RequestWizard = forwardRef<RequestWizardHandle>((_props, ref) => {
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({
           user_id: session.user.id,
-          service_type: services[service].name,
+          service_type: primaryLabel,
           date,
           slots: slotStartIso,
           required_minutes: requiredMinutes,
@@ -663,26 +723,40 @@ const RequestWizard = forwardRef<RequestWizardHandle>((_props, ref) => {
                 </div>
 
               {step === 1 && (
-                <div className="grid gap-4 md:grid-cols-2">
-                  {Object.entries(services).map(([id, svc]) => (
-                    <button
-                      key={id}
-                      onClick={() => setService(id as ServiceId)}
-                      className={`flex h-full flex-col items-start gap-2 rounded-xl border px-4 py-4 text-left transition ${
-                        service === id
-                          ? 'border-indigo-600 bg-indigo-50 shadow-sm'
-                          : 'border-slate-200 bg-white hover:border-indigo-200'
-                      }`}
-                    >
-                      <span className="text-2xl">{svc.icon}</span>
-                      <div className="grid gap-1">
-                        <span className="text-base font-semibold text-slate-900">{svc.name}</span>
-                        <span className="text-sm text-slate-600">{svc.description}</span>
-                      </div>
-                    </button>
-                  ))}
+                <div className="grid gap-5">
+                  <div className="flex flex-wrap items-center justify-between gap-3">
+                    <div>
+                      <p className="text-xs uppercase tracking-[0.2em] text-indigo-700">Choose a service</p>
+                      <p className="text-sm text-slate-600">Pick a quick category or search the full catalog.</p>
+                    </div>
+                    <div className="rounded-full border border-slate-200 bg-slate-50 px-4 py-2 text-xs font-semibold text-slate-700">
+                      Selected: {selectedCatalogItem?.name ?? services[service].name}
+                    </div>
+                  </div>
+
+                  <div className="grid gap-3 md:grid-cols-2">
+                    {Object.entries(services).map(([id, svc]) => (
+                      <button
+                        key={id}
+                        onClick={() => { setService(id as ServiceId); setCatalogServiceId(null); }}
+                        className={`flex h-full flex-col items-start gap-2 rounded-xl border px-4 py-4 text-left transition ${
+                          service === id && !catalogServiceId
+                            ? 'border-indigo-600 bg-indigo-50 shadow-sm'
+                            : 'border-slate-200 bg-white hover:border-indigo-200'
+                        }`}
+                      >
+                        <span className="text-2xl">{svc.icon}</span>
+                        <div className="grid gap-1">
+                          <span className="text-base font-semibold text-slate-900">{svc.name}</span>
+                          <span className="text-sm text-slate-600">{svc.description}</span>
+                        </div>
+                        <span className="text-xs font-semibold text-indigo-700">Quick pick</span>
+                      </button>
+                    ))}
+                  </div>
+
                   {service === 'tv_mount' && (
-                    <div className="md:col-span-2 grid gap-3 rounded-xl border border-slate-200 bg-slate-50 p-4">
+                    <div className="grid gap-3 rounded-xl border border-slate-200 bg-slate-50 p-4">
                       <div className="flex flex-wrap gap-3">
                         <FieldLabel>TV size</FieldLabel>
                         <div className="flex flex-wrap gap-2">
@@ -718,7 +792,7 @@ const RequestWizard = forwardRef<RequestWizardHandle>((_props, ref) => {
                   )}
 
                   {service === 'assembly' && (
-                    <div className="md:col-span-2 grid gap-3 rounded-xl border border-slate-200 bg-slate-50 p-4">
+                    <div className="grid gap-3 rounded-xl border border-slate-200 bg-slate-50 p-4">
                       <div className="flex flex-wrap gap-3">
                         <FieldLabel>What are we assembling?</FieldLabel>
                         <div className="flex flex-wrap gap-2">
@@ -743,6 +817,47 @@ const RequestWizard = forwardRef<RequestWizardHandle>((_props, ref) => {
                       )}
                     </div>
                   )}
+
+                  <div className="grid gap-3 rounded-xl border border-slate-200 bg-white p-4 shadow-sm">
+                    <div className="flex flex-wrap items-center justify-between gap-3">
+                      <div>
+                        <p className="text-sm font-semibold text-slate-900">Browse full catalog</p>
+                        <p className="text-xs text-slate-600">Search any task and we will preload timing and pricing.</p>
+                      </div>
+                      <div className="relative w-full max-w-xs">
+                        <input
+                          type="search"
+                          value={serviceSearch}
+                          onChange={(e) => setServiceSearch(e.target.value)}
+                          placeholder="Search services..."
+                          className="w-full rounded-lg border border-slate-200 bg-slate-50 py-2 pl-9 pr-3 text-sm focus:border-indigo-500 focus:bg-white focus:outline-none focus:ring-1 focus:ring-indigo-500"
+                        />
+                        <span className="absolute left-3 top-1/2 -translate-y-1/2 text-slate-400">🔍</span>
+                      </div>
+                    </div>
+                    <div className="grid gap-2 sm:grid-cols-2 lg:grid-cols-3">
+                      {filteredCatalog.map((item) => {
+                        const isSelected = catalogServiceId === item.id;
+                        return (
+                          <button
+                            key={item.id}
+                            onClick={() => chooseCatalogService(item.id)}
+                            className={`flex h-full flex-col items-start gap-2 rounded-lg border px-3 py-3 text-left transition ${
+                              isSelected ? 'border-indigo-600 bg-indigo-50' : 'border-slate-200 hover:border-indigo-200'
+                            }`}
+                          >
+                            <span className="text-xs font-semibold uppercase tracking-[0.08em] text-slate-500">{item.category}</span>
+                            <span className="text-sm font-semibold text-slate-900">{item.name}</span>
+                            <span className="text-xs text-slate-600">
+                              {formatPrice(item.priceCents)} · {item.baseMinutes} min
+                            </span>
+                            {isSelected && <span className="text-[11px] font-semibold text-indigo-700">Selected</span>}
+                          </button>
+                        );
+                      })}
+                    </div>
+                    <p className="text-xs text-slate-500">Don&apos;t see it? Pick the closest and add notes on the next step.</p>
+                  </div>
                 </div>
               )}
 
