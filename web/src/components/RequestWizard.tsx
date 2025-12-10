@@ -32,6 +32,9 @@ type RequestItem = {
   photoNames: string[];
   catalogServiceId?: string | null;
   catalogFollowup?: string | null;
+  hasPaint?: boolean;
+  paintSupplyTier?: 'budget' | 'standard' | 'premium';
+  paintColor?: string | null;
 };
 
 export const services: Record<
@@ -126,7 +129,7 @@ const RequestWizard = forwardRef<RequestWizardHandle>((_props, ref) => {
   const [tvSize, setTvSize] = useState('55"');
   const [wallType, setWallType] = useState('Drywall');
   const [hasMount, setHasMount] = useState<'yes' | 'no'>('yes');
-  const [assemblyType, setAssemblyType] = useState('Chair');
+  const [assemblyType, setAssemblyType] = useState('Other');
   const [assemblyOther, setAssemblyOther] = useState('');
   const [notes, setNotes] = useState('');
   const [extraItems, setExtraItems] = useState<string[]>([]);
@@ -159,8 +162,21 @@ const RequestWizard = forwardRef<RequestWizardHandle>((_props, ref) => {
   const [catalogServiceId, setCatalogServiceId] = useState<string | null>(null);
   const [serviceSearch, setServiceSearch] = useState('');
   const [catalogFollowup, setCatalogFollowup] = useState<string>('');
+  const [hasPaint, setHasPaint] = useState(true);
+  const [paintSupplyTier, setPaintSupplyTier] = useState<'budget' | 'standard' | 'premium'>('standard');
+  const [paintColor, setPaintColor] = useState('');
 
   const formatPrice = (cents: number) => `$${Math.max(0, cents / 100).toFixed(0)}`;
+  const isPaintingService = (id: string) => id.includes('paint');
+  const MOUNT_SURCHARGE_CENTS = 3000;
+  const PAINT_SURCHARGE = useMemo(
+    () => ({
+      budget: 3500,
+      standard: 6000,
+      premium: 9000,
+    } as const),
+    [],
+  );
 
   const catalogMap = useMemo(
     () =>
@@ -199,7 +215,7 @@ const RequestWizard = forwardRef<RequestWizardHandle>((_props, ref) => {
     setTvSize('55"');
     setWallType('Drywall');
     setHasMount('yes');
-    setAssemblyType('Chair');
+    setAssemblyType('Other');
     setAssemblyOther('');
     setNotes('');
     setExtraItems([]);
@@ -223,6 +239,9 @@ const RequestWizard = forwardRef<RequestWizardHandle>((_props, ref) => {
     setCatalogServiceId(null);
     setServiceSearch('');
     setCatalogFollowup('');
+    setHasPaint(true);
+    setPaintSupplyTier('standard');
+    setPaintColor('');
   }, []);
 
   const startRequest = useCallback((svc?: ServiceId) => {
@@ -333,7 +352,25 @@ const RequestWizard = forwardRef<RequestWizardHandle>((_props, ref) => {
     photoNames,
     catalogServiceId,
     catalogFollowup: catalogFollowup || null,
-  }), [service, tvSize, wallType, hasMount, assemblyType, assemblyOther, extraItems, notes, photoNames, catalogServiceId, catalogFollowup]);
+    hasPaint,
+    paintSupplyTier,
+    paintColor: paintColor || null,
+  }), [
+    service,
+    tvSize,
+    wallType,
+    hasMount,
+    assemblyType,
+    assemblyOther,
+    extraItems,
+    notes,
+    photoNames,
+    catalogServiceId,
+    catalogFollowup,
+    hasPaint,
+    paintSupplyTier,
+    paintColor,
+  ]);
 
   const getServiceId = (item: RequestItem) => {
     if (item.catalogServiceId) return item.catalogServiceId;
@@ -387,9 +424,16 @@ const RequestWizard = forwardRef<RequestWizardHandle>((_props, ref) => {
   const getPriceForItem = useCallback(
     (item: RequestItem) => {
       const id = getServiceId(item);
-      return servicePrices[id] ?? 0;
+      let base = servicePrices[id] ?? 0;
+      if (item.service === 'tv_mount' && item.hasMount === 'no') {
+        base += MOUNT_SURCHARGE_CENTS;
+      }
+      if (isPaintingService(id) && item.hasPaint === false) {
+        base += PAINT_SURCHARGE[item.paintSupplyTier ?? 'standard'];
+      }
+      return base;
     },
-    [servicePrices],
+    [servicePrices, PAINT_SURCHARGE],
   );
 
   const getServiceLabel = useCallback(
@@ -556,6 +600,10 @@ const RequestWizard = forwardRef<RequestWizardHandle>((_props, ref) => {
           item.service === 'tv_mount' ? `TV size: ${item.tvSize}` : null,
           item.service === 'tv_mount' ? `Wall: ${item.wallType}` : null,
           item.service === 'tv_mount' ? `Mount provided: ${item.hasMount === 'yes' ? 'Yes' : 'No'}` : null,
+          isPaintingService(getServiceId(item)) ? `Has paint: ${item.hasPaint === false ? 'No' : 'Yes'}` : null,
+          isPaintingService(getServiceId(item)) && item.hasPaint === false
+            ? `Paint tier: ${item.paintSupplyTier ?? 'standard'}${item.paintColor ? `, Color: ${item.paintColor}` : ''}`
+            : null,
           item.service === 'assembly' ? `Assembly type: ${item.assemblyType}` : null,
           item.service === 'assembly' && item.assemblyType === 'Other' && item.assemblyOther
             ? `Other: ${item.assemblyOther}`
@@ -799,29 +847,8 @@ const RequestWizard = forwardRef<RequestWizardHandle>((_props, ref) => {
                   )}
 
                   {service === 'assembly' && (
-                    <div className="grid gap-3 rounded-xl border border-slate-200 bg-slate-50 p-4">
-                      <div className="flex flex-wrap gap-3">
-                        <FieldLabel>What are we assembling?</FieldLabel>
-                        <div className="flex flex-wrap gap-2">
-                          {services.assembly.options?.assemblyTypes?.map((type) => (
-                            <Chip key={type} selected={assemblyType === type} onClick={() => setAssemblyType(type)}>
-                              {type}
-                            </Chip>
-                          ))}
-                        </div>
-                      </div>
-                      {assemblyType === 'Other' && (
-                        <label className="grid gap-1 text-sm text-slate-800">
-                          Describe the item
-                          <input
-                            type="text"
-                            value={assemblyOther}
-                            onChange={(e) => setAssemblyOther(e.target.value)}
-                            className="w-full rounded-lg border border-slate-300 px-3 py-2 text-slate-900 shadow-inner shadow-slate-100 focus:border-indigo-600 focus:outline-none focus:ring-2 focus:ring-indigo-100"
-                            placeholder="e.g., custom cabinet, gym equipment"
-                          />
-                        </label>
-                      )}
+                    <div className="grid gap-2 rounded-xl border border-slate-200 bg-slate-50 p-4">
+                      <p className="text-sm text-slate-700">Add notes on the next step and we will scope the assembly.</p>
                     </div>
                   )}
 
@@ -926,6 +953,52 @@ const RequestWizard = forwardRef<RequestWizardHandle>((_props, ref) => {
                               </Chip>
                             ))}
                           </div>
+                        </div>
+                      )}
+                      {isPaintingService(selectedCatalogItem.id) && (
+                        <div className="grid gap-3">
+                          <div className="flex flex-wrap gap-3">
+                            <FieldLabel>Do you have paint?</FieldLabel>
+                            <div className="flex flex-wrap gap-2">
+                              <Chip selected={hasPaint === true} onClick={() => setHasPaint(true)}>Yes</Chip>
+                              <Chip selected={hasPaint === false} onClick={() => setHasPaint(false)}>No</Chip>
+                            </div>
+                          </div>
+                          {hasPaint === false && (
+                            <div className="grid gap-2 rounded-lg border border-slate-200 bg-white p-3">
+                              <div className="grid gap-2">
+                                <FieldLabel>Paint quality</FieldLabel>
+                                <div className="flex flex-wrap gap-2">
+                                  {[
+                                    { id: 'budget', label: 'Budget (builder grade)' },
+                                    { id: 'standard', label: 'Standard' },
+                                    { id: 'premium', label: 'Premium' },
+                                  ].map((opt) => (
+                                    <Chip
+                                      key={opt.id}
+                                      selected={paintSupplyTier === opt.id}
+                                      onClick={() => setPaintSupplyTier(opt.id as typeof paintSupplyTier)}
+                                    >
+                                      {opt.label}
+                                    </Chip>
+                                  ))}
+                                </div>
+                              </div>
+                              <label className="grid gap-1 text-sm text-slate-700">
+                                Preferred color (optional)
+                                <input
+                                  type="text"
+                                  value={paintColor}
+                                  onChange={(e) => setPaintColor(e.target.value)}
+                                  className="w-full rounded-lg border border-slate-300 px-3 py-2 text-slate-900 shadow-inner shadow-slate-100 focus:border-indigo-600 focus:outline-none focus:ring-2 focus:ring-indigo-100"
+                                  placeholder="e.g., Snowbound, Agreeable Gray"
+                                />
+                              </label>
+                              <p className="text-xs text-slate-500">
+                                We&apos;ll source paint at your selected tier and add the material cost to your booking.
+                              </p>
+                            </div>
+                          )}
                         </div>
                       )}
                       {!catalogFollowup && (
