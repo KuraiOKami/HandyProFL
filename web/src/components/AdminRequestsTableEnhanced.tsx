@@ -43,6 +43,10 @@ export default function AdminRequestsTableEnhanced({ initial }: { initial: Reque
   const [statusFilter, setStatusFilter] = useState<string>('all');
   const [currentPage, setCurrentPage] = useState(1);
 
+  // Drag and drop state
+  const [draggedId, setDraggedId] = useState<string | null>(null);
+  const [dragOverStatus, setDragOverStatus] = useState<string | null>(null);
+
   // Load client names
   useEffect(() => {
     const loadClients = async () => {
@@ -130,6 +134,51 @@ export default function AdminRequestsTableEnhanced({ initial }: { initial: Reque
     return statusConfig[status || 'pending'] || statusConfig.pending;
   };
 
+  // Drag and drop handlers
+  const handleDragStart = (e: React.DragEvent, id: string) => {
+    setDraggedId(id);
+    e.dataTransfer.effectAllowed = 'move';
+    e.dataTransfer.setData('text/plain', id);
+    // Add a slight delay to allow the drag image to be captured
+    setTimeout(() => {
+      const element = document.getElementById(`request-card-${id}`);
+      if (element) element.style.opacity = '0.5';
+    }, 0);
+  };
+
+  const handleDragEnd = () => {
+    setDraggedId(null);
+    setDragOverStatus(null);
+    const element = document.getElementById(`request-card-${draggedId}`);
+    if (element) element.style.opacity = '1';
+  };
+
+  const handleDragOver = (e: React.DragEvent, status: string) => {
+    e.preventDefault();
+    e.dataTransfer.dropEffect = 'move';
+    setDragOverStatus(status);
+  };
+
+  const handleDragLeave = (e: React.DragEvent) => {
+    // Only clear if leaving the column entirely
+    const relatedTarget = e.relatedTarget as HTMLElement;
+    if (!relatedTarget?.closest(`[data-status]`)) {
+      setDragOverStatus(null);
+    }
+  };
+
+  const handleDrop = async (e: React.DragEvent, newStatus: string) => {
+    e.preventDefault();
+    const id = e.dataTransfer.getData('text/plain');
+    setDraggedId(null);
+    setDragOverStatus(null);
+
+    const request = requests.find((r) => r.id === id);
+    if (request && request.status !== newStatus) {
+      await updateRequest(id, { status: newStatus });
+    }
+  };
+
   const formatDate = (dateStr: string | null) => {
     if (!dateStr) return 'No date';
     const date = new Date(dateStr);
@@ -158,12 +207,21 @@ export default function AdminRequestsTableEnhanced({ initial }: { initial: Reque
     complete: requests.filter((r) => r.status === 'complete').length,
   }), [requests]);
 
-  const RequestCard = ({ req, compact = false }: { req: Request; compact?: boolean }) => {
+  const RequestCard = ({ req, compact = false, draggable = false }: { req: Request; compact?: boolean; draggable?: boolean }) => {
     const style = getStatusStyle(req.status);
     const clientInfo = clients[req.user_id || ''];
+    const isDragging = draggedId === req.id;
 
     return (
-      <div className={`rounded-xl border bg-white p-4 transition hover:shadow-md ${style.border}`}>
+      <div
+        id={`request-card-${req.id}`}
+        draggable={draggable}
+        onDragStart={draggable ? (e) => handleDragStart(e, req.id) : undefined}
+        onDragEnd={draggable ? handleDragEnd : undefined}
+        className={`rounded-xl border bg-white p-4 transition hover:shadow-md ${style.border} ${
+          draggable ? 'cursor-grab active:cursor-grabbing' : ''
+        } ${isDragging ? 'opacity-50 ring-2 ring-indigo-400' : ''}`}
+      >
         <div className="flex items-start justify-between gap-3">
           <div className="flex-1 min-w-0">
             <div className="flex items-center gap-2">
@@ -375,9 +433,21 @@ export default function AdminRequestsTableEnhanced({ initial }: { initial: Reque
           {(['pending', 'confirmed', 'complete', 'cancelled'] as const).map((status) => {
             const style = statusConfig[status];
             const statusRequests = groupedByStatus[status] || [];
+            const isDropTarget = dragOverStatus === status;
 
             return (
-              <div key={status} className="rounded-xl border border-slate-200 bg-slate-50 p-3">
+              <div
+                key={status}
+                data-status={status}
+                onDragOver={(e) => handleDragOver(e, status)}
+                onDragLeave={handleDragLeave}
+                onDrop={(e) => handleDrop(e, status)}
+                className={`rounded-xl border-2 p-3 transition-all ${
+                  isDropTarget
+                    ? 'border-indigo-400 bg-indigo-50 ring-2 ring-indigo-200'
+                    : 'border-slate-200 bg-slate-50'
+                }`}
+              >
                 <div className="mb-3 flex items-center justify-between">
                   <div className="flex items-center gap-2">
                     <span className={`h-2.5 w-2.5 rounded-full ${style.dot}`}></span>
@@ -387,13 +457,19 @@ export default function AdminRequestsTableEnhanced({ initial }: { initial: Reque
                     {statusRequests.length}
                   </span>
                 </div>
-                <div className="space-y-2 max-h-[600px] overflow-y-auto">
+                <div className={`space-y-2 max-h-[600px] min-h-[100px] overflow-y-auto rounded-lg transition-colors ${
+                  isDropTarget ? 'bg-indigo-100/50' : ''
+                }`}>
                   {statusRequests.map((req) => (
-                    <RequestCard key={req.id} req={req} compact />
+                    <RequestCard key={req.id} req={req} compact draggable />
                   ))}
                   {statusRequests.length === 0 && (
-                    <div className="rounded-lg border border-dashed border-slate-200 bg-white p-4 text-center">
-                      <p className="text-xs text-slate-400">No requests</p>
+                    <div className={`rounded-lg border-2 border-dashed p-4 text-center transition-colors ${
+                      isDropTarget ? 'border-indigo-300 bg-indigo-50' : 'border-slate-200 bg-white'
+                    }`}>
+                      <p className="text-xs text-slate-400">
+                        {isDropTarget ? 'Drop here' : 'No requests'}
+                      </p>
                     </div>
                   )}
                 </div>
