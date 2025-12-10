@@ -177,6 +177,14 @@ const RequestWizard = forwardRef<RequestWizardHandle>((_props, ref) => {
     } as const),
     [],
   );
+  const URGENCY_SURCHARGE = useMemo(
+    () => ({
+      sameDay: 5000,
+      nextDay: 3000,
+      twoDay: 1500,
+    }),
+    [],
+  );
 
   const catalogMap = useMemo(
     () =>
@@ -436,6 +444,23 @@ const RequestWizard = forwardRef<RequestWizardHandle>((_props, ref) => {
     [servicePrices, PAINT_SURCHARGE],
   );
 
+  const daysUntilDate = (dateStr: string | null) => {
+    if (!dateStr) return null;
+    const today = new Date();
+    const target = new Date(dateStr);
+    const diffMs = target.setHours(0, 0, 0, 0) - today.setHours(0, 0, 0, 0);
+    return Math.floor(diffMs / (1000 * 60 * 60 * 24));
+  };
+
+  const urgencySurchargeCents = useMemo(() => {
+    const days = daysUntilDate(date);
+    if (days == null) return 0;
+    if (days <= 0) return URGENCY_SURCHARGE.sameDay;
+    if (days === 1) return URGENCY_SURCHARGE.nextDay;
+    if (days === 2) return URGENCY_SURCHARGE.twoDay;
+    return 0;
+  }, [date, URGENCY_SURCHARGE]);
+
   const getServiceLabel = useCallback(
     (item: RequestItem) => {
       if (item.catalogServiceId) {
@@ -450,6 +475,8 @@ const RequestWizard = forwardRef<RequestWizardHandle>((_props, ref) => {
     const allItems = [...items, buildCurrentItem()];
     return allItems.map(getPriceForItem).reduce((sum, n) => sum + n, 0);
   }, [items, buildCurrentItem, getPriceForItem]);
+
+  const totalChargeCents = useMemo(() => totalPriceCents + urgencySurchargeCents, [totalPriceCents, urgencySurchargeCents]);
 
   const totalMinutes = useMemo(() => {
     const allItems = [...items, buildCurrentItem()];
@@ -556,7 +583,7 @@ const RequestWizard = forwardRef<RequestWizardHandle>((_props, ref) => {
       return;
     }
     let paymentMethodToUse: string | null = null;
-    if (totalPriceCents <= 0) {
+    if (totalChargeCents <= 0) {
       setError('Total must be greater than $0. Update the request items.');
       return;
     }
@@ -617,7 +644,7 @@ const RequestWizard = forwardRef<RequestWizardHandle>((_props, ref) => {
         return parts;
       })
       .join(' || ');
-    const detailsWithDuration = `${details}${details ? ' | ' : ''}Estimated minutes: ${requiredMinutes} | Subtotal: ${(totalPriceCents / 100).toLocaleString(undefined, { style: 'currency', currency: 'USD' })}`;
+    const detailsWithDuration = `${details}${details ? ' | ' : ''}Estimated minutes: ${requiredMinutes} | Subtotal: ${(totalPriceCents / 100).toLocaleString(undefined, { style: 'currency', currency: 'USD' })}${urgencySurchargeCents ? ` | Urgency surcharge: ${(urgencySurchargeCents / 100).toLocaleString(undefined, { style: 'currency', currency: 'USD' })}` : ''}`;
 
     const selectedIdx = selectedSlots.findIndex((s) => s.startIso === slot?.startIso);
     const chosenSlots = selectedIdx >= 0 ? selectedSlots.slice(selectedIdx, selectedIdx + requiredSlots) : [];
@@ -659,7 +686,7 @@ const RequestWizard = forwardRef<RequestWizardHandle>((_props, ref) => {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({
-          amount_cents: totalPriceCents,
+          amount_cents: totalChargeCents,
           currency: 'usd',
           payment_method_id: paymentMethodToUse,
           request_id: newRequestId,
@@ -1243,6 +1270,20 @@ const RequestWizard = forwardRef<RequestWizardHandle>((_props, ref) => {
                       <span className="text-slate-700">Subtotal</span>
                       <span className="font-semibold text-slate-900">
                         {(totalPriceCents / 100).toLocaleString(undefined, { style: 'currency', currency: 'USD' })}
+                      </span>
+                    </div>
+                    {urgencySurchargeCents > 0 && (
+                      <div className="flex items-center justify-between text-amber-700">
+                        <span className="text-sm font-semibold">Urgency (within 3 days)</span>
+                        <span className="font-semibold">
+                          {(urgencySurchargeCents / 100).toLocaleString(undefined, { style: 'currency', currency: 'USD' })}
+                        </span>
+                      </div>
+                    )}
+                    <div className="flex items-center justify-between border-t border-slate-200 pt-2">
+                      <span className="text-slate-800 font-semibold">Total</span>
+                      <span className="text-base font-bold text-slate-900">
+                        {(totalChargeCents / 100).toLocaleString(undefined, { style: 'currency', currency: 'USD' })}
                       </span>
                     </div>
                     <div className="flex items-center justify-between">
