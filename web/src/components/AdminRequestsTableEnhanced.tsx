@@ -37,7 +37,7 @@ export default function AdminRequestsTableEnhanced({ initial }: { initial: Reque
   const [clients, setClients] = useState<ClientMap>({});
   const [savingId, setSavingId] = useState<string | null>(null);
   const [error, setError] = useState<string | null>(null);
-  const [viewMode, setViewMode] = useState<'list' | 'kanban'>('list');
+  const [viewMode, setViewMode] = useState<'list' | 'kanban'>('kanban');
 
   // Search and filter state
   const [searchQuery, setSearchQuery] = useState('');
@@ -140,6 +140,8 @@ export default function AdminRequestsTableEnhanced({ initial }: { initial: Reque
     setDraggedId(id);
     e.dataTransfer.effectAllowed = 'move';
     e.dataTransfer.setData('text/plain', id);
+    document.body.style.userSelect = 'none';
+    document.body.style.cursor = 'grabbing';
 
     // Create a custom drag image
     const element = e.currentTarget as HTMLElement;
@@ -164,6 +166,8 @@ export default function AdminRequestsTableEnhanced({ initial }: { initial: Reque
   const handleDragEnd = () => {
     setDraggedId(null);
     setDragOverStatus(null);
+    document.body.style.userSelect = '';
+    document.body.style.cursor = '';
   };
 
   const handleDragOver = (e: React.DragEvent, status: string) => {
@@ -182,6 +186,8 @@ export default function AdminRequestsTableEnhanced({ initial }: { initial: Reque
 
   const handleDrop = async (e: React.DragEvent, newStatus: string) => {
     e.preventDefault();
+    document.body.style.userSelect = '';
+    document.body.style.cursor = '';
     const id = e.dataTransfer.getData('text/plain');
 
     const request = requests.find((r) => r.id === id);

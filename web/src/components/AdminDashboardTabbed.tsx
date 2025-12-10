@@ -1,6 +1,7 @@
 'use client';
 
-import { lazy, Suspense, useState } from 'react';
+import { lazy, Suspense, useEffect, useMemo, useState } from 'react';
+import { usePathname, useRouter, useSearchParams } from 'next/navigation';
 
 // Lazy load admin section components
 const AdminDashboardContent = lazy(() => import('./admin/AdminDashboardContent'));
@@ -40,8 +41,33 @@ type Props = {
 };
 
 export default function AdminDashboardTabbed({ userEmail, userName }: Props) {
-  const [activeTab, setActiveTab] = useState<Tab>('dashboard');
+  const router = useRouter();
+  const pathname = usePathname();
+  const searchParams = useSearchParams();
+
+  const normalizeTab = useMemo(() => {
+    const set = new Set(tabs.map((t) => t.id));
+    return (value: string | null): Tab => (set.has(value as Tab) ? (value as Tab) : 'dashboard');
+  }, []);
+
+  const [activeTab, setActiveTab] = useState<Tab>(() => normalizeTab(searchParams.get('tab')));
   const [sidebarCollapsed, setSidebarCollapsed] = useState(false);
+
+  useEffect(() => {
+    setActiveTab(normalizeTab(searchParams.get('tab')));
+  }, [searchParams, normalizeTab]);
+
+  const handleTabChange = (tab: Tab) => {
+    setActiveTab(tab);
+    const params = new URLSearchParams(searchParams);
+    if (tab === 'dashboard') {
+      params.delete('tab');
+    } else {
+      params.set('tab', tab);
+    }
+    const query = params.toString();
+    router.replace(query ? `${pathname}?${query}` : pathname, { scroll: false });
+  };
 
   const initials = userName
     ? userName.split(' ').map((n) => n[0]).join('').toUpperCase().slice(0, 2)
@@ -74,7 +100,7 @@ export default function AdminDashboardTabbed({ userEmail, userName }: Props) {
             {tabs.map((tab) => (
               <li key={tab.id}>
                 <button
-                  onClick={() => setActiveTab(tab.id)}
+                  onClick={() => handleTabChange(tab.id)}
                   className={`flex w-full items-center gap-3 rounded-lg px-3 py-2.5 text-sm font-medium transition ${
                     activeTab === tab.id
                       ? 'bg-indigo-600 text-white'

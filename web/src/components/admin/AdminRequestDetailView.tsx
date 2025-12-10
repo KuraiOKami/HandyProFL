@@ -170,7 +170,7 @@ export default function AdminRequestDetailView({ request, client, otherRequests 
   const statusAction = (nextStatus: string) => handleUpdate({ status: nextStatus }, `Status updated`);
 
   return (
-    <div className="mx-auto max-w-6xl">
+    <div className="mx-auto max-w-6xl px-6 py-8 lg:py-10">
       {/* Header */}
       <div className="mb-6 flex flex-wrap items-start justify-between gap-4">
         <div className="flex items-start gap-4">
