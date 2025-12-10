@@ -1,7 +1,7 @@
 'use client';
 
 import Link from 'next/link';
-import { useEffect, useState } from 'react';
+import { useEffect, useMemo, useState } from 'react';
 
 type CalendarEvent = {
   id: string;
@@ -32,6 +32,16 @@ export default function AdminScheduleContent() {
   const [loading, setLoading] = useState(true);
   const [view, setView] = useState<'month' | 'week' | 'day'>('month');
   const [selectedDay, setSelectedDay] = useState<DayDetail | null>(null);
+  const [selectedDays, setSelectedDays] = useState<number[]>([1, 2, 3, 4, 5]); // Mon-Fri
+  const [startTime, setStartTime] = useState('09:00');
+  const [endTime, setEndTime] = useState('17:00');
+  const [slotMinutes, setSlotMinutes] = useState(60);
+  const [weeksAhead, setWeeksAhead] = useState(2);
+  const [startDateInput, setStartDateInput] = useState(() => new Date().toISOString().slice(0, 10));
+  const [savingAvailability, setSavingAvailability] = useState(false);
+  const [availabilityMessage, setAvailabilityMessage] = useState<string | null>(null);
+  const [availabilityError, setAvailabilityError] = useState<string | null>(null);
+  const timeZone = 'America/New_York';
 
   useEffect(() => {
     const loadEvents = async () => {
@@ -143,6 +153,48 @@ export default function AdminScheduleContent() {
            date.getFullYear() === today.getFullYear();
   };
 
+  const toggleDay = (dayIndex: number) => {
+    setSelectedDays((prev) => {
+      const next = prev.includes(dayIndex) ? prev.filter((d) => d !== dayIndex) : [...prev, dayIndex];
+      return next.sort((a, b) => a - b);
+    });
+  };
+
+  const dayShortNames = useMemo(() => ['Sun', 'Mon', 'Tue', 'Wed', 'Thu', 'Fri', 'Sat'], []);
+
+  const handleSaveAvailability = async () => {
+    setSavingAvailability(true);
+    setAvailabilityError(null);
+    setAvailabilityMessage(null);
+
+    try {
+      const res = await fetch('/api/admin/availability', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({
+          days: selectedDays,
+          startTime,
+          endTime,
+          slotMinutes,
+          weeks: weeksAhead,
+          timeZone,
+          startDate: startDateInput,
+        }),
+      });
+
+      const body = await res.json().catch(() => null);
+      if (!res.ok) {
+        setAvailabilityError(body?.error || 'Failed to save availability.');
+      } else {
+        setAvailabilityMessage(body?.message || 'Availability saved.');
+      }
+    } catch {
+      setAvailabilityError('Unable to reach the server. Please try again.');
+    } finally {
+      setSavingAvailability(false);
+    }
+  };
+
   const handleDayClick = (day: number) => {
     const dateStr = formatDateStr(day);
     const dayEvents = getEventsForDate(day);
@@ -174,6 +226,140 @@ export default function AdminScheduleContent() {
 
   return (
     <section className="grid gap-5">
+      {/* Availability Generator */}
+      <div className="grid gap-4 rounded-xl border border-slate-200 bg-white p-4 shadow-sm">
+        <div className="flex flex-wrap items-center justify-between gap-3">
+          <div>
+            <p className="text-xs uppercase tracking-[0.2em] text-indigo-700">Availability</p>
+            <h2 className="text-lg font-semibold text-slate-900">Set weekly slots</h2>
+            <p className="text-sm text-slate-600">
+              Choose the days and hours you work. We&apos;ll generate manual slots for the next few weeks.
+            </p>
+          </div>
+          <div className="rounded-lg bg-slate-50 px-3 py-2 text-xs font-semibold text-slate-700">
+            Time zone: {timeZone}
+          </div>
+        </div>
+
+        <div className="grid gap-3 md:grid-cols-2 lg:grid-cols-3">
+          <div className="space-y-2">
+            <p className="text-xs font-semibold uppercase tracking-wide text-slate-500">Days</p>
+            <div className="flex flex-wrap gap-2">
+              {dayShortNames.map((day, idx) => {
+                const active = selectedDays.includes(idx);
+                return (
+                  <button
+                    key={day}
+                    onClick={() => toggleDay(idx)}
+                    className={`rounded-lg border px-3 py-1.5 text-sm font-semibold transition ${
+                      active
+                        ? 'border-indigo-600 bg-indigo-50 text-indigo-700'
+                        : 'border-slate-200 bg-white text-slate-600 hover:border-indigo-200 hover:text-indigo-700'
+                    }`}
+                  >
+                    {day}
+                  </button>
+                );
+              })}
+            </div>
+          </div>
+
+          <div className="space-y-2">
+            <p className="text-xs font-semibold uppercase tracking-wide text-slate-500">Hours</p>
+            <div className="flex flex-wrap items-center gap-2">
+              <label className="text-sm text-slate-600">
+                Start
+                <input
+                  type="time"
+                  value={startTime}
+                  onChange={(e) => setStartTime(e.target.value)}
+                  className="ml-2 rounded-lg border border-slate-200 px-2 py-1 text-sm"
+                />
+              </label>
+              <label className="text-sm text-slate-600">
+                End
+                <input
+                  type="time"
+                  value={endTime}
+                  onChange={(e) => setEndTime(e.target.value)}
+                  className="ml-2 rounded-lg border border-slate-200 px-2 py-1 text-sm"
+                />
+              </label>
+            </div>
+          </div>
+
+          <div className="space-y-2">
+            <p className="text-xs font-semibold uppercase tracking-wide text-slate-500">Start date</p>
+            <input
+              type="date"
+              value={startDateInput}
+              onChange={(e) => setStartDateInput(e.target.value)}
+              className="w-full rounded-lg border border-slate-200 px-3 py-2 text-sm"
+            />
+          </div>
+
+          <div className="space-y-2">
+            <p className="text-xs font-semibold uppercase tracking-wide text-slate-500">Slot length</p>
+            <select
+              value={slotMinutes}
+              onChange={(e) => setSlotMinutes(Number(e.target.value))}
+              className="w-full rounded-lg border border-slate-200 px-3 py-2 text-sm"
+            >
+              {[30, 45, 60, 90, 120].map((mins) => (
+                <option key={mins} value={mins}>
+                  {mins} minutes
+                </option>
+              ))}
+            </select>
+          </div>
+
+          <div className="space-y-2">
+            <p className="text-xs font-semibold uppercase tracking-wide text-slate-500">Weeks ahead</p>
+            <select
+              value={weeksAhead}
+              onChange={(e) => setWeeksAhead(Number(e.target.value))}
+              className="w-full rounded-lg border border-slate-200 px-3 py-2 text-sm"
+            >
+              {[1, 2, 3, 4, 6, 8, 12].map((wk) => (
+                <option key={wk} value={wk}>
+                  {wk} week{wk === 1 ? '' : 's'}
+                </option>
+              ))}
+            </select>
+          </div>
+
+          <div className="space-y-2 lg:col-span-2">
+            <p className="text-xs font-semibold uppercase tracking-wide text-slate-500">Notes</p>
+            <div className="rounded-lg border border-slate-200 bg-slate-50 p-3 text-sm text-slate-600">
+              Generates manual slots and replaces unbooked manual slots in the range. Booked slots and Google Calendar
+              imports stay untouched.
+            </div>
+          </div>
+        </div>
+
+        {(availabilityMessage || availabilityError) && (
+          <div
+            className={`rounded-lg px-3 py-2 text-sm ${
+              availabilityError
+                ? 'border border-rose-200 bg-rose-50 text-rose-800'
+                : 'border border-emerald-200 bg-emerald-50 text-emerald-800'
+            }`}
+          >
+            {availabilityError || availabilityMessage}
+          </div>
+        )}
+
+        <div className="flex items-center justify-end gap-3">
+          <button
+            onClick={handleSaveAvailability}
+            disabled={savingAvailability || !selectedDays.length}
+            className="rounded-lg bg-indigo-700 px-4 py-2 text-sm font-semibold text-white shadow-sm transition hover:bg-indigo-800 disabled:cursor-not-allowed disabled:bg-slate-300"
+          >
+            {savingAvailability ? 'Saving...' : 'Save availability'}
+          </button>
+        </div>
+      </div>
+
       {/* Stats Bar */}
       <div className="grid grid-cols-2 gap-4 sm:grid-cols-4">
         <div className="rounded-xl border border-slate-200 bg-white p-4">
