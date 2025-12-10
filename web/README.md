@@ -21,7 +21,7 @@ NEXT_PUBLIC_SUPABASE_ANON_KEY=...
 npm run dev
 ```
 
-Visit http://localhost:3000. Auth/login is at `/auth`, profile `/profile`, requests `/requests`, scheduling `/schedule`.
+Visit http://localhost:3000. Auth/login is at `/auth`, profile `/profile`, requests `/requests`.
 
 ## Supabase schema (minimum)
 

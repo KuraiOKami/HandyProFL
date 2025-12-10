@@ -47,11 +47,12 @@ export default function TopNav() {
       <Link href="/services" className="hover:text-indigo-700 transition" onClick={onNav}>
         Services
       </Link>
-      <Link href="/schedule" className="hover:text-indigo-700 transition" onClick={onNav}>
-        Schedule
-      </Link>
-      <Link href="/requests" className="hover:text-indigo-700 transition" onClick={onNav}>
-        Requests
+      <Link
+        href="/requests"
+        className="rounded-full bg-indigo-700 px-3 py-1.5 text-white shadow-sm shadow-indigo-200 transition hover:-translate-y-0.5 hover:bg-indigo-800"
+        onClick={onNav}
+      >
+        Book a request
       </Link>
       <Link href="/settings" className="hover:text-indigo-700 transition" onClick={onNav}>
         Settings

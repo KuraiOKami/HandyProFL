@@ -1,12 +1,14 @@
 'use client';
 
-import { useCallback, useEffect, useMemo, useState } from 'react';
+import { useCallback, useEffect, useImperativeHandle, useMemo, useState, forwardRef, FormEvent, ReactNode } from 'react';
+import { CardElement, Elements, useElements, useStripe } from '@stripe/react-stripe-js';
+import { loadStripe } from '@stripe/stripe-js';
 import { getSupabaseClient } from '@/lib/supabaseClient';
 import { useSupabaseSession } from '@/hooks/useSupabaseSession';
 
 type Step = 1 | 2 | 3 | 4 | 5;
 
-type ServiceId = 'tv_mount' | 'assembly' | 'electrical' | 'punch';
+export type ServiceId = 'tv_mount' | 'assembly' | 'electrical' | 'punch';
 
 type Slot = { time: string; available: boolean; startIso: string };
 type PaymentMethod = {
@@ -29,7 +31,7 @@ type RequestItem = {
   photoNames: string[];
 };
 
-const services: Record<
+export const services: Record<
   ServiceId,
   {
     name: string;
@@ -76,6 +78,28 @@ const services: Record<
 const DISPLAY_TIME_ZONE = 'America/New_York';
 
 const defaultSlots: Slot[] = [];
+const publishableKey = process.env.NEXT_PUBLIC_STRIPE_PUBLISHABLE_KEY ?? '';
+const stripePromise = publishableKey ? loadStripe(publishableKey) : null;
+
+const cardElementOptions = {
+  hidePostalCode: true,
+  style: {
+    base: {
+      fontSize: '16px',
+      color: '#0f172a',
+      '::placeholder': {
+        color: '#94a3b8',
+      },
+    },
+    invalid: {
+      color: '#e11d48',
+    },
+  },
+} as const;
+
+export type RequestWizardHandle = {
+  open: (service?: ServiceId) => void;
+};
 
 function nextDays(days = 14) {
   const out: { label: string; value: string }[] = [];
@@ -89,7 +113,7 @@ function nextDays(days = 14) {
   return out;
 }
 
-export default function RequestWizard() {
+const RequestWizard = forwardRef<RequestWizardHandle>((_props, ref) => {
   const { session } = useSupabaseSession();
   const supabase = getSupabaseClient();
 
@@ -118,16 +142,34 @@ export default function RequestWizard() {
   const [servicePrices, setServicePrices] = useState<Record<string, number>>({});
   const selectedSlots = useMemo(() => availableSlots[date] ?? defaultSlots, [availableSlots, date]);
   const [slotDurationMinutes, setSlotDurationMinutes] = useState<number | null>(null);
-  const [payMethod, setPayMethod] = useState<'pay_later' | 'card_on_file'>('pay_later');
+  const [payMethod, setPayMethod] = useState<'new_card' | 'card_on_file'>('new_card');
   const [paymentMethods, setPaymentMethods] = useState<PaymentMethod[]>([]);
   const [walletLoading, setWalletLoading] = useState(false);
   const [walletError, setWalletError] = useState<string | null>(null);
   const [selectedPaymentMethodId, setSelectedPaymentMethodId] = useState<string | null>(null);
   const [requestId, setRequestId] = useState<string | null>(null);
+  const [setupClientSecret, setSetupClientSecret] = useState<string | null>(null);
+  const [newPaymentMethodId, setNewPaymentMethodId] = useState<string | null>(null);
+  const [cardStatus, setCardStatus] = useState<string | null>(null);
+  const [cardError, setCardError] = useState<string | null>(null);
+  const [preparingCard, setPreparingCard] = useState(false);
 
-  const reset = () => {
+  const startRequest = useCallback((svc?: ServiceId) => {
+    reset(svc);
+    setOpen(true);
+  }, [reset]);
+
+  useImperativeHandle(
+    ref,
+    () => ({
+      open: (svc?: ServiceId) => startRequest(svc),
+    }),
+    [startRequest],
+  );
+
+  const reset = useCallback((svc?: ServiceId) => {
     setStep(1);
-    setService('tv_mount');
+    setService(svc ?? 'tv_mount');
     setTvSize('55"');
     setWallType('Drywall');
     setHasMount('yes');
@@ -142,12 +184,17 @@ export default function RequestWizard() {
     setStatus(null);
     setError(null);
     setItems([]);
-    setPayMethod('pay_later');
+    setPayMethod('new_card');
     setPaymentMethods([]);
     setWalletError(null);
     setSelectedPaymentMethodId(null);
     setRequestId(null);
-  };
+    setSetupClientSecret(null);
+    setNewPaymentMethodId(null);
+    setCardStatus(null);
+    setCardError(null);
+    setPreparingCard(false);
+  }, []);
 
   // Load service catalog durations (server API so anon/mobile sees prices)
   useEffect(() => {
@@ -337,6 +384,46 @@ export default function RequestWizard() {
     }
   }, [step, session, loadPaymentMethods]);
 
+  const startCardSetup = useCallback(async () => {
+    if (!session) {
+      setCardError('Sign in to add a card.');
+      return;
+    }
+    if (!stripePromise) {
+      setCardError('Card payments are not configured.');
+      return;
+    }
+    setPreparingCard(true);
+    setCardError(null);
+    setCardStatus(null);
+    const res = await fetch('/api/payments/wallet', { method: 'POST' });
+    const body = await res.json().catch(() => ({}));
+    if (!res.ok || !body?.client_secret) {
+      setCardError(body.error || 'Could not start card setup.');
+      setPreparingCard(false);
+      return;
+    }
+    setSetupClientSecret(body.client_secret as string);
+    setPreparingCard(false);
+  }, [session]);
+
+  useEffect(() => {
+    if (open && step === 4 && payMethod === 'new_card' && !setupClientSecret && !preparingCard && !cardError) {
+      startCardSetup();
+    }
+  }, [open, step, payMethod, setupClientSecret, preparingCard, startCardSetup, cardError]);
+
+  const handleCardSaved = useCallback(
+    (paymentMethodId: string) => {
+      setNewPaymentMethodId(paymentMethodId);
+      setSelectedPaymentMethodId(paymentMethodId);
+      setCardStatus('Card saved for this booking.');
+      setCardError(null);
+      loadPaymentMethods();
+    },
+    [loadPaymentMethods],
+  );
+
   const resetItemFields = () => {
     setService('tv_mount');
     setTvSize('55"');
@@ -361,6 +448,11 @@ export default function RequestWizard() {
       setStep(2);
       return;
     }
+    let paymentMethodToUse: string | null = null;
+    if (totalPriceCents <= 0) {
+      setError('Total must be greater than $0. Update the request items.');
+      return;
+    }
     if (payMethod === 'card_on_file') {
       if (!hasPaymentMethods) {
         setError('Add a card in Settings > Wallet first.');
@@ -370,10 +462,18 @@ export default function RequestWizard() {
         setError('Select a saved card to charge.');
         return;
       }
-      if (totalPriceCents <= 0) {
-        setError('Total must be greater than $0. Update the request items.');
+      paymentMethodToUse = selectedPaymentMethodId;
+    }
+    if (payMethod === 'new_card') {
+      if (!stripePromise) {
+        setError('Card payments are not configured.');
         return;
       }
+      if (!newPaymentMethodId) {
+        setError('Add your card to continue.');
+        return;
+      }
+      paymentMethodToUse = newPaymentMethodId;
     }
 
     setSubmitting(true);
@@ -439,14 +539,14 @@ export default function RequestWizard() {
       setRequestId(newRequestId);
     }
 
-    if (payMethod === 'card_on_file' && selectedPaymentMethodId) {
+    if (paymentMethodToUse) {
       const chargeRes = await fetch('/api/payments/charge', {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({
           amount_cents: totalPriceCents,
           currency: 'usd',
-          payment_method_id: selectedPaymentMethodId,
+          payment_method_id: paymentMethodToUse,
           request_id: newRequestId,
         }),
       });
@@ -476,13 +576,63 @@ export default function RequestWizard() {
     setStep(5);
   };
 
+  const InlineCardSetup = ({ clientSecret }: { clientSecret: string }) => {
+    const stripe = useStripe();
+    const elements = useElements();
+    const [saving, setSaving] = useState(false);
+
+    const submit = async (e: FormEvent<HTMLFormElement>) => {
+      e.preventDefault();
+      if (!stripe || !elements) {
+        setCardError('Stripe failed to load. Please refresh.');
+        return;
+      }
+      const card = elements.getElement(CardElement);
+      if (!card) {
+        setCardError('Card field is not ready yet.');
+        return;
+      }
+      setSaving(true);
+      const { error, setupIntent } = await stripe.confirmCardSetup(clientSecret, {
+        payment_method: { card },
+      });
+      if (error) {
+        setCardError(error.message ?? 'We could not save the card.');
+        setSaving(false);
+        return;
+      }
+      if (setupIntent?.status === 'succeeded' && setupIntent.payment_method) {
+        handleCardSaved(String(setupIntent.payment_method));
+        setCardStatus('Card added and ready to charge.');
+      } else {
+        setCardError('We could not confirm the card. Please try again.');
+      }
+      setSaving(false);
+    };
+
+    return (
+      <form onSubmit={submit} className="grid gap-3">
+        <div className="rounded-lg border border-slate-200 bg-slate-50 px-3 py-3">
+          <CardElement options={cardElementOptions} />
+        </div>
+        <div className="flex flex-wrap items-center gap-2">
+          <button
+            type="submit"
+            disabled={saving || preparingCard || !stripe || !elements}
+            className="rounded-lg bg-indigo-700 px-4 py-2 text-sm font-semibold text-white shadow-sm hover:bg-indigo-800 disabled:cursor-not-allowed disabled:bg-slate-300"
+          >
+            {saving ? 'Saving...' : 'Save card'}
+          </button>
+          <p className="text-xs text-slate-500">Cards are vaulted securely with Stripe.</p>
+        </div>
+      </form>
+    );
+  };
+
   return (
     <div className="grid gap-4">
       <button
-        onClick={() => {
-          setOpen(true);
-          reset();
-        }}
+        onClick={() => startRequest()}
         className="inline-flex w-full items-center justify-center rounded-lg bg-indigo-700 px-5 py-3 text-sm font-semibold text-white shadow-md shadow-indigo-200 transition hover:bg-indigo-800 sm:w-auto"
       >
         Start a request
@@ -843,7 +993,7 @@ export default function RequestWizard() {
                       </span>
                     </div>
                   </div>
-                  <div className="grid gap-2 rounded-lg border border-slate-200 bg-slate-50 p-3">
+                  <div className="grid gap-3 rounded-lg border border-slate-200 bg-slate-50 p-3">
                     <div className="flex items-center justify-between">
                       <p className="text-sm font-semibold text-slate-900">Payment</p>
                       <button
@@ -855,71 +1005,100 @@ export default function RequestWizard() {
                         {walletLoading ? 'Refreshing…' : 'Refresh cards'}
                       </button>
                     </div>
-                    <label className="flex items-center gap-2 text-sm text-slate-800">
-                      <input
-                        type="radio"
-                        name="pay_method"
-                        checked={payMethod === 'pay_later'}
-                        onChange={() => setPayMethod('pay_later')}
-                        className="h-4 w-4 text-indigo-700 focus:ring-indigo-600"
-                      />
-                      Pay after confirmation (on-site or link)
-                    </label>
-                    <label
-                      className={`flex items-center gap-2 text-sm text-slate-800 ${!hasPaymentMethods ? 'opacity-60' : ''}`}
-                    >
-                      <input
-                        type="radio"
-                        name="pay_method"
-                        checked={payMethod === 'card_on_file'}
-                        onChange={() => setPayMethod('card_on_file')}
-                        disabled={!hasPaymentMethods}
-                        className="h-4 w-4 text-indigo-700 focus:ring-indigo-600"
-                      />
-                      Charge a saved card now
-                    </label>
-                    {walletError && (
-                      <p className="rounded-md bg-rose-50 px-3 py-2 text-xs text-rose-800">{walletError}</p>
-                    )}
-                    {payMethod === 'card_on_file' && (
-                      <div className="grid gap-2 rounded-lg border border-slate-200 bg-white p-3 text-sm">
-                        {hasPaymentMethods ? (
-                          paymentMethods.map((pm) => (
-                            <label
-                              key={pm.id}
-                              className={`flex items-center justify-between gap-3 rounded-lg border px-3 py-2 ${
-                                selectedPaymentMethodId === pm.id
-                                  ? 'border-indigo-600 bg-indigo-50'
-                                  : 'border-slate-200'
-                              }`}
-                            >
-                              <div className="flex flex-col">
-                                <span className="text-sm font-semibold text-slate-900">
-                                  {pm.brand ? pm.brand.toUpperCase() : 'Card'} •••• {pm.last4 ?? '••••'}
-                                </span>
-                                <span className="text-xs text-slate-600">
-                                  Expires {pm.exp_month ?? '??'}/{pm.exp_year ?? '??'}
-                                </span>
-                              </div>
-                              <input
-                                type="radio"
-                                name="selected_payment_method"
-                                checked={selectedPaymentMethodId === pm.id}
-                                onChange={() => setSelectedPaymentMethodId(pm.id)}
-                                className="h-4 w-4 text-indigo-700 focus:ring-indigo-600"
-                              />
-                            </label>
-                          ))
-                        ) : (
-                          <p className="text-sm text-slate-700">
-                            No saved cards. Add one in <a href="/settings" className="text-indigo-700 underline">Settings → Wallet</a>.
+
+                    <div className="grid gap-2 rounded-lg border border-slate-200 bg-white p-3">
+                      <label className="flex items-center gap-2 text-sm font-semibold text-slate-900">
+                        <input
+                          type="radio"
+                          name="pay_method"
+                          checked={payMethod === 'new_card'}
+                          onChange={() => setPayMethod('new_card')}
+                          className="h-4 w-4 text-indigo-700 focus:ring-indigo-600"
+                        />
+                        Use a new card
+                      </label>
+                      {payMethod === 'new_card' && (
+                        <div className="grid gap-2 rounded-lg border border-slate-200 bg-slate-50 p-3">
+                          {!stripePromise && (
+                            <p className="text-sm text-rose-700">
+                              Card payments are not configured. Add a Stripe publishable key.
+                            </p>
+                          )}
+                          {stripePromise && setupClientSecret && (
+                            <Elements stripe={stripePromise} options={{ clientSecret: setupClientSecret }}>
+                              <InlineCardSetup clientSecret={setupClientSecret} />
+                            </Elements>
+                          )}
+                          {stripePromise && !setupClientSecret && (
+                            <p className="text-sm text-slate-600">
+                              {preparingCard ? 'Preparing card form…' : 'Starting secure card entry...'}
+                            </p>
+                          )}
+                          {cardStatus && <p className="text-xs font-semibold text-emerald-700">{cardStatus}</p>}
+                          {cardError && (
+                            <p className="rounded-md bg-rose-50 px-3 py-2 text-xs text-rose-800">{cardError}</p>
+                          )}
+                        </div>
+                      )}
+                    </div>
+
+                    <div className="grid gap-2 rounded-lg border border-slate-200 bg-white p-3">
+                      <label
+                        className={`flex items-center gap-2 text-sm font-semibold text-slate-900 ${!hasPaymentMethods ? 'opacity-60' : ''}`}
+                      >
+                        <input
+                          type="radio"
+                          name="pay_method"
+                          checked={payMethod === 'card_on_file'}
+                          onChange={() => setPayMethod('card_on_file')}
+                          disabled={!hasPaymentMethods}
+                          className="h-4 w-4 text-indigo-700 focus:ring-indigo-600"
+                        />
+                        Use a saved card
+                      </label>
+                      {walletError && (
+                        <p className="rounded-md bg-rose-50 px-3 py-2 text-xs text-rose-800">{walletError}</p>
+                      )}
+                      {payMethod === 'card_on_file' && (
+                        <div className="grid gap-2 text-sm">
+                          {hasPaymentMethods ? (
+                            paymentMethods.map((pm) => (
+                              <label
+                                key={pm.id}
+                                className={`flex items-center justify-between gap-3 rounded-lg border px-3 py-2 ${
+                                  selectedPaymentMethodId === pm.id
+                                    ? 'border-indigo-600 bg-indigo-50'
+                                    : 'border-slate-200'
+                                }`}
+                              >
+                                <div className="flex flex-col">
+                                  <span className="text-sm font-semibold text-slate-900">
+                                    {pm.brand ? pm.brand.toUpperCase() : 'Card'} •••• {pm.last4 ?? '••••'}
+                                  </span>
+                                  <span className="text-xs text-slate-600">
+                                    Expires {pm.exp_month ?? '??'}/{pm.exp_year ?? '??'}
+                                  </span>
+                                </div>
+                                <input
+                                  type="radio"
+                                  name="selected_payment_method"
+                                  checked={selectedPaymentMethodId === pm.id}
+                                  onChange={() => setSelectedPaymentMethodId(pm.id)}
+                                  className="h-4 w-4 text-indigo-700 focus:ring-indigo-600"
+                                />
+                              </label>
+                            ))
+                          ) : (
+                            <p className="text-sm text-slate-700">
+                              No saved cards. Add one in <a href="/settings?tab=wallet" className="text-indigo-700 underline">Settings → Wallet</a>.
+                            </p>
+                          )}
+                          <p className="text-xs text-slate-500">
+                            We charge your card now to lock in the booking. Payment is processed securely via Stripe.
                           </p>
-                        )}
-                        <p className="text-xs text-slate-500">
-                          We charge your card now to lock in the booking. Payment is processed securely via Stripe.
-                        </p>
-                      </div>
-                    )}
+                        </div>
+                      )}
+                    </div>
                   </div>
                 </div>
               )}
@@ -945,7 +1124,7 @@ export default function RequestWizard() {
                     {step === 1 && 'Choose the service and options.'}
                     {step === 2 && 'Select a date and a time slot.'}
                     {step === 3 && 'Add any extra context.'}
-                    {step === 4 && 'Review subtotal and payment preference.'}
+                    {step === 4 && 'Review subtotal and payment.'}
                   </div>
                   <div className="flex flex-wrap gap-2">
                     <button
@@ -978,11 +1157,13 @@ export default function RequestWizard() {
             </div>
           </div>
         </div>
-        </div>
+      </div>
       )}
     </div>
   );
-}
+});
+
+export default RequestWizard;
 
 function Stepper({ step }: { step: Step }) {
   const steps = [
@@ -1020,7 +1201,7 @@ function Chip({
   selected,
   onClick,
 }: {
-  children: React.ReactNode;
+  children: ReactNode;
   selected: boolean;
   onClick: () => void;
 }) {
@@ -1036,6 +1217,6 @@ function Chip({
   );
 }
 
-function FieldLabel({ children }: { children: React.ReactNode }) {
+function FieldLabel({ children }: { children: ReactNode }) {
   return <span className="text-xs font-semibold uppercase tracking-[0.12em] text-slate-700">{children}</span>;
 }
