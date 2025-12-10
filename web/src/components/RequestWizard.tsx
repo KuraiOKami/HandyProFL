@@ -1540,7 +1540,7 @@ function Stepper({ step }: { step: Step }) {
           >
             {s.id}
           </span>
-          <span>{s.label}</span>
+          <span className="hidden sm:inline">{s.label}</span>
         </div>
       ))}
     </div>
