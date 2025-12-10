@@ -1106,25 +1106,7 @@ const RequestWizard = forwardRef<RequestWizardHandle>((_props, ref) => {
                   <div className="grid gap-2 rounded-lg border border-slate-200 bg-slate-50 p-3">
                     <div className="flex items-center justify-between">
                       <p className="text-sm font-semibold text-slate-900">Extra items</p>
-                      <button
-                        onClick={() => {
-                          if (!newItem.trim()) return;
-                          setExtraItems((prev) => [...prev, newItem.trim()]);
-                          setNewItem('');
-                        }}
-                        className="rounded-lg bg-indigo-700 px-3 py-1.5 text-xs font-semibold text-white shadow-sm hover:bg-indigo-800"
-                        type="button"
-                      >
-                        Add item
-                      </button>
                     </div>
-                    <input
-                      type="text"
-                      value={newItem}
-                      onChange={(e) => setNewItem(e.target.value)}
-                      className="w-full rounded-lg border border-slate-300 px-3 py-2 text-slate-900 shadow-inner shadow-slate-100 focus:border-indigo-600 focus:outline-none focus:ring-2 focus:ring-indigo-100"
-                      placeholder="e.g., additional chair, side table"
-                    />
                     <div className="flex flex-wrap gap-2">
                       {extraItems.map((item, idx) => (
                         <span
@@ -1142,6 +1124,26 @@ const RequestWizard = forwardRef<RequestWizardHandle>((_props, ref) => {
                         </span>
                       ))}
                       {!extraItems.length && <span className="text-xs text-slate-500">No extra items added yet.</span>}
+                    </div>
+                    <div className="flex flex-wrap items-center gap-2 pt-2">
+                      <input
+                        type="text"
+                        value={newItem}
+                        onChange={(e) => setNewItem(e.target.value)}
+                        className="w-full rounded-lg border border-slate-300 px-3 py-2 text-slate-900 shadow-inner shadow-slate-100 focus:border-indigo-600 focus:outline-none focus:ring-2 focus:ring-indigo-100 sm:w-auto sm:min-w-[240px] sm:flex-1"
+                        placeholder="Add another item (e.g., side table, lamp)"
+                      />
+                      <button
+                        onClick={() => {
+                          if (!newItem.trim()) return;
+                          setExtraItems((prev) => [...prev, newItem.trim()]);
+                          setNewItem('');
+                        }}
+                        className="rounded-lg bg-indigo-700 px-3 py-2 text-xs font-semibold text-white shadow-sm hover:bg-indigo-800"
+                        type="button"
+                      >
+                        Add item
+                      </button>
                     </div>
                   </div>
                   <textarea
