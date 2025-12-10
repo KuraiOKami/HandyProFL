@@ -16,7 +16,11 @@ export default async function AdminRootPage() {
     redirect("/auth");
   }
 
-  const { data: profile } = await supabase.from("profiles").select("role").eq("id", session.user.id).single();
+  const { data: profile } = await supabase
+    .from("profiles")
+    .select("role, first_name, last_name, email")
+    .eq("id", session.user.id)
+    .single();
 
   if (profile?.role !== "admin") {
     return (
@@ -26,14 +30,13 @@ export default async function AdminRootPage() {
     );
   }
 
+  const userName = [profile.first_name, profile.last_name].filter(Boolean).join(" ") || undefined;
+  const userEmail = profile.email || session.user.email || undefined;
+
   return (
-    <div className="grid gap-6">
-      <div>
-        <p className="text-xs uppercase tracking-[0.2em] text-indigo-700">Admin</p>
-        <h1 className="text-3xl font-semibold text-slate-900">Control Panel</h1>
-        <p className="text-sm text-slate-600">Manage all aspects of your handyman business.</p>
-      </div>
-      <AdminDashboardTabbed />
-    </div>
+    <AdminDashboardTabbed
+      userName={userName}
+      userEmail={userEmail}
+    />
   );
 }

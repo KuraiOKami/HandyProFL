@@ -40,48 +40,130 @@ function LoadingSpinner() {
   );
 }
 
-export default function AdminDashboardTabbed() {
+type Props = {
+  userEmail?: string;
+  userName?: string;
+};
+
+export default function AdminDashboardTabbed({ userEmail, userName }: Props) {
   const [activeTab, setActiveTab] = useState<Tab>('dashboard');
+  const [sidebarCollapsed, setSidebarCollapsed] = useState(false);
+
+  const initials = userName
+    ? userName.split(' ').map((n) => n[0]).join('').toUpperCase().slice(0, 2)
+    : userEmail?.slice(0, 2).toUpperCase() || 'AD';
 
   return (
-    <div className="grid gap-6">
-      {/* Tab Navigation */}
-      <div className="sticky top-0 z-10 rounded-xl bg-white shadow-sm ring-1 ring-slate-200">
-        <div className="overflow-x-auto">
-          <div className="flex border-b border-slate-200">
+    <div className="flex min-h-[calc(100vh-2rem)]">
+      {/* Sidebar */}
+      <aside
+        className={`sticky top-0 flex h-screen flex-col bg-slate-900 text-white transition-all duration-300 ${
+          sidebarCollapsed ? 'w-16' : 'w-56'
+        }`}
+      >
+        {/* Logo / Brand */}
+        <div className="flex items-center gap-3 border-b border-slate-700 px-4 py-4">
+          <div className="flex h-9 w-9 items-center justify-center rounded-lg bg-indigo-600 text-lg font-bold">
+            H
+          </div>
+          {!sidebarCollapsed && (
+            <div>
+              <p className="text-sm font-semibold">HandyProFL</p>
+              <p className="text-xs text-slate-400">Admin Panel</p>
+            </div>
+          )}
+        </div>
+
+        {/* Navigation */}
+        <nav className="flex-1 overflow-y-auto py-4">
+          <ul className="space-y-1 px-2">
             {tabs.map((tab) => (
-              <button
-                key={tab.id}
-                onClick={() => setActiveTab(tab.id)}
-                className={`flex items-center gap-2 whitespace-nowrap border-b-2 px-4 py-3 text-sm font-semibold transition ${
-                  activeTab === tab.id
-                    ? 'border-indigo-700 text-indigo-700'
-                    : 'border-transparent text-slate-600 hover:border-slate-300 hover:text-slate-900'
-                }`}
-              >
-                <span className="text-base">{tab.icon}</span>
-                <span>{tab.label}</span>
-              </button>
+              <li key={tab.id}>
+                <button
+                  onClick={() => setActiveTab(tab.id)}
+                  className={`flex w-full items-center gap-3 rounded-lg px-3 py-2.5 text-sm font-medium transition ${
+                    activeTab === tab.id
+                      ? 'bg-indigo-600 text-white'
+                      : 'text-slate-300 hover:bg-slate-800 hover:text-white'
+                  }`}
+                  title={sidebarCollapsed ? tab.label : undefined}
+                >
+                  <span className="text-lg">{tab.icon}</span>
+                  {!sidebarCollapsed && <span>{tab.label}</span>}
+                </button>
+              </li>
             ))}
+          </ul>
+        </nav>
+
+        {/* Collapse Toggle */}
+        <button
+          onClick={() => setSidebarCollapsed(!sidebarCollapsed)}
+          className="border-t border-slate-700 px-4 py-3 text-left text-xs text-slate-400 hover:bg-slate-800 hover:text-white"
+        >
+          {sidebarCollapsed ? '→' : '← Collapse'}
+        </button>
+
+        {/* User Info */}
+        <div className="border-t border-slate-700 px-3 py-3">
+          <div className="flex items-center gap-3">
+            <div className="flex h-9 w-9 items-center justify-center rounded-full bg-indigo-500 text-sm font-semibold">
+              {initials}
+            </div>
+            {!sidebarCollapsed && (
+              <div className="min-w-0 flex-1">
+                <p className="truncate text-sm font-medium">{userName || 'Admin'}</p>
+                <p className="truncate text-xs text-slate-400">{userEmail || 'admin@handyprofl.com'}</p>
+              </div>
+            )}
           </div>
         </div>
-      </div>
+      </aside>
 
-      {/* Tab Content */}
-      <div className="rounded-xl bg-white p-6 shadow-sm ring-1 ring-slate-200">
-        <Suspense fallback={<LoadingSpinner />}>
-          {activeTab === 'dashboard' && <AdminDashboardContent />}
-          {activeTab === 'requests' && <AdminRequestsContent />}
-          {activeTab === 'clients' && <AdminClientsContent />}
-          {activeTab === 'schedule' && <AdminScheduleContent />}
-          {activeTab === 'services' && <AdminServicesContent />}
-          {activeTab === 'billing' && <AdminBillingContent />}
-          {activeTab === 'notifications' && <AdminNotificationsContent />}
-          {activeTab === 'files' && <AdminFilesContent />}
-          {activeTab === 'settings' && <AdminSettingsContent />}
-          {activeTab === 'activity' && <AdminActivityContent />}
-        </Suspense>
-      </div>
+      {/* Main Content */}
+      <main className="flex-1 bg-slate-50">
+        {/* Top Header */}
+        <header className="sticky top-0 z-10 border-b border-slate-200 bg-white px-6 py-4">
+          <div className="flex items-center justify-between">
+            <div>
+              <h1 className="text-xl font-semibold text-slate-900 capitalize">{activeTab}</h1>
+              <p className="text-sm text-slate-500">
+                {activeTab === 'dashboard' && 'Overview of your business'}
+                {activeTab === 'requests' && 'Manage service requests'}
+                {activeTab === 'clients' && 'CRM-style client management'}
+                {activeTab === 'schedule' && 'Availability and appointments'}
+                {activeTab === 'services' && 'Service catalog management'}
+                {activeTab === 'billing' && 'Revenue and payment tracking'}
+                {activeTab === 'notifications' && 'Alerts and messages'}
+                {activeTab === 'files' && 'Documents and attachments'}
+                {activeTab === 'settings' && 'System configuration'}
+                {activeTab === 'activity' && 'Recent activity log'}
+              </p>
+            </div>
+            <div className="flex items-center gap-3">
+              <button className="rounded-lg border border-slate-200 px-3 py-2 text-sm font-medium text-slate-700 hover:bg-slate-50">
+                Help
+              </button>
+            </div>
+          </div>
+        </header>
+
+        {/* Page Content */}
+        <div className="p-6">
+          <Suspense fallback={<LoadingSpinner />}>
+            {activeTab === 'dashboard' && <AdminDashboardContent />}
+            {activeTab === 'requests' && <AdminRequestsContent />}
+            {activeTab === 'clients' && <AdminClientsContent />}
+            {activeTab === 'schedule' && <AdminScheduleContent />}
+            {activeTab === 'services' && <AdminServicesContent />}
+            {activeTab === 'billing' && <AdminBillingContent />}
+            {activeTab === 'notifications' && <AdminNotificationsContent />}
+            {activeTab === 'files' && <AdminFilesContent />}
+            {activeTab === 'settings' && <AdminSettingsContent />}
+            {activeTab === 'activity' && <AdminActivityContent />}
+          </Suspense>
+        </div>
+      </main>
     </div>
   );
 }
