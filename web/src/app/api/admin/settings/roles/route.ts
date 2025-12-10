@@ -68,7 +68,7 @@ export async function POST(req: NextRequest) {
     return NextResponse.json({ error: "Missing userId or role" }, { status: 400 });
   }
 
-  if (!["admin", "client"].includes(role)) {
+  if (!["admin", "client", "agent"].includes(role)) {
     return NextResponse.json({ error: "Invalid role" }, { status: 400 });
   }
 

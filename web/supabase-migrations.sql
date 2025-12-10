@@ -120,3 +120,331 @@ COMMENT ON TABLE google_calendar_credentials IS 'Stores OAuth tokens for Google 
 COMMENT ON TABLE calendar_sync_log IS 'Tracks history of Google Calendar synchronization operations';
 COMMENT ON COLUMN service_requests.google_calendar_event_id IS 'Google Calendar event ID for two-way sync';
 COMMENT ON COLUMN available_slots.source IS 'Source of the slot: manual or google_calendar';
+
+-- ============================================
+-- AGENT PORTAL SCHEMA
+-- Run this migration to enable agent features
+-- ============================================
+
+-- Extended profiles for agents (service providers)
+CREATE TABLE IF NOT EXISTS agent_profiles (
+  id UUID PRIMARY KEY REFERENCES auth.users(id) ON DELETE CASCADE,
+  bio TEXT,
+  photo_url TEXT,
+  skills TEXT[] DEFAULT '{}', -- array of service categories they can handle
+  service_area_miles INTEGER DEFAULT 25, -- service radius
+  rating DECIMAL(3,2) DEFAULT 5.00,
+  total_jobs INTEGER DEFAULT 0,
+  total_earnings_cents INTEGER DEFAULT 0,
+  status TEXT DEFAULT 'pending_approval', -- pending_approval, approved, suspended
+  stripe_account_id TEXT, -- Stripe Connect Express account ID
+  stripe_account_status TEXT DEFAULT 'pending', -- pending, enabled, restricted
+  stripe_payouts_enabled BOOLEAN DEFAULT false,
+  stripe_charges_enabled BOOLEAN DEFAULT false,
+  instant_payout_enabled BOOLEAN DEFAULT false,
+  payout_schedule TEXT DEFAULT 'weekly', -- weekly, instant
+  created_at TIMESTAMPTZ DEFAULT NOW(),
+  updated_at TIMESTAMPTZ DEFAULT NOW()
+);
+
+-- Enable RLS for agent_profiles
+ALTER TABLE agent_profiles ENABLE ROW LEVEL SECURITY;
+
+-- Agents can view and update their own profile
+CREATE POLICY "Agents can view own profile"
+  ON agent_profiles FOR SELECT
+  USING (auth.uid() = id);
+
+CREATE POLICY "Agents can update own profile"
+  ON agent_profiles FOR UPDATE
+  USING (auth.uid() = id);
+
+CREATE POLICY "Users can insert their agent profile"
+  ON agent_profiles FOR INSERT
+  WITH CHECK (auth.uid() = id);
+
+-- Admins can view all agent profiles
+CREATE POLICY "Admins can view all agent profiles"
+  ON agent_profiles FOR SELECT
+  USING (
+    EXISTS (
+      SELECT 1 FROM profiles
+      WHERE profiles.id = auth.uid()
+      AND profiles.role = 'admin'
+    )
+  );
+
+-- Admins can update any agent profile (for approval/suspension)
+CREATE POLICY "Admins can update agent profiles"
+  ON agent_profiles FOR UPDATE
+  USING (
+    EXISTS (
+      SELECT 1 FROM profiles
+      WHERE profiles.id = auth.uid()
+      AND profiles.role = 'admin'
+    )
+  );
+
+-- Job assignments linking service_requests to agents
+CREATE TABLE IF NOT EXISTS job_assignments (
+  id UUID PRIMARY KEY DEFAULT gen_random_uuid(),
+  request_id UUID NOT NULL REFERENCES service_requests(id) ON DELETE CASCADE,
+  agent_id UUID NOT NULL REFERENCES auth.users(id),
+  assigned_by TEXT NOT NULL DEFAULT 'agent', -- 'agent' (self-claimed) or 'admin'
+  assigned_by_user_id UUID REFERENCES auth.users(id), -- who assigned (for admin assignments)
+  assigned_at TIMESTAMPTZ DEFAULT NOW(),
+  started_at TIMESTAMPTZ, -- when agent checked in
+  completed_at TIMESTAMPTZ, -- when agent checked out
+  job_price_cents INTEGER NOT NULL, -- total job price
+  agent_payout_cents INTEGER NOT NULL, -- 70% of job price
+  platform_fee_cents INTEGER NOT NULL, -- 30% of job price
+  status TEXT DEFAULT 'assigned', -- assigned, in_progress, completed, cancelled
+  cancellation_reason TEXT,
+  notes TEXT,
+  created_at TIMESTAMPTZ DEFAULT NOW(),
+  updated_at TIMESTAMPTZ DEFAULT NOW(),
+  UNIQUE(request_id) -- one agent per job
+);
+
+-- Enable RLS for job_assignments
+ALTER TABLE job_assignments ENABLE ROW LEVEL SECURITY;
+
+-- Agents can view their own assignments
+CREATE POLICY "Agents can view own assignments"
+  ON job_assignments FOR SELECT
+  USING (agent_id = auth.uid());
+
+-- Agents can update their own assignments (status changes)
+CREATE POLICY "Agents can update own assignments"
+  ON job_assignments FOR UPDATE
+  USING (agent_id = auth.uid());
+
+-- Agents can insert (claim jobs)
+CREATE POLICY "Agents can insert assignments"
+  ON job_assignments FOR INSERT
+  WITH CHECK (agent_id = auth.uid());
+
+-- Admins can view all assignments
+CREATE POLICY "Admins can view all assignments"
+  ON job_assignments FOR ALL
+  USING (
+    EXISTS (
+      SELECT 1 FROM profiles
+      WHERE profiles.id = auth.uid()
+      AND profiles.role = 'admin'
+    )
+  );
+
+-- Check-in/out records with GPS location
+CREATE TABLE IF NOT EXISTS agent_checkins (
+  id UUID PRIMARY KEY DEFAULT gen_random_uuid(),
+  assignment_id UUID NOT NULL REFERENCES job_assignments(id) ON DELETE CASCADE,
+  agent_id UUID NOT NULL REFERENCES auth.users(id),
+  type TEXT NOT NULL, -- 'checkin' or 'checkout'
+  timestamp TIMESTAMPTZ DEFAULT NOW(),
+  latitude DECIMAL(10,8),
+  longitude DECIMAL(11,8),
+  location_verified BOOLEAN DEFAULT false,
+  distance_from_job_meters INTEGER,
+  device_info TEXT, -- optional device/browser info
+  created_at TIMESTAMPTZ DEFAULT NOW()
+);
+
+-- Enable RLS for agent_checkins
+ALTER TABLE agent_checkins ENABLE ROW LEVEL SECURITY;
+
+-- Agents can manage their own checkins
+CREATE POLICY "Agents can manage own checkins"
+  ON agent_checkins FOR ALL
+  USING (agent_id = auth.uid());
+
+-- Admins can view all checkins
+CREATE POLICY "Admins can view all checkins"
+  ON agent_checkins FOR SELECT
+  USING (
+    EXISTS (
+      SELECT 1 FROM profiles
+      WHERE profiles.id = auth.uid()
+      AND profiles.role = 'admin'
+    )
+  );
+
+-- Proof of work photos
+CREATE TABLE IF NOT EXISTS proof_of_work (
+  id UUID PRIMARY KEY DEFAULT gen_random_uuid(),
+  assignment_id UUID NOT NULL REFERENCES job_assignments(id) ON DELETE CASCADE,
+  agent_id UUID NOT NULL REFERENCES auth.users(id),
+  type TEXT NOT NULL, -- 'box' (before/unopened) or 'finished' (after/completed)
+  photo_url TEXT NOT NULL,
+  thumbnail_url TEXT, -- optional smaller version
+  notes TEXT,
+  uploaded_at TIMESTAMPTZ DEFAULT NOW(),
+  created_at TIMESTAMPTZ DEFAULT NOW()
+);
+
+-- Enable RLS for proof_of_work
+ALTER TABLE proof_of_work ENABLE ROW LEVEL SECURITY;
+
+-- Agents can manage their own proof photos
+CREATE POLICY "Agents can manage own proof"
+  ON proof_of_work FOR ALL
+  USING (agent_id = auth.uid());
+
+-- Admins can view all proof photos
+CREATE POLICY "Admins can view all proof"
+  ON proof_of_work FOR SELECT
+  USING (
+    EXISTS (
+      SELECT 1 FROM profiles
+      WHERE profiles.id = auth.uid()
+      AND profiles.role = 'admin'
+    )
+  );
+
+-- Clients can view proof for their own requests
+CREATE POLICY "Clients can view proof for their requests"
+  ON proof_of_work FOR SELECT
+  USING (
+    EXISTS (
+      SELECT 1 FROM job_assignments ja
+      JOIN service_requests sr ON sr.id = ja.request_id
+      WHERE ja.id = proof_of_work.assignment_id
+      AND sr.user_id = auth.uid()
+    )
+  );
+
+-- Agent earnings per job
+CREATE TABLE IF NOT EXISTS agent_earnings (
+  id UUID PRIMARY KEY DEFAULT gen_random_uuid(),
+  agent_id UUID NOT NULL REFERENCES auth.users(id),
+  assignment_id UUID NOT NULL REFERENCES job_assignments(id) ON DELETE CASCADE,
+  amount_cents INTEGER NOT NULL, -- 70% of job price
+  status TEXT DEFAULT 'pending', -- pending, available, paid_out
+  available_at TIMESTAMPTZ, -- 2 hours after job completion
+  paid_out_at TIMESTAMPTZ,
+  payout_id UUID, -- reference to agent_payouts when paid
+  created_at TIMESTAMPTZ DEFAULT NOW(),
+  updated_at TIMESTAMPTZ DEFAULT NOW(),
+  UNIQUE(assignment_id) -- one earning record per job
+);
+
+-- Enable RLS for agent_earnings
+ALTER TABLE agent_earnings ENABLE ROW LEVEL SECURITY;
+
+-- Agents can view their own earnings
+CREATE POLICY "Agents can view own earnings"
+  ON agent_earnings FOR SELECT
+  USING (agent_id = auth.uid());
+
+-- Admins can view all earnings
+CREATE POLICY "Admins can view all earnings"
+  ON agent_earnings FOR SELECT
+  USING (
+    EXISTS (
+      SELECT 1 FROM profiles
+      WHERE profiles.id = auth.uid()
+      AND profiles.role = 'admin'
+    )
+  );
+
+-- Agent payouts (batch payments)
+CREATE TABLE IF NOT EXISTS agent_payouts (
+  id UUID PRIMARY KEY DEFAULT gen_random_uuid(),
+  agent_id UUID NOT NULL REFERENCES auth.users(id),
+  amount_cents INTEGER NOT NULL, -- total payout amount
+  type TEXT NOT NULL, -- 'weekly' or 'instant'
+  instant_fee_cents INTEGER DEFAULT 0, -- fee for instant payout (1.5%)
+  net_amount_cents INTEGER NOT NULL, -- amount after fees
+  stripe_transfer_id TEXT, -- Stripe Transfer ID
+  stripe_payout_id TEXT, -- Stripe Payout ID (for instant)
+  status TEXT DEFAULT 'pending', -- pending, processing, completed, failed
+  failure_reason TEXT,
+  earnings_count INTEGER DEFAULT 0, -- number of jobs included
+  period_start TIMESTAMPTZ, -- for weekly: start of period
+  period_end TIMESTAMPTZ, -- for weekly: end of period
+  created_at TIMESTAMPTZ DEFAULT NOW(),
+  completed_at TIMESTAMPTZ,
+  updated_at TIMESTAMPTZ DEFAULT NOW()
+);
+
+-- Enable RLS for agent_payouts
+ALTER TABLE agent_payouts ENABLE ROW LEVEL SECURITY;
+
+-- Agents can view their own payouts
+CREATE POLICY "Agents can view own payouts"
+  ON agent_payouts FOR SELECT
+  USING (agent_id = auth.uid());
+
+-- Admins can view all payouts
+CREATE POLICY "Admins can manage all payouts"
+  ON agent_payouts FOR ALL
+  USING (
+    EXISTS (
+      SELECT 1 FROM profiles
+      WHERE profiles.id = auth.uid()
+      AND profiles.role = 'admin'
+    )
+  );
+
+-- Add agent assignment to service_requests
+ALTER TABLE service_requests
+  ADD COLUMN IF NOT EXISTS assigned_agent_id UUID REFERENCES auth.users(id),
+  ADD COLUMN IF NOT EXISTS job_latitude DECIMAL(10,8),
+  ADD COLUMN IF NOT EXISTS job_longitude DECIMAL(11,8);
+
+-- Create index for faster agent lookups
+CREATE INDEX IF NOT EXISTS idx_service_requests_assigned_agent
+  ON service_requests(assigned_agent_id)
+  WHERE assigned_agent_id IS NOT NULL;
+
+CREATE INDEX IF NOT EXISTS idx_job_assignments_agent
+  ON job_assignments(agent_id);
+
+CREATE INDEX IF NOT EXISTS idx_job_assignments_status
+  ON job_assignments(status);
+
+CREATE INDEX IF NOT EXISTS idx_agent_earnings_agent_status
+  ON agent_earnings(agent_id, status);
+
+CREATE INDEX IF NOT EXISTS idx_agent_payouts_agent
+  ON agent_payouts(agent_id);
+
+-- Trigger for agent_profiles updated_at
+CREATE TRIGGER update_agent_profiles_updated_at
+  BEFORE UPDATE ON agent_profiles
+  FOR EACH ROW
+  EXECUTE FUNCTION update_updated_at_column();
+
+-- Trigger for job_assignments updated_at
+CREATE TRIGGER update_job_assignments_updated_at
+  BEFORE UPDATE ON job_assignments
+  FOR EACH ROW
+  EXECUTE FUNCTION update_updated_at_column();
+
+-- Trigger for agent_earnings updated_at
+CREATE TRIGGER update_agent_earnings_updated_at
+  BEFORE UPDATE ON agent_earnings
+  FOR EACH ROW
+  EXECUTE FUNCTION update_updated_at_column();
+
+-- Trigger for agent_payouts updated_at
+CREATE TRIGGER update_agent_payouts_updated_at
+  BEFORE UPDATE ON agent_payouts
+  FOR EACH ROW
+  EXECUTE FUNCTION update_updated_at_column();
+
+-- Grant permissions
+GRANT ALL ON agent_profiles TO authenticated;
+GRANT ALL ON job_assignments TO authenticated;
+GRANT ALL ON agent_checkins TO authenticated;
+GRANT ALL ON proof_of_work TO authenticated;
+GRANT SELECT ON agent_earnings TO authenticated;
+GRANT SELECT ON agent_payouts TO authenticated;
+
+-- Comments for agent tables
+COMMENT ON TABLE agent_profiles IS 'Extended profile data for agents/service providers';
+COMMENT ON TABLE job_assignments IS 'Links service requests to assigned agents';
+COMMENT ON TABLE agent_checkins IS 'GPS check-in/out records for job tracking';
+COMMENT ON TABLE proof_of_work IS 'Before/after photos documenting completed work';
+COMMENT ON TABLE agent_earnings IS 'Per-job earnings for agents (70% split)';
+COMMENT ON TABLE agent_payouts IS 'Batch payout records (weekly or instant)';

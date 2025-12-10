@@ -9,10 +9,11 @@ const AdminRequestsContent = lazy(() => import('./admin/AdminRequestsContent'));
 const AdminClientsContent = lazy(() => import('./admin/AdminClientsContent'));
 const AdminScheduleContent = lazy(() => import('./admin/AdminScheduleContent'));
 const AdminServicesContent = lazy(() => import('./admin/AdminServicesContent'));
+const AdminAgentsContent = lazy(() => import('./admin/AdminAgentsContent'));
 const AdminBillingContent = lazy(() => import('./admin/AdminBillingContent'));
 const AdminSettingsContent = lazy(() => import('./admin/AdminSettingsContent'));
 
-type Tab = 'dashboard' | 'requests' | 'clients' | 'schedule' | 'services' | 'billing' | 'settings';
+type Tab = 'dashboard' | 'requests' | 'clients' | 'schedule' | 'services' | 'agents' | 'billing' | 'settings';
 
 const tabs: { id: Tab; label: string; icon: string }[] = [
   { id: 'dashboard', label: 'Dashboard', icon: '📊' },
@@ -20,6 +21,7 @@ const tabs: { id: Tab; label: string; icon: string }[] = [
   { id: 'clients', label: 'Clients', icon: '👥' },
   { id: 'schedule', label: 'Schedule', icon: '📅' },
   { id: 'services', label: 'Services', icon: '🛠️' },
+  { id: 'agents', label: 'Agents', icon: '🔧' },
   { id: 'billing', label: 'Billing', icon: '💰' },
   { id: 'settings', label: 'Settings', icon: '⚙️' },
 ];
@@ -153,6 +155,7 @@ export default function AdminDashboardTabbed({ userEmail, userName }: Props) {
                 {activeTab === 'clients' && 'CRM-style client management'}
                 {activeTab === 'schedule' && 'Availability and appointments'}
                 {activeTab === 'services' && 'Service catalog management'}
+                {activeTab === 'agents' && 'Manage service providers'}
                 {activeTab === 'billing' && 'Revenue and payment tracking'}
                 {activeTab === 'settings' && 'System configuration'}
               </p>
@@ -173,6 +176,7 @@ export default function AdminDashboardTabbed({ userEmail, userName }: Props) {
             {activeTab === 'clients' && <AdminClientsContent />}
             {activeTab === 'schedule' && <AdminScheduleContent />}
             {activeTab === 'services' && <AdminServicesContent />}
+            {activeTab === 'agents' && <AdminAgentsContent />}
             {activeTab === 'billing' && <AdminBillingContent />}
             {activeTab === 'settings' && <AdminSettingsContent />}
           </Suspense>
