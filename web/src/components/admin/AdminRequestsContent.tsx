@@ -48,27 +48,20 @@ export default function AdminRequestsContent() {
 
   if (loading) {
     return (
-      <section className="grid gap-4">
-        <div>
-          <p className="text-xs uppercase tracking-[0.2em] text-indigo-700">Admin</p>
-          <h2 className="text-xl font-semibold text-slate-900">Requests</h2>
-          <p className="text-sm text-slate-600">Search, filter, and manage all client requests.</p>
+      <div className="flex items-center justify-center py-12">
+        <div className="text-center">
+          <div className="mb-3 inline-block h-8 w-8 animate-spin rounded-full border-4 border-indigo-200 border-t-indigo-600"></div>
+          <p className="text-sm text-slate-600">Loading requests...</p>
         </div>
-        <p className="text-sm text-slate-600">Loading requests...</p>
-      </section>
+      </div>
     );
   }
 
   if (error) {
     return (
-      <section className="grid gap-4">
-        <div>
-          <p className="text-xs uppercase tracking-[0.2em] text-indigo-700">Admin</p>
-          <h2 className="text-xl font-semibold text-slate-900">Requests</h2>
-          <p className="text-sm text-slate-600">Search, filter, and manage all client requests.</p>
-        </div>
-        <p className="rounded-md bg-rose-50 px-3 py-2 text-sm text-rose-800">{error}</p>
-      </section>
+      <div className="rounded-xl border border-rose-200 bg-rose-50 p-6 text-center">
+        <p className="text-sm text-rose-700">{error}</p>
+      </div>
     );
   }
 

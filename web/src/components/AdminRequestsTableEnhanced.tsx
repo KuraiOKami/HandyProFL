@@ -1,7 +1,7 @@
 'use client';
 
 import Link from 'next/link';
-import { useMemo, useState } from 'react';
+import { useEffect, useMemo, useState } from 'react';
 
 type Request = {
   id: string;
@@ -13,62 +13,100 @@ type Request = {
   estimated_minutes?: number | null;
   user_id: string | null;
   created_at?: string | null;
+  client_name?: string;
+  client_email?: string;
+  client_phone?: string;
 };
 
+type ClientMap = Record<string, { name: string; email: string; phone: string }>;
+
 const statuses = ['pending', 'confirmed', 'complete', 'cancelled'];
+
+const statusConfig: Record<string, { bg: string; text: string; border: string; dot: string }> = {
+  pending: { bg: 'bg-amber-50', text: 'text-amber-700', border: 'border-amber-200', dot: 'bg-amber-500' },
+  confirmed: { bg: 'bg-emerald-50', text: 'text-emerald-700', border: 'border-emerald-200', dot: 'bg-emerald-500' },
+  complete: { bg: 'bg-blue-50', text: 'text-blue-700', border: 'border-blue-200', dot: 'bg-blue-500' },
+  cancelled: { bg: 'bg-slate-100', text: 'text-slate-500', border: 'border-slate-200', dot: 'bg-slate-400' },
+};
+
 const ITEMS_PER_PAGE = 10;
 
 export default function AdminRequestsTableEnhanced({ initial }: { initial: Request[] }) {
   const [requests, setRequests] = useState<Request[]>(initial);
+  const [clients, setClients] = useState<ClientMap>({});
   const [savingId, setSavingId] = useState<string | null>(null);
   const [error, setError] = useState<string | null>(null);
+  const [viewMode, setViewMode] = useState<'list' | 'kanban'>('list');
 
   // Search and filter state
   const [searchQuery, setSearchQuery] = useState('');
   const [statusFilter, setStatusFilter] = useState<string>('all');
-  const [dateFilter, setDateFilter] = useState<string>('');
-
-  // Pagination state
   const [currentPage, setCurrentPage] = useState(1);
 
-  // Bulk actions state
-  const [selectedIds, setSelectedIds] = useState<Set<string>>(new Set());
-  const [bulkActionLoading, setBulkActionLoading] = useState(false);
+  // Load client names
+  useEffect(() => {
+    const loadClients = async () => {
+      try {
+        const res = await fetch('/api/admin/clients');
+        if (res.ok) {
+          const data = await res.json();
+          const clientMap: ClientMap = {};
+          (data.clients || []).forEach((c: { id: string; first_name?: string; last_name?: string; email?: string; phone?: string }) => {
+            const name = [c.first_name, c.last_name].filter(Boolean).join(' ') || 'Unknown';
+            clientMap[c.id] = { name, email: c.email || '', phone: c.phone || '' };
+          });
+          setClients(clientMap);
+        }
+      } catch {
+        // Silent fail
+      }
+    };
+    loadClients();
+  }, []);
 
   // Filter and search logic
   const filteredRequests = useMemo(() => {
     return requests.filter((req) => {
-      // Search filter (service type, details, user ID)
       const searchLower = searchQuery.toLowerCase();
+      const clientInfo = clients[req.user_id || ''];
+      const clientName = clientInfo?.name || '';
+
       const matchesSearch =
         !searchQuery ||
         req.service_type?.toLowerCase().includes(searchLower) ||
         req.details?.toLowerCase().includes(searchLower) ||
-        req.user_id?.toLowerCase().includes(searchLower);
+        clientName.toLowerCase().includes(searchLower) ||
+        clientInfo?.email?.toLowerCase().includes(searchLower);
 
-      // Status filter
       const matchesStatus = statusFilter === 'all' || req.status === statusFilter;
 
-      // Date filter
-      const matchesDate = !dateFilter || req.preferred_date === dateFilter;
-
-      return matchesSearch && matchesStatus && matchesDate;
+      return matchesSearch && matchesStatus;
     });
-  }, [requests, searchQuery, statusFilter, dateFilter]);
+  }, [requests, searchQuery, statusFilter, clients]);
 
-  // Pagination logic
+  // Pagination
   const totalPages = Math.ceil(filteredRequests.length / ITEMS_PER_PAGE);
   const paginatedRequests = useMemo(() => {
     const start = (currentPage - 1) * ITEMS_PER_PAGE;
-    const end = start + ITEMS_PER_PAGE;
-    return filteredRequests.slice(start, end);
+    return filteredRequests.slice(start, start + ITEMS_PER_PAGE);
   }, [filteredRequests, currentPage]);
 
-  // Reset to page 1 when filters change
-  const handleFilterChange = (setter: (value: string) => void, value: string) => {
-    setter(value);
-    setCurrentPage(1);
-  };
+  // Group by status for Kanban
+  const groupedByStatus = useMemo(() => {
+    const groups: Record<string, Request[]> = {
+      pending: [],
+      confirmed: [],
+      complete: [],
+      cancelled: [],
+    };
+    filteredRequests.forEach((req) => {
+      const status = req.status || 'pending';
+      if (groups[status]) {
+        groups[status].push(req);
+      }
+    });
+    return groups;
+  }, [filteredRequests]);
 
   const updateRequest = async (id: string, updates: Partial<Request>) => {
     setSavingId(id);
@@ -88,305 +126,280 @@ export default function AdminRequestsTableEnhanced({ initial }: { initial: Reque
     setSavingId(null);
   };
 
-  const handleBulkAction = async (action: 'confirm' | 'cancel' | 'delete') => {
-    if (selectedIds.size === 0) return;
-
-    setBulkActionLoading(true);
-    setError(null);
-
-    const updates = action === 'confirm' ? { status: 'confirmed' } : action === 'cancel' ? { status: 'cancelled' } : null;
-
-    try {
-      for (const id of Array.from(selectedIds)) {
-        if (action === 'delete') {
-          // Delete logic would go here
-          setRequests((prev) => prev.filter((r) => r.id !== id));
-        } else if (updates) {
-          await updateRequest(id, updates);
-        }
-      }
-      setSelectedIds(new Set());
-    } catch {
-      setError('Bulk action failed for some requests.');
-    } finally {
-      setBulkActionLoading(false);
-    }
+  const getStatusStyle = (status: string | null) => {
+    return statusConfig[status || 'pending'] || statusConfig.pending;
   };
 
-  const toggleSelection = (id: string) => {
-    setSelectedIds((prev) => {
-      const next = new Set(prev);
-      if (next.has(id)) {
-        next.delete(id);
-      } else {
-        next.add(id);
-      }
-      return next;
-    });
+  const formatDate = (dateStr: string | null) => {
+    if (!dateStr) return 'No date';
+    const date = new Date(dateStr);
+    return date.toLocaleDateString('en-US', { month: 'short', day: 'numeric', year: 'numeric' });
   };
 
-  const toggleSelectAll = () => {
-    if (selectedIds.size === paginatedRequests.length) {
-      setSelectedIds(new Set());
-    } else {
-      setSelectedIds(new Set(paginatedRequests.map((r) => r.id)));
-    }
+  const formatRelativeDate = (dateStr: string | null) => {
+    if (!dateStr) return '';
+    const date = new Date(dateStr);
+    const today = new Date();
+    const diffDays = Math.floor((date.getTime() - today.getTime()) / (1000 * 60 * 60 * 24));
+
+    if (diffDays === 0) return 'Today';
+    if (diffDays === 1) return 'Tomorrow';
+    if (diffDays === -1) return 'Yesterday';
+    if (diffDays > 0 && diffDays <= 7) return `In ${diffDays} days`;
+    if (diffDays < 0 && diffDays >= -7) return `${Math.abs(diffDays)} days ago`;
+    return formatDate(dateStr);
+  };
+
+  // Stats
+  const stats = useMemo(() => ({
+    total: requests.length,
+    pending: requests.filter((r) => r.status === 'pending').length,
+    confirmed: requests.filter((r) => r.status === 'confirmed').length,
+    complete: requests.filter((r) => r.status === 'complete').length,
+  }), [requests]);
+
+  const RequestCard = ({ req, compact = false }: { req: Request; compact?: boolean }) => {
+    const style = getStatusStyle(req.status);
+    const clientInfo = clients[req.user_id || ''];
+
+    return (
+      <div className={`rounded-xl border bg-white p-4 transition hover:shadow-md ${style.border}`}>
+        <div className="flex items-start justify-between gap-3">
+          <div className="flex-1 min-w-0">
+            <div className="flex items-center gap-2">
+              <span className={`inline-flex h-2 w-2 rounded-full ${style.dot}`}></span>
+              <h4 className="font-semibold text-slate-900 truncate">{req.service_type || 'Service Request'}</h4>
+            </div>
+            <p className="mt-1 text-sm text-slate-600">{clientInfo?.name || 'Unknown Client'}</p>
+            {!compact && clientInfo?.email && (
+              <p className="text-xs text-slate-400">{clientInfo.email}</p>
+            )}
+          </div>
+          <span className={`flex-shrink-0 rounded-full px-2.5 py-1 text-xs font-medium capitalize ${style.bg} ${style.text}`}>
+            {req.status}
+          </span>
+        </div>
+
+        <div className="mt-3 flex items-center gap-4 text-sm text-slate-500">
+          <span>{formatRelativeDate(req.preferred_date)}</span>
+          {req.preferred_time && <span>{req.preferred_time}</span>}
+          {req.estimated_minutes && <span>{req.estimated_minutes} min</span>}
+        </div>
+
+        {!compact && req.details && (
+          <p className="mt-2 text-sm text-slate-600 line-clamp-2">{req.details}</p>
+        )}
+
+        <div className="mt-3 flex items-center justify-between gap-2">
+          <div className="flex items-center gap-2">
+            {req.status === 'pending' && (
+              <button
+                onClick={() => updateRequest(req.id, { status: 'confirmed' })}
+                disabled={savingId === req.id}
+                className="rounded-lg bg-emerald-600 px-3 py-1.5 text-xs font-semibold text-white hover:bg-emerald-700 disabled:opacity-50"
+              >
+                Confirm
+              </button>
+            )}
+            {req.status === 'confirmed' && (
+              <button
+                onClick={() => updateRequest(req.id, { status: 'complete' })}
+                disabled={savingId === req.id}
+                className="rounded-lg bg-blue-600 px-3 py-1.5 text-xs font-semibold text-white hover:bg-blue-700 disabled:opacity-50"
+              >
+                Complete
+              </button>
+            )}
+            {(req.status === 'pending' || req.status === 'confirmed') && (
+              <button
+                onClick={() => updateRequest(req.id, { status: 'cancelled' })}
+                disabled={savingId === req.id}
+                className="rounded-lg border border-slate-200 px-3 py-1.5 text-xs font-semibold text-slate-600 hover:bg-slate-50 disabled:opacity-50"
+              >
+                Cancel
+              </button>
+            )}
+          </div>
+          <Link
+            href={`/admin/requests/${req.id}`}
+            className="text-xs font-semibold text-indigo-600 hover:text-indigo-700"
+          >
+            View details
+          </Link>
+        </div>
+      </div>
+    );
   };
 
   return (
-    <div className="grid gap-4 rounded-xl bg-white p-5 shadow-sm ring-1 ring-slate-200">
-      {/* Header */}
-      <div className="flex items-center justify-between">
-        <div>
-          <p className="text-xs uppercase tracking-[0.2em] text-indigo-700">Admin</p>
-          <h2 className="text-xl font-semibold text-slate-900">All requests</h2>
-          <p className="text-sm text-slate-600">
-            {filteredRequests.length} of {requests.length} requests
-          </p>
+    <div className="grid gap-5">
+      {/* Stats */}
+      <div className="grid grid-cols-2 gap-4 sm:grid-cols-4">
+        <div className="rounded-xl border border-slate-200 bg-white p-4">
+          <p className="text-xs font-medium uppercase tracking-wide text-slate-500">Total</p>
+          <p className="text-2xl font-bold text-slate-900">{stats.total}</p>
         </div>
-        {selectedIds.size > 0 && (
-          <div className="flex items-center gap-2">
-            <span className="text-sm text-slate-600">{selectedIds.size} selected</span>
-            <button
-              onClick={() => handleBulkAction('confirm')}
-              disabled={bulkActionLoading}
-              className="rounded-lg bg-indigo-700 px-3 py-1.5 text-xs font-semibold text-white hover:bg-indigo-800 disabled:cursor-not-allowed disabled:bg-slate-300"
-            >
-              Confirm all
-            </button>
-            <button
-              onClick={() => handleBulkAction('cancel')}
-              disabled={bulkActionLoading}
-              className="rounded-lg border border-rose-200 px-3 py-1.5 text-xs font-semibold text-rose-700 hover:bg-rose-50 disabled:cursor-not-allowed disabled:opacity-60"
-            >
-              Cancel all
-            </button>
-          </div>
-        )}
+        <button
+          onClick={() => { setStatusFilter('pending'); setCurrentPage(1); }}
+          className={`rounded-xl border p-4 text-left transition hover:shadow-md ${statusFilter === 'pending' ? 'border-amber-300 bg-amber-50' : 'border-slate-200 bg-white'}`}
+        >
+          <p className="text-xs font-medium uppercase tracking-wide text-slate-500">Pending</p>
+          <p className="text-2xl font-bold text-amber-600">{stats.pending}</p>
+        </button>
+        <button
+          onClick={() => { setStatusFilter('confirmed'); setCurrentPage(1); }}
+          className={`rounded-xl border p-4 text-left transition hover:shadow-md ${statusFilter === 'confirmed' ? 'border-emerald-300 bg-emerald-50' : 'border-slate-200 bg-white'}`}
+        >
+          <p className="text-xs font-medium uppercase tracking-wide text-slate-500">Confirmed</p>
+          <p className="text-2xl font-bold text-emerald-600">{stats.confirmed}</p>
+        </button>
+        <button
+          onClick={() => { setStatusFilter('complete'); setCurrentPage(1); }}
+          className={`rounded-xl border p-4 text-left transition hover:shadow-md ${statusFilter === 'complete' ? 'border-blue-300 bg-blue-50' : 'border-slate-200 bg-white'}`}
+        >
+          <p className="text-xs font-medium uppercase tracking-wide text-slate-500">Completed</p>
+          <p className="text-2xl font-bold text-blue-600">{stats.complete}</p>
+        </button>
       </div>
 
-      {/* Search and Filters */}
-      <div className="grid gap-3 rounded-lg border border-slate-200 bg-slate-50 p-4">
-        <div className="grid gap-3 md:grid-cols-3">
-          {/* Search */}
-          <div className="md:col-span-2">
-            <label className="block text-xs font-semibold uppercase tracking-[0.12em] text-slate-700 mb-1">
-              Search
-            </label>
+      {/* Controls */}
+      <div className="flex flex-wrap items-center justify-between gap-4 rounded-xl border border-slate-200 bg-white p-4">
+        <div className="flex flex-1 items-center gap-3">
+          <div className="relative flex-1 max-w-md">
             <input
-              type="text"
+              type="search"
+              placeholder="Search requests, clients..."
               value={searchQuery}
-              onChange={(e) => handleFilterChange(setSearchQuery, e.target.value)}
-              placeholder="Service type, details, user ID..."
-              className="w-full rounded-lg border border-slate-300 px-3 py-2 text-sm text-slate-900 shadow-inner shadow-slate-100 focus:border-indigo-600 focus:outline-none focus:ring-2 focus:ring-indigo-100"
+              onChange={(e) => { setSearchQuery(e.target.value); setCurrentPage(1); }}
+              className="w-full rounded-lg border border-slate-200 bg-slate-50 py-2 pl-10 pr-4 text-sm focus:border-indigo-500 focus:bg-white focus:outline-none focus:ring-1 focus:ring-indigo-500"
             />
+            <span className="absolute left-3 top-1/2 -translate-y-1/2 text-slate-400">
+              <svg className="h-4 w-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M21 21l-6-6m2-5a7 7 0 11-14 0 7 7 0 0114 0z" />
+              </svg>
+            </span>
           </div>
 
-          {/* Status Filter */}
-          <div>
-            <label className="block text-xs font-semibold uppercase tracking-[0.12em] text-slate-700 mb-1">
-              Status
-            </label>
-            <select
-              value={statusFilter}
-              onChange={(e) => handleFilterChange(setStatusFilter, e.target.value)}
-              className="w-full rounded-lg border border-slate-300 bg-white px-3 py-2 text-sm text-slate-900 shadow-inner shadow-slate-100 focus:border-indigo-600 focus:outline-none focus:ring-2 focus:ring-indigo-100"
-            >
-              <option value="all">All statuses</option>
-              {statuses.map((s) => (
-                <option key={s} value={s}>
-                  {s.charAt(0).toUpperCase() + s.slice(1)}
-                </option>
-              ))}
-            </select>
-          </div>
-        </div>
+          <select
+            value={statusFilter}
+            onChange={(e) => { setStatusFilter(e.target.value); setCurrentPage(1); }}
+            className="rounded-lg border border-slate-200 bg-white px-3 py-2 text-sm focus:border-indigo-500 focus:outline-none focus:ring-1 focus:ring-indigo-500"
+          >
+            <option value="all">All statuses</option>
+            {statuses.map((s) => (
+              <option key={s} value={s}>{s.charAt(0).toUpperCase() + s.slice(1)}</option>
+            ))}
+          </select>
 
-        <div className="grid gap-3 md:grid-cols-3">
-          {/* Date Filter */}
-          <div>
-            <label className="block text-xs font-semibold uppercase tracking-[0.12em] text-slate-700 mb-1">
-              Date
-            </label>
-            <input
-              type="date"
-              value={dateFilter}
-              onChange={(e) => handleFilterChange(setDateFilter, e.target.value)}
-              className="w-full rounded-lg border border-slate-300 px-3 py-2 text-sm text-slate-900 shadow-inner shadow-slate-100 focus:border-indigo-600 focus:outline-none focus:ring-2 focus:ring-indigo-100"
-            />
-          </div>
-
-          {/* Clear Filters */}
-          <div className="flex items-end md:col-span-2">
+          {(searchQuery || statusFilter !== 'all') && (
             <button
-              onClick={() => {
-                setSearchQuery('');
-                setStatusFilter('all');
-                setDateFilter('');
-                setCurrentPage(1);
-              }}
-              className="text-sm font-semibold text-indigo-700 hover:text-indigo-800 hover:underline"
+              onClick={() => { setSearchQuery(''); setStatusFilter('all'); setCurrentPage(1); }}
+              className="text-sm font-medium text-indigo-600 hover:text-indigo-700"
             >
-              Clear all filters
+              Clear filters
             </button>
-          </div>
+          )}
         </div>
-      </div>
 
-      {error && <p className="rounded-md bg-rose-50 px-3 py-2 text-sm text-rose-800">{error}</p>}
-
-      {/* Select All Checkbox */}
-      {paginatedRequests.length > 0 && (
-        <div className="flex items-center gap-2 border-b border-slate-200 pb-2">
-          <input
-            type="checkbox"
-            checked={selectedIds.size === paginatedRequests.length && paginatedRequests.length > 0}
-            onChange={toggleSelectAll}
-            className="h-4 w-4 rounded border-slate-300 text-indigo-700 focus:ring-indigo-600"
-          />
-          <span className="text-sm font-semibold text-slate-700">Select all on page</span>
-        </div>
-      )}
-
-      {/* Requests List */}
-      <div className="grid gap-2">
-        {paginatedRequests.map((req) => (
-          <div
-            key={req.id}
-            className={`rounded-lg border p-4 ${
-              selectedIds.has(req.id) ? 'border-indigo-600 bg-indigo-50' : 'border-slate-200'
+        <div className="flex items-center rounded-lg border border-slate-200 p-1">
+          <button
+            onClick={() => setViewMode('list')}
+            className={`rounded-md px-3 py-1.5 text-sm font-medium transition ${
+              viewMode === 'list' ? 'bg-slate-900 text-white' : 'text-slate-600 hover:text-slate-900'
             }`}
           >
-            <div className="flex items-start gap-3">
-              <input
-                type="checkbox"
-                checked={selectedIds.has(req.id)}
-                onChange={() => toggleSelection(req.id)}
-                className="mt-1 h-4 w-4 rounded border-slate-300 text-indigo-700 focus:ring-indigo-600"
-              />
-              <div className="flex-1 grid gap-2">
-                <div className="flex flex-wrap items-center justify-between gap-2">
-                  <div className="flex items-center gap-3">
-                    <span className="rounded-full bg-indigo-50 px-3 py-1 text-xs font-semibold text-indigo-700">
-                      {req.service_type || 'Service'}
-                    </span>
-                    <span className="rounded-full bg-slate-100 px-2.5 py-1 text-[11px] font-semibold uppercase tracking-wide text-slate-700">
-                      {req.status || 'pending'}
-                    </span>
-                  </div>
-                  <div className="flex items-center gap-3">
-                    <p className="text-xs text-slate-500">
-                      {req.preferred_date || 'Date'} @ {req.preferred_time || 'Time'} | Est: {req.estimated_minutes ?? '—'} min
-                    </p>
-                    <Link
-                      href={`/admin/requests/${req.id}`}
-                      className="text-xs font-semibold text-indigo-700 hover:text-indigo-800 hover:underline"
-                    >
-                      Open
-                    </Link>
-                  </div>
-                </div>
-                <p className="text-xs text-slate-500">User: {req.user_id || 'Unknown'}</p>
-                <p className="text-sm text-slate-800">{req.details || 'No details.'}</p>
-                <div className="flex flex-wrap items-center gap-2">
-                  <select
-                    value={req.status ?? 'pending'}
-                    onChange={(e) => updateRequest(req.id, { status: e.target.value })}
-                    disabled={savingId === req.id}
-                    className="rounded-lg border border-slate-300 bg-white px-3 py-2 text-sm text-slate-900 shadow-inner shadow-slate-100 focus:border-indigo-600 focus:outline-none focus:ring-2 focus:ring-indigo-100"
-                  >
-                    {statuses.map((s) => (
-                      <option key={s} value={s}>
-                        {s}
-                      </option>
-                    ))}
-                  </select>
-                  <input
-                    type="date"
-                    value={req.preferred_date ?? ''}
-                    onChange={(e) => updateRequest(req.id, { preferred_date: e.target.value })}
-                    disabled={savingId === req.id}
-                    className="rounded-lg border border-slate-300 px-3 py-2 text-sm text-slate-900 shadow-inner shadow-slate-100 focus:border-indigo-600 focus:outline-none focus:ring-2 focus:ring-indigo-100"
-                  />
-                  <input
-                    type="text"
-                    value={req.preferred_time ?? ''}
-                    onChange={(e) => updateRequest(req.id, { preferred_time: e.target.value })}
-                    disabled={savingId === req.id}
-                    placeholder="e.g., 9:00 AM"
-                    className="rounded-lg border border-slate-300 px-3 py-2 text-sm text-slate-900 shadow-inner shadow-slate-100 focus:border-indigo-600 focus:outline-none focus:ring-2 focus:ring-indigo-100"
-                  />
-                  <button
-                    onClick={() => updateRequest(req.id, { status: 'cancelled' })}
-                    disabled={savingId === req.id}
-                    className="rounded-lg border border-rose-200 px-3 py-2 text-sm font-semibold text-rose-700 hover:bg-rose-50 disabled:cursor-not-allowed disabled:opacity-60"
-                  >
-                    Cancel
-                  </button>
-                </div>
-              </div>
-            </div>
-          </div>
-        ))}
-        {!paginatedRequests.length && !searchQuery && !statusFilter && !dateFilter && (
-          <p className="text-sm text-slate-600">No requests found.</p>
-        )}
-        {!paginatedRequests.length && (searchQuery || statusFilter !== 'all' || dateFilter) && (
-          <p className="text-sm text-slate-600">
-            No requests match your filters. Try clearing filters or adjusting your search.
-          </p>
-        )}
+            List
+          </button>
+          <button
+            onClick={() => setViewMode('kanban')}
+            className={`rounded-md px-3 py-1.5 text-sm font-medium transition ${
+              viewMode === 'kanban' ? 'bg-slate-900 text-white' : 'text-slate-600 hover:text-slate-900'
+            }`}
+          >
+            Kanban
+          </button>
+        </div>
       </div>
 
-      {/* Pagination */}
-      {totalPages > 1 && (
-        <div className="flex items-center justify-between border-t border-slate-200 pt-4">
-          <p className="text-sm text-slate-600">
-            Page {currentPage} of {totalPages}
-          </p>
-          <div className="flex gap-2">
-            <button
-              onClick={() => setCurrentPage((p) => Math.max(1, p - 1))}
-              disabled={currentPage === 1}
-              className="rounded-lg border border-slate-300 px-3 py-1.5 text-sm font-semibold text-slate-800 hover:border-indigo-600 hover:text-indigo-700 disabled:cursor-not-allowed disabled:opacity-50"
-            >
-              Previous
-            </button>
-            <div className="flex gap-1">
-              {Array.from({ length: Math.min(5, totalPages) }, (_, i) => {
-                let pageNum: number;
-                if (totalPages <= 5) {
-                  pageNum = i + 1;
-                } else if (currentPage <= 3) {
-                  pageNum = i + 1;
-                } else if (currentPage >= totalPages - 2) {
-                  pageNum = totalPages - 4 + i;
-                } else {
-                  pageNum = currentPage - 2 + i;
-                }
-                return (
-                  <button
-                    key={pageNum}
-                    onClick={() => setCurrentPage(pageNum)}
-                    className={`h-9 w-9 rounded-lg text-sm font-semibold ${
-                      currentPage === pageNum
-                        ? 'bg-indigo-700 text-white'
-                        : 'border border-slate-300 text-slate-800 hover:border-indigo-600 hover:text-indigo-700'
-                    }`}
-                  >
-                    {pageNum}
-                  </button>
-                );
-              })}
-            </div>
-            <button
-              onClick={() => setCurrentPage((p) => Math.min(totalPages, p + 1))}
-              disabled={currentPage === totalPages}
-              className="rounded-lg border border-slate-300 px-3 py-1.5 text-sm font-semibold text-slate-800 hover:border-indigo-600 hover:text-indigo-700 disabled:cursor-not-allowed disabled:opacity-50"
-            >
-              Next
-            </button>
+      {error && (
+        <div className="rounded-lg bg-rose-50 px-4 py-3 text-sm text-rose-700">{error}</div>
+      )}
+
+      {/* List View */}
+      {viewMode === 'list' && (
+        <>
+          <div className="grid gap-3">
+            {paginatedRequests.map((req) => (
+              <RequestCard key={req.id} req={req} />
+            ))}
+            {paginatedRequests.length === 0 && (
+              <div className="rounded-xl border border-dashed border-slate-200 p-8 text-center">
+                <p className="text-sm text-slate-500">No requests match your filters</p>
+              </div>
+            )}
           </div>
+
+          {/* Pagination */}
+          {totalPages > 1 && (
+            <div className="flex items-center justify-between rounded-xl border border-slate-200 bg-white px-4 py-3">
+              <p className="text-sm text-slate-500">
+                Showing {(currentPage - 1) * ITEMS_PER_PAGE + 1} to {Math.min(currentPage * ITEMS_PER_PAGE, filteredRequests.length)} of {filteredRequests.length}
+              </p>
+              <div className="flex items-center gap-2">
+                <button
+                  onClick={() => setCurrentPage((p) => Math.max(1, p - 1))}
+                  disabled={currentPage === 1}
+                  className="rounded-lg border border-slate-200 px-3 py-1.5 text-sm font-medium text-slate-700 hover:bg-slate-50 disabled:opacity-50"
+                >
+                  Previous
+                </button>
+                <span className="text-sm text-slate-600">
+                  {currentPage} / {totalPages}
+                </span>
+                <button
+                  onClick={() => setCurrentPage((p) => Math.min(totalPages, p + 1))}
+                  disabled={currentPage === totalPages}
+                  className="rounded-lg border border-slate-200 px-3 py-1.5 text-sm font-medium text-slate-700 hover:bg-slate-50 disabled:opacity-50"
+                >
+                  Next
+                </button>
+              </div>
+            </div>
+          )}
+        </>
+      )}
+
+      {/* Kanban View */}
+      {viewMode === 'kanban' && (
+        <div className="grid grid-cols-1 gap-4 md:grid-cols-2 lg:grid-cols-4">
+          {(['pending', 'confirmed', 'complete', 'cancelled'] as const).map((status) => {
+            const style = statusConfig[status];
+            const statusRequests = groupedByStatus[status] || [];
+
+            return (
+              <div key={status} className="rounded-xl border border-slate-200 bg-slate-50 p-3">
+                <div className="mb-3 flex items-center justify-between">
+                  <div className="flex items-center gap-2">
+                    <span className={`h-2.5 w-2.5 rounded-full ${style.dot}`}></span>
+                    <h3 className="font-semibold capitalize text-slate-900">{status}</h3>
+                  </div>
+                  <span className="rounded-full bg-white px-2 py-0.5 text-xs font-medium text-slate-600 ring-1 ring-slate-200">
+                    {statusRequests.length}
+                  </span>
+                </div>
+                <div className="space-y-2 max-h-[600px] overflow-y-auto">
+                  {statusRequests.map((req) => (
+                    <RequestCard key={req.id} req={req} compact />
+                  ))}
+                  {statusRequests.length === 0 && (
+                    <div className="rounded-lg border border-dashed border-slate-200 bg-white p-4 text-center">
+                      <p className="text-xs text-slate-400">No requests</p>
+                    </div>
+                  )}
+                </div>
+              </div>
+            );
+          })}
         </div>
       )}
     </div>
