@@ -31,6 +31,7 @@ type RequestItem = {
   notes: string;
   photoNames: string[];
   catalogServiceId?: string | null;
+  catalogFollowup?: string | null;
 };
 
 export const services: Record<
@@ -157,6 +158,7 @@ const RequestWizard = forwardRef<RequestWizardHandle>((_props, ref) => {
   const [preparingCard, setPreparingCard] = useState(false);
   const [catalogServiceId, setCatalogServiceId] = useState<string | null>(null);
   const [serviceSearch, setServiceSearch] = useState('');
+  const [catalogFollowup, setCatalogFollowup] = useState<string>('');
 
   const formatPrice = (cents: number) => `$${Math.max(0, cents / 100).toFixed(0)}`;
 
@@ -220,6 +222,7 @@ const RequestWizard = forwardRef<RequestWizardHandle>((_props, ref) => {
     setPreparingCard(false);
     setCatalogServiceId(null);
     setServiceSearch('');
+    setCatalogFollowup('');
   }, []);
 
   const startRequest = useCallback((svc?: ServiceId) => {
@@ -237,6 +240,7 @@ const RequestWizard = forwardRef<RequestWizardHandle>((_props, ref) => {
 
   const chooseCatalogService = (id: string) => {
     setCatalogServiceId(id);
+    setCatalogFollowup('');
     setService(deriveBaseService(id));
   };
 
@@ -328,7 +332,8 @@ const RequestWizard = forwardRef<RequestWizardHandle>((_props, ref) => {
     notes,
     photoNames,
     catalogServiceId,
-  }), [service, tvSize, wallType, hasMount, assemblyType, assemblyOther, extraItems, notes, photoNames, catalogServiceId]);
+    catalogFollowup: catalogFollowup || null,
+  }), [service, tvSize, wallType, hasMount, assemblyType, assemblyOther, extraItems, notes, photoNames, catalogServiceId, catalogFollowup]);
 
   const getServiceId = (item: RequestItem) => {
     if (item.catalogServiceId) return item.catalogServiceId;
@@ -493,6 +498,7 @@ const RequestWizard = forwardRef<RequestWizardHandle>((_props, ref) => {
     setPhotoNames([]);
     setStep(1);
     setCatalogServiceId(null);
+    setCatalogFollowup('');
   };
 
   const onSubmit = async () => {
@@ -546,6 +552,7 @@ const RequestWizard = forwardRef<RequestWizardHandle>((_props, ref) => {
         const label = getServiceLabel(item);
         const parts = [
           `Item ${idx + 1}: ${label}`,
+          item.catalogFollowup ? `Details: ${item.catalogFollowup}` : null,
           item.service === 'tv_mount' ? `TV size: ${item.tvSize}` : null,
           item.service === 'tv_mount' ? `Wall: ${item.wallType}` : null,
           item.service === 'tv_mount' ? `Mount provided: ${item.hasMount === 'yes' ? 'Yes' : 'No'}` : null,
@@ -858,6 +865,74 @@ const RequestWizard = forwardRef<RequestWizardHandle>((_props, ref) => {
                     </div>
                     <p className="text-xs text-slate-500">Don&apos;t see it? Pick the closest and add notes on the next step.</p>
                   </div>
+                  {selectedCatalogItem && (
+                    <div className="grid gap-3 rounded-xl border border-slate-200 bg-slate-50 p-4">
+                      <p className="text-sm font-semibold text-slate-900">A few details</p>
+                      {selectedCatalogItem.id === 'assembly_sofa' && (
+                        <div className="grid gap-2">
+                          <FieldLabel>Sofa size</FieldLabel>
+                          <div className="flex flex-wrap gap-2">
+                            {['Loveseat', '3-seat sofa', 'Sectional', 'Full set (sofa + loveseat + chair)'].map((opt) => (
+                              <Chip key={opt} selected={catalogFollowup === opt} onClick={() => setCatalogFollowup(opt)}>
+                                {opt}
+                              </Chip>
+                            ))}
+                          </div>
+                        </div>
+                      )}
+                      {selectedCatalogItem.id === 'tv_mount_premium' && (
+                        <div className="grid gap-2">
+                          <FieldLabel>Mount style</FieldLabel>
+                          <div className="flex flex-wrap gap-2">
+                            {['Standard wall', 'Above fireplace', 'Brick/stone', 'With wire concealment'].map((opt) => (
+                              <Chip key={opt} selected={catalogFollowup === opt} onClick={() => setCatalogFollowup(opt)}>
+                                {opt}
+                              </Chip>
+                            ))}
+                          </div>
+                        </div>
+                      )}
+                      {selectedCatalogItem.category === 'Electrical & Lighting' && (
+                        <div className="grid gap-2">
+                          <FieldLabel>Ceiling height</FieldLabel>
+                          <div className="flex flex-wrap gap-2">
+                            {['8 ft', '9-10 ft', 'Vaulted/over 10 ft'].map((opt) => (
+                              <Chip key={opt} selected={catalogFollowup === opt} onClick={() => setCatalogFollowup(opt)}>
+                                {opt}
+                              </Chip>
+                            ))}
+                          </div>
+                        </div>
+                      )}
+                      {(selectedCatalogItem.id === 'assembly_patio' || selectedCatalogItem.id === 'assembly_table') && (
+                        <div className="grid gap-2">
+                          <FieldLabel>Pieces included</FieldLabel>
+                          <div className="flex flex-wrap gap-2">
+                            {['1-2 pieces', '3-5 pieces', '6+ pieces'].map((opt) => (
+                              <Chip key={opt} selected={catalogFollowup === opt} onClick={() => setCatalogFollowup(opt)}>
+                                {opt}
+                              </Chip>
+                            ))}
+                          </div>
+                        </div>
+                      )}
+                      {selectedCatalogItem.id === 'pressure_wash_house' && (
+                        <div className="grid gap-2">
+                          <FieldLabel>Home size</FieldLabel>
+                          <div className="flex flex-wrap gap-2">
+                            {['Single story', 'Two story', 'Townhome', 'Other'].map((opt) => (
+                              <Chip key={opt} selected={catalogFollowup === opt} onClick={() => setCatalogFollowup(opt)}>
+                                {opt}
+                              </Chip>
+                            ))}
+                          </div>
+                        </div>
+                      )}
+                      {!catalogFollowup && (
+                        <p className="text-xs text-slate-500">Select one so we can bring the right hardware and time.</p>
+                      )}
+                    </div>
+                  )}
                 </div>
               )}
 
