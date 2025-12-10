@@ -185,9 +185,12 @@ const RequestWizard = forwardRef<RequestWizardHandle>((_props, ref) => {
     }),
     [],
   );
-  const FALLBACK_PRICE_CENTS: Record<string, number> = {
-    punch: 12000, // default hourly handyman
-  };
+  const FALLBACK_PRICE_CENTS = useMemo<Record<string, number>>(
+    () => ({
+      punch: 12000, // default hourly handyman
+    }),
+    [],
+  );
 
   const catalogMap = useMemo(
     () =>
@@ -436,6 +439,13 @@ const RequestWizard = forwardRef<RequestWizardHandle>((_props, ref) => {
     (item: RequestItem) => {
       const id = getServiceId(item);
       let base = servicePrices[id] ?? FALLBACK_PRICE_CENTS[id] ?? 0;
+      if (id === 'bike_assemble') {
+        const follow = (item.catalogFollowup ?? '').toLowerCase();
+        if (follow.includes('electric')) base += 5000;
+        else if (follow.includes('adult')) base += 2000;
+        else if (follow.includes('tricycle') || follow.includes('trike')) base += 2000;
+        else if (follow.includes('kids') || follow.includes('kid')) base += 0;
+      }
       if (item.service === 'tv_mount' && item.hasMount === 'no') {
         base += MOUNT_SURCHARGE_CENTS;
       }
@@ -444,7 +454,7 @@ const RequestWizard = forwardRef<RequestWizardHandle>((_props, ref) => {
       }
       return base;
     },
-    [servicePrices, PAINT_SURCHARGE],
+    [servicePrices, PAINT_SURCHARGE, FALLBACK_PRICE_CENTS],
   );
 
   const daysUntilDate = (dateStr: string | null) => {
@@ -983,6 +993,21 @@ const RequestWizard = forwardRef<RequestWizardHandle>((_props, ref) => {
                               </Chip>
                             ))}
                           </div>
+                        </div>
+                      )}
+                      {selectedCatalogItem.id === 'bike_assemble' && (
+                        <div className="grid gap-2">
+                          <FieldLabel>Bike type</FieldLabel>
+                          <div className="flex flex-wrap gap-2">
+                            {['Kids bike', 'Adult bike', 'Electric bike', 'Tricycle', 'Other'].map((opt) => (
+                              <Chip key={opt} selected={catalogFollowup === opt} onClick={() => setCatalogFollowup(opt)}>
+                                {opt}
+                              </Chip>
+                            ))}
+                          </div>
+                          <p className="text-xs text-slate-500">
+                            Electric and tricycle builds add a bit more time and cost.
+                          </p>
                         </div>
                       )}
                       {isPaintingService(selectedCatalogItem.id) && (
