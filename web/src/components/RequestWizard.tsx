@@ -154,19 +154,6 @@ const RequestWizard = forwardRef<RequestWizardHandle>((_props, ref) => {
   const [cardError, setCardError] = useState<string | null>(null);
   const [preparingCard, setPreparingCard] = useState(false);
 
-  const startRequest = useCallback((svc?: ServiceId) => {
-    reset(svc);
-    setOpen(true);
-  }, [reset]);
-
-  useImperativeHandle(
-    ref,
-    () => ({
-      open: (svc?: ServiceId) => startRequest(svc),
-    }),
-    [startRequest],
-  );
-
   const reset = useCallback((svc?: ServiceId) => {
     setStep(1);
     setService(svc ?? 'tv_mount');
@@ -195,6 +182,19 @@ const RequestWizard = forwardRef<RequestWizardHandle>((_props, ref) => {
     setCardError(null);
     setPreparingCard(false);
   }, []);
+
+  const startRequest = useCallback((svc?: ServiceId) => {
+    reset(svc);
+    setOpen(true);
+  }, [reset]);
+
+  useImperativeHandle(
+    ref,
+    () => ({
+      open: (svc?: ServiceId) => startRequest(svc),
+    }),
+    [startRequest],
+  );
 
   // Load service catalog durations (server API so anon/mobile sees prices)
   useEffect(() => {
@@ -1162,6 +1162,8 @@ const RequestWizard = forwardRef<RequestWizardHandle>((_props, ref) => {
     </div>
   );
 });
+
+RequestWizard.displayName = 'RequestWizard';
 
 export default RequestWizard;
 
