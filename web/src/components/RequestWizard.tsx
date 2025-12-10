@@ -1227,11 +1227,11 @@ const RequestWizard = forwardRef<RequestWizardHandle>((_props, ref) => {
               )}
 
               {step === 4 && (
-                <div className="grid gap-3 rounded-xl border border-slate-200 p-4">
-                  <p className="text-sm font-semibold text-slate-900">Review & payment</p>
-                  <div className="grid gap-2">
-                    <div className="flex items-center justify-between">
-                      <p className="text-sm font-semibold text-slate-900">Items</p>
+                  <div className="grid gap-3 rounded-xl border border-slate-200 p-4">
+                    <p className="text-sm font-semibold text-slate-900">Review & payment</p>
+                    <div className="grid gap-2">
+                      <div className="flex items-center justify-between">
+                        <p className="text-sm font-semibold text-slate-900">Items</p>
                       <span className="text-xs font-semibold text-indigo-700">
                         {items.length + 1} {items.length + 1 === 1 ? 'item' : 'items'}
                       </span>
@@ -1244,7 +1244,7 @@ const RequestWizard = forwardRef<RequestWizardHandle>((_props, ref) => {
                               <span className="rounded-full bg-indigo-50 px-2 py-0.5 text-[11px] font-semibold text-indigo-700">
                                 Item {idx + 1}
                               </span>
-                              <span className="font-semibold">{services[item.service].name}</span>
+                              <span className="font-semibold">{getServiceLabel(item)}</span>
                             </div>
                             <span className="text-xs font-semibold text-slate-700">
                               {(getPriceForItem(item) / 100).toLocaleString(undefined, { style: 'currency', currency: 'USD' })}
@@ -1295,7 +1295,13 @@ const RequestWizard = forwardRef<RequestWizardHandle>((_props, ref) => {
                     <div className="flex items-center justify-between">
                       <span className="text-slate-700">Selected slot</span>
                       <span className="font-semibold text-slate-900">
-                        {date && slot ? `${date} @ ${slot.time}` : 'Not selected'}
+                        {date && slot
+                          ? `${new Date(date).toLocaleDateString('en-US', {
+                              month: 'long',
+                              day: 'numeric',
+                              year: 'numeric',
+                            })} @ ${slot.time}`
+                          : 'Not selected'}
                       </span>
                     </div>
                   </div>
@@ -1323,18 +1329,27 @@ const RequestWizard = forwardRef<RequestWizardHandle>((_props, ref) => {
                         />
                         Use a new card
                       </label>
-                      {payMethod === 'new_card' && (
-                        <div className="grid gap-2 rounded-lg border border-slate-200 bg-slate-50 p-3">
-                          {!stripePromise && (
-                            <p className="text-sm text-rose-700">
-                              Card payments are not configured. Add a Stripe publishable key.
-                            </p>
-                          )}
-                          {stripePromise && setupClientSecret && (
-                            <Elements stripe={stripePromise} options={{ clientSecret: setupClientSecret }}>
-                              <InlineCardSetup clientSecret={setupClientSecret} />
-                            </Elements>
-                          )}
+                    {payMethod === 'new_card' && (
+                      <div className="grid gap-2 rounded-lg border border-slate-200 bg-slate-50 p-3">
+                        {!stripePromise && (
+                          <p className="text-sm text-rose-700">
+                            Card payments are not configured. Add a Stripe publishable key.
+                          </p>
+                        )}
+                        <div className="flex items-center gap-2 text-slate-600">
+                          <span className="text-xs font-semibold uppercase tracking-[0.12em] text-slate-500">We accept</span>
+                          <span className="flex items-center gap-1 rounded-full border border-slate-200 bg-white px-2 py-1 text-[10px] font-semibold text-slate-700">
+                            <span className="rounded bg-slate-900 px-1.5 py-0.5 text-white">VISA</span>
+                            <span className="rounded bg-indigo-600 px-1.5 py-0.5 text-white">MC</span>
+                            <span className="rounded bg-orange-500 px-1.5 py-0.5 text-white">DISC</span>
+                            <span className="rounded bg-slate-200 px-1.5 py-0.5 text-slate-800">AMEX</span>
+                          </span>
+                        </div>
+                        {stripePromise && setupClientSecret && (
+                          <Elements stripe={stripePromise} options={{ clientSecret: setupClientSecret }}>
+                            <InlineCardSetup clientSecret={setupClientSecret} />
+                          </Elements>
+                        )}
                           {stripePromise && !setupClientSecret && (
                             <p className="text-sm text-slate-600">
                               {preparingCard ? 'Preparing card form…' : 'Starting secure card entry...'}
