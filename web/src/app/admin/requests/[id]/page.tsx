@@ -101,26 +101,10 @@ export default async function AdminRequestDetailPage({ params }: PageProps) {
   }
 
   return (
-    <div className="grid gap-4">
-      <div className="flex flex-wrap items-center justify-between gap-2">
-        <div>
-          <p className="text-xs uppercase tracking-[0.2em] text-indigo-700">Admin</p>
-          <h1 className="text-3xl font-semibold text-slate-900">Request details</h1>
-          <p className="text-sm text-slate-600">Full request view with client info and scheduling context.</p>
-        </div>
-        <Link
-          href="/admin"
-          className="text-sm font-semibold text-indigo-700 hover:text-indigo-800 hover:underline"
-        >
-          ← Back to admin
-        </Link>
-      </div>
-
-      <AdminRequestDetailView
-        request={request as RequestDetail}
-        client={clientProfile}
-        otherRequests={otherRequests}
-      />
-    </div>
+    <AdminRequestDetailView
+      request={request as RequestDetail}
+      client={clientProfile}
+      otherRequests={otherRequests}
+    />
   );
 }
