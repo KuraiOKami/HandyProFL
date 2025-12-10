@@ -139,18 +139,30 @@ export default function AdminRequestsTableEnhanced({ initial }: { initial: Reque
     setDraggedId(id);
     e.dataTransfer.effectAllowed = 'move';
     e.dataTransfer.setData('text/plain', id);
-    // Add a slight delay to allow the drag image to be captured
+
+    // Create a custom drag image
+    const element = e.currentTarget as HTMLElement;
+    const rect = element.getBoundingClientRect();
+    const dragImage = element.cloneNode(true) as HTMLElement;
+    dragImage.style.position = 'absolute';
+    dragImage.style.top = '-9999px';
+    dragImage.style.left = '-9999px';
+    dragImage.style.width = `${rect.width}px`;
+    dragImage.style.opacity = '0.9';
+    dragImage.style.transform = 'rotate(3deg)';
+    dragImage.style.boxShadow = '0 10px 25px rgba(0,0,0,0.15)';
+    document.body.appendChild(dragImage);
+    e.dataTransfer.setDragImage(dragImage, rect.width / 2, 20);
+
+    // Clean up the drag image after a short delay
     setTimeout(() => {
-      const element = document.getElementById(`request-card-${id}`);
-      if (element) element.style.opacity = '0.5';
+      document.body.removeChild(dragImage);
     }, 0);
   };
 
   const handleDragEnd = () => {
     setDraggedId(null);
     setDragOverStatus(null);
-    const element = document.getElementById(`request-card-${draggedId}`);
-    if (element) element.style.opacity = '1';
   };
 
   const handleDragOver = (e: React.DragEvent, status: string) => {
@@ -170,13 +182,30 @@ export default function AdminRequestsTableEnhanced({ initial }: { initial: Reque
   const handleDrop = async (e: React.DragEvent, newStatus: string) => {
     e.preventDefault();
     const id = e.dataTransfer.getData('text/plain');
-    setDraggedId(null);
-    setDragOverStatus(null);
 
     const request = requests.find((r) => r.id === id);
     if (request && request.status !== newStatus) {
-      await updateRequest(id, { status: newStatus });
+      // Optimistic update - immediately move the card
+      setRequests((prev) => prev.map((r) => (r.id === id ? { ...r, status: newStatus } : r)));
+
+      // Then persist to database
+      setSavingId(id);
+      const res = await fetch('/api/admin/requests/update', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ id, updates: { status: newStatus } }),
+      });
+
+      if (!res.ok) {
+        // Revert on failure
+        setRequests((prev) => prev.map((r) => (r.id === id ? { ...r, status: request.status } : r)));
+        setError('Failed to update status');
+      }
+      setSavingId(null);
     }
+
+    setDraggedId(null);
+    setDragOverStatus(null);
   };
 
   const formatDate = (dateStr: string | null) => {
