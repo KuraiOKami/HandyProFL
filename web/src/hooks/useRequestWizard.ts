@@ -64,8 +64,8 @@ export const services: Record<
     icon: '💡',
   },
   punch: {
-    name: 'Punch List / Misc',
-    description: 'Small repairs, touch-ups, and odd jobs.',
+    name: 'General Handyman (Hourly)',
+    description: 'Mixed small jobs, billed hourly with materials as needed.',
     icon: '📋',
   },
 };

@@ -75,8 +75,8 @@ export const services: Record<
     icon: '💡',
   },
   punch: {
-    name: 'Punch List / Misc',
-    description: 'Small repairs, touch-ups, and odd jobs.',
+    name: 'General Handyman (Hourly)',
+    description: 'Mixed small jobs, billed hourly with materials as needed.',
     icon: '📋',
   },
 };
@@ -185,6 +185,9 @@ const RequestWizard = forwardRef<RequestWizardHandle>((_props, ref) => {
     }),
     [],
   );
+  const FALLBACK_PRICE_CENTS: Record<string, number> = {
+    punch: 12000, // default hourly handyman
+  };
 
   const catalogMap = useMemo(
     () =>
@@ -423,7 +426,7 @@ const RequestWizard = forwardRef<RequestWizardHandle>((_props, ref) => {
             ? 60
             : item.service === 'electrical'
               ? 60
-              : 45)
+              : 60)
       );
     },
     [serviceDurations],
@@ -432,7 +435,7 @@ const RequestWizard = forwardRef<RequestWizardHandle>((_props, ref) => {
   const getPriceForItem = useCallback(
     (item: RequestItem) => {
       const id = getServiceId(item);
-      let base = servicePrices[id] ?? 0;
+      let base = servicePrices[id] ?? FALLBACK_PRICE_CENTS[id] ?? 0;
       if (item.service === 'tv_mount' && item.hasMount === 'no') {
         base += MOUNT_SURCHARGE_CENTS;
       }

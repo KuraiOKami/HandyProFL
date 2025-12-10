@@ -37,10 +37,10 @@ export const coreServices: Service[] = [
     description: 'Pressure washing patios, driveways, siding, and decks.',
   },
   {
-    name: 'Custom punch list',
-    duration: 'Varies',
-    price: 'Quote',
-    description: 'Send your list of small jobs and we will bundle them.',
+    name: 'General handyman (hourly)',
+    duration: 'Per hour',
+    price: 'From $120/hr',
+    description: 'Hire us hourly for mixed small jobs; materials billed as needed.',
   },
 ];
 
