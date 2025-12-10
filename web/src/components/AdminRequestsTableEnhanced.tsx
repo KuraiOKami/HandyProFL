@@ -1,6 +1,6 @@
 'use client';
 
-import Link from 'next/link';
+import { useRouter } from 'next/navigation';
 import { useEffect, useMemo, useState } from 'react';
 
 type Request = {
@@ -32,6 +32,7 @@ const statusConfig: Record<string, { bg: string; text: string; border: string; d
 const ITEMS_PER_PAGE = 10;
 
 export default function AdminRequestsTableEnhanced({ initial }: { initial: Request[] }) {
+  const router = useRouter();
   const [requests, setRequests] = useState<Request[]>(initial);
   const [clients, setClients] = useState<ClientMap>({});
   const [savingId, setSavingId] = useState<string | null>(null);
@@ -241,14 +242,21 @@ export default function AdminRequestsTableEnhanced({ initial }: { initial: Reque
     const clientInfo = clients[req.user_id || ''];
     const isDragging = draggedId === req.id;
 
+    const handleCardClick = (e: React.MouseEvent) => {
+      // Don't navigate if clicking a button
+      if ((e.target as HTMLElement).closest('button')) return;
+      router.push(`/admin/requests/${req.id}`);
+    };
+
     return (
       <div
         id={`request-card-${req.id}`}
         draggable={draggable}
         onDragStart={draggable ? (e) => handleDragStart(e, req.id) : undefined}
         onDragEnd={draggable ? handleDragEnd : undefined}
+        onClick={handleCardClick}
         className={`rounded-xl border bg-white p-4 transition hover:shadow-md ${style.border} ${
-          draggable ? 'cursor-grab active:cursor-grabbing' : ''
+          draggable ? 'cursor-grab active:cursor-grabbing select-none' : 'cursor-pointer'
         } ${isDragging ? 'opacity-50 ring-2 ring-indigo-400' : ''}`}
       >
         <div className="flex items-start justify-between gap-3">
@@ -281,7 +289,7 @@ export default function AdminRequestsTableEnhanced({ initial }: { initial: Reque
           <div className="flex items-center gap-2">
             {req.status === 'pending' && (
               <button
-                onClick={() => updateRequest(req.id, { status: 'confirmed' })}
+                onClick={(e) => { e.stopPropagation(); updateRequest(req.id, { status: 'confirmed' }); }}
                 disabled={savingId === req.id}
                 className="rounded-lg bg-emerald-600 px-3 py-1.5 text-xs font-semibold text-white hover:bg-emerald-700 disabled:opacity-50"
               >
@@ -290,7 +298,7 @@ export default function AdminRequestsTableEnhanced({ initial }: { initial: Reque
             )}
             {req.status === 'confirmed' && (
               <button
-                onClick={() => updateRequest(req.id, { status: 'complete' })}
+                onClick={(e) => { e.stopPropagation(); updateRequest(req.id, { status: 'complete' }); }}
                 disabled={savingId === req.id}
                 className="rounded-lg bg-blue-600 px-3 py-1.5 text-xs font-semibold text-white hover:bg-blue-700 disabled:opacity-50"
               >
@@ -299,7 +307,7 @@ export default function AdminRequestsTableEnhanced({ initial }: { initial: Reque
             )}
             {(req.status === 'pending' || req.status === 'confirmed') && (
               <button
-                onClick={() => updateRequest(req.id, { status: 'cancelled' })}
+                onClick={(e) => { e.stopPropagation(); updateRequest(req.id, { status: 'cancelled' }); }}
                 disabled={savingId === req.id}
                 className="rounded-lg border border-slate-200 px-3 py-1.5 text-xs font-semibold text-slate-600 hover:bg-slate-50 disabled:opacity-50"
               >
@@ -307,12 +315,7 @@ export default function AdminRequestsTableEnhanced({ initial }: { initial: Reque
               </button>
             )}
           </div>
-          <Link
-            href={`/admin/requests/${req.id}`}
-            className="text-xs font-semibold text-indigo-600 hover:text-indigo-700"
-          >
-            View details
-          </Link>
+          <span className="text-xs text-slate-400">Click to view</span>
         </div>
       </div>
     );

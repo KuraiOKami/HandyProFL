@@ -9,12 +9,9 @@ const AdminClientsContent = lazy(() => import('./admin/AdminClientsContent'));
 const AdminScheduleContent = lazy(() => import('./admin/AdminScheduleContent'));
 const AdminServicesContent = lazy(() => import('./admin/AdminServicesContent'));
 const AdminBillingContent = lazy(() => import('./admin/AdminBillingContent'));
-const AdminNotificationsContent = lazy(() => import('./admin/AdminNotificationsContent'));
-const AdminFilesContent = lazy(() => import('./admin/AdminFilesContent'));
 const AdminSettingsContent = lazy(() => import('./admin/AdminSettingsContent'));
-const AdminActivityContent = lazy(() => import('./admin/AdminActivityContent'));
 
-type Tab = 'dashboard' | 'requests' | 'clients' | 'schedule' | 'services' | 'billing' | 'notifications' | 'files' | 'settings' | 'activity';
+type Tab = 'dashboard' | 'requests' | 'clients' | 'schedule' | 'services' | 'billing' | 'settings';
 
 const tabs: { id: Tab; label: string; icon: string }[] = [
   { id: 'dashboard', label: 'Dashboard', icon: '📊' },
@@ -23,10 +20,7 @@ const tabs: { id: Tab; label: string; icon: string }[] = [
   { id: 'schedule', label: 'Schedule', icon: '📅' },
   { id: 'services', label: 'Services', icon: '🛠️' },
   { id: 'billing', label: 'Billing', icon: '💰' },
-  { id: 'notifications', label: 'Notifications', icon: '🔔' },
-  { id: 'files', label: 'Files', icon: '📁' },
   { id: 'settings', label: 'Settings', icon: '⚙️' },
-  { id: 'activity', label: 'Activity', icon: '📈' },
 ];
 
 function LoadingSpinner() {
@@ -134,10 +128,7 @@ export default function AdminDashboardTabbed({ userEmail, userName }: Props) {
                 {activeTab === 'schedule' && 'Availability and appointments'}
                 {activeTab === 'services' && 'Service catalog management'}
                 {activeTab === 'billing' && 'Revenue and payment tracking'}
-                {activeTab === 'notifications' && 'Alerts and messages'}
-                {activeTab === 'files' && 'Documents and attachments'}
                 {activeTab === 'settings' && 'System configuration'}
-                {activeTab === 'activity' && 'Recent activity log'}
               </p>
             </div>
             <div className="flex items-center gap-3">
@@ -157,10 +148,7 @@ export default function AdminDashboardTabbed({ userEmail, userName }: Props) {
             {activeTab === 'schedule' && <AdminScheduleContent />}
             {activeTab === 'services' && <AdminServicesContent />}
             {activeTab === 'billing' && <AdminBillingContent />}
-            {activeTab === 'notifications' && <AdminNotificationsContent />}
-            {activeTab === 'files' && <AdminFilesContent />}
             {activeTab === 'settings' && <AdminSettingsContent />}
-            {activeTab === 'activity' && <AdminActivityContent />}
           </Suspense>
         </div>
       </main>
