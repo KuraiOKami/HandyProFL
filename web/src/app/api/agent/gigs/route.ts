@@ -65,13 +65,8 @@ export async function GET() {
       job_longitude,
       estimated_minutes,
       profiles:user_id (
-        first_name,
-        last_name,
-        phone,
-        street,
         city,
-        state,
-        postal_code
+        state
       )
     `)
     .in("status", ["pending", "confirmed"])
@@ -91,16 +86,13 @@ export async function GET() {
   const catalogMap = new Map(catalog?.map((s) => [s.id, s]) || []);
 
   // Transform requests to gigs with payout info
+  // NOTE: Only expose general location (city/state) before agent accepts the gig
+  // Full address, client name, and phone are only available after accepting
   const gigs = (requests || []).map((req) => {
     const profileRaw = Array.isArray(req.profiles) ? req.profiles[0] : req.profiles;
     const profile = profileRaw as {
-      first_name?: string;
-      last_name?: string;
-      phone?: string;
-      street?: string;
       city?: string;
       state?: string;
-      postal_code?: string;
     } | null;
     const catalogEntry = catalogMap.get(req.service_type);
     const estimatedMinutes = req.estimated_minutes || catalogEntry?.base_minutes || 60;
@@ -109,9 +101,6 @@ export async function GET() {
       Math.round(estimatedMinutes * DEFAULT_RATE_PER_MINUTE_CENTS);
     const agentPayoutCents = Math.max(1, Math.round(priceCents * AGENT_PAYOUT_PERCENTAGE));
 
-    // Build client name from first/last
-    const clientName = [profile?.first_name, profile?.last_name].filter(Boolean).join(' ') || null;
-
     return {
       id: req.id,
       service_type: req.service_type,
@@ -119,14 +108,11 @@ export async function GET() {
       preferred_time: req.preferred_time,
       estimated_minutes: estimatedMinutes,
       details: req.details,
-      street_address: profile?.street || null,
+      // Only general area - no street address or zip before accepting
       city: profile?.city || "Unknown",
       state: profile?.state || "FL",
-      zip_code: profile?.postal_code || null,
-      price_cents: priceCents,
+      // Only agent payout - don't expose total job price
       agent_payout_cents: agentPayoutCents,
-      client_name: clientName,
-      client_phone: profile?.phone || null,
       has_location: !!(req.job_latitude && req.job_longitude),
     };
   });

@@ -11,12 +11,8 @@ type AvailableGig = {
   details: string | null;
   city: string;
   state: string;
-  zip_code?: string;
-  street_address?: string;
-  price_cents: number;
   agent_payout_cents: number;
-  client_name?: string;
-  client_phone?: string;
+  has_location?: boolean;
 };
 
 export default function AgentGigsContent() {
@@ -99,6 +95,20 @@ export default function AgentGigsContent() {
     const hours = Math.floor(minutes / 60);
     const mins = minutes % 60;
     return mins > 0 ? `${hours}h ${mins}m` : `${hours}h`;
+  };
+
+  const formatTime = (timeStr: string) => {
+    // Handle ISO datetime strings like "2025-12-11T15:00:00+00:00"
+    if (timeStr.includes('T')) {
+      const date = new Date(timeStr);
+      return date.toLocaleTimeString('en-US', {
+        hour: 'numeric',
+        minute: '2-digit',
+        hour12: true,
+      });
+    }
+    // Handle simple time strings like "9:00 AM" or "14:00"
+    return timeStr;
   };
 
   const getFilteredGigs = () => {
@@ -216,7 +226,7 @@ export default function AgentGigsContent() {
                   </div>
                   <div className="flex items-center gap-2 text-slate-600">
                     <span>🕐</span>
-                    <span>{gig.preferred_time}</span>
+                    <span>{formatTime(gig.preferred_time)}</span>
                   </div>
                   <div className="flex items-center gap-2 text-slate-600">
                     <span>⏱️</span>
@@ -287,15 +297,9 @@ export default function AgentGigsContent() {
             <div className="px-6 py-4 space-y-5">
               {/* Earnings */}
               <div className="rounded-lg bg-emerald-50 p-4">
-                <div className="flex items-center justify-between">
-                  <div>
-                    <p className="text-sm font-medium text-emerald-700">Your Earnings</p>
-                    <p className="text-2xl font-bold text-emerald-600">{formatCurrency(selectedGig.agent_payout_cents)}</p>
-                  </div>
-                  <div className="text-right">
-                    <p className="text-xs text-emerald-600">Total Job Value</p>
-                    <p className="text-sm text-emerald-700">{formatCurrency(selectedGig.price_cents)}</p>
-                  </div>
+                <div className="text-center">
+                  <p className="text-sm font-medium text-emerald-700">Your Earnings</p>
+                  <p className="text-2xl font-bold text-emerald-600">{formatCurrency(selectedGig.agent_payout_cents)}</p>
                 </div>
               </div>
 
@@ -318,7 +322,7 @@ export default function AgentGigsContent() {
                   </div>
                   <div className="flex items-center gap-3 text-sm">
                     <span className="text-lg">🕐</span>
-                    <p className="font-medium text-slate-900">{selectedGig.preferred_time}</p>
+                    <p className="font-medium text-slate-900">{formatTime(selectedGig.preferred_time)}</p>
                   </div>
                   <div className="flex items-center gap-3 text-sm">
                     <span className="text-lg">⏱️</span>
@@ -327,40 +331,21 @@ export default function AgentGigsContent() {
                 </div>
               </div>
 
-              {/* Location */}
+              {/* Location - General area only before accepting */}
               <div>
                 <h3 className="mb-2 text-sm font-semibold text-slate-900">Location</h3>
                 <div className="flex items-start gap-3 text-sm">
                   <span className="text-lg">📍</span>
                   <div>
-                    {selectedGig.street_address && (
-                      <p className="font-medium text-slate-900">{selectedGig.street_address}</p>
-                    )}
-                    <p className="text-slate-600">
-                      {selectedGig.city}, {selectedGig.state} {selectedGig.zip_code || ''}
+                    <p className="font-medium text-slate-900">
+                      {selectedGig.city}, {selectedGig.state}
+                    </p>
+                    <p className="text-xs text-slate-500 mt-1">
+                      Full address available after accepting
                     </p>
                   </div>
                 </div>
               </div>
-
-              {/* Client Info (if available) */}
-              {selectedGig.client_name && (
-                <div>
-                  <h3 className="mb-2 text-sm font-semibold text-slate-900">Client</h3>
-                  <div className="space-y-2">
-                    <div className="flex items-center gap-3 text-sm">
-                      <span className="text-lg">👤</span>
-                      <p className="text-slate-900">{selectedGig.client_name}</p>
-                    </div>
-                    {selectedGig.client_phone && (
-                      <div className="flex items-center gap-3 text-sm">
-                        <span className="text-lg">📞</span>
-                        <p className="text-slate-600">{selectedGig.client_phone}</p>
-                      </div>
-                    )}
-                  </div>
-                </div>
-              )}
 
               {/* Job Details */}
               {selectedGig.details && (
