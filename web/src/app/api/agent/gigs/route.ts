@@ -67,7 +67,7 @@ export async function GET() {
         state
       )
     `)
-    .eq("status", "confirmed")
+    .in("status", ["pending", "confirmed"])
     .is("assigned_agent_id", null)
     .order("preferred_date", { ascending: true })
     .order("preferred_time", { ascending: true });

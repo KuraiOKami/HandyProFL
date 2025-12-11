@@ -433,6 +433,21 @@ CREATE TRIGGER update_agent_payouts_updated_at
   FOR EACH ROW
   EXECUTE FUNCTION update_updated_at_column();
 
+-- Ensure relationship for service_requests.user_id -> profiles.id (needed for Supabase row joins)
+DO $$
+BEGIN
+  IF NOT EXISTS (
+    SELECT 1
+    FROM pg_constraint
+    WHERE conname = 'service_requests_user_id_profiles_fkey'
+  ) THEN
+    ALTER TABLE service_requests
+      ADD CONSTRAINT service_requests_user_id_profiles_fkey
+      FOREIGN KEY (user_id) REFERENCES profiles(id) ON DELETE CASCADE;
+  END IF;
+END;
+$$;
+
 -- Grant permissions
 GRANT ALL ON agent_profiles TO authenticated;
 GRANT ALL ON job_assignments TO authenticated;

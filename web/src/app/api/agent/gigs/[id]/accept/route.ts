@@ -67,7 +67,7 @@ export async function POST(
     return NextResponse.json({ error: "Request not found" }, { status: 404 });
   }
 
-  if (request.status !== "confirmed") {
+  if (!["pending", "confirmed"].includes(request.status || "")) {
     return NextResponse.json({ error: "Request is not available" }, { status: 400 });
   }
 
@@ -112,7 +112,7 @@ export async function POST(
   // Update service request with assigned agent
   const { error: updateError } = await adminSupabase
     .from("service_requests")
-    .update({ assigned_agent_id: session.user.id })
+    .update({ assigned_agent_id: session.user.id, status: "confirmed" })
     .eq("id", requestId);
 
   if (updateError) {
