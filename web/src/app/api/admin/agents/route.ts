@@ -33,49 +33,49 @@ export async function GET() {
   if ("error" in auth) return auth.error;
   const { adminSupabase } = auth;
 
-  // Get all agents (users with role='agent')
-  const { data: profiles, error: profilesError } = await adminSupabase
-    .from("profiles")
-    .select("id, first_name, last_name, email, phone")
-    .eq("role", "agent");
-
-  if (profilesError) {
-    return NextResponse.json({ error: profilesError.message }, { status: 500 });
-  }
-
-  if (!profiles || profiles.length === 0) {
-    return NextResponse.json({ agents: [] });
-  }
-
-  // Get agent profiles
-  const agentIds = profiles.map((p) => p.id);
+  // Pull all agent profile rows regardless of profile role (ensures pending applications still show)
   const { data: agentProfiles, error: agentError } = await adminSupabase
     .from("agent_profiles")
     .select("*")
-    .in("id", agentIds);
+    .order("created_at", { ascending: true });
 
   if (agentError) {
     return NextResponse.json({ error: agentError.message }, { status: 500 });
   }
 
-  // Merge profiles with agent profiles
-  const agentProfileMap = new Map(agentProfiles?.map((a) => [a.id, a]) || []);
+  if (!agentProfiles || agentProfiles.length === 0) {
+    return NextResponse.json({ agents: [] });
+  }
 
-  const agents = profiles.map((p) => {
-    const agentData = agentProfileMap.get(p.id);
+  const agentIds = agentProfiles.map((a) => a.id);
+  const { data: profiles, error: profilesError } = await adminSupabase
+    .from("profiles")
+    .select("id, first_name, last_name, email, phone, role")
+    .in("id", agentIds);
+
+  if (profilesError) {
+    return NextResponse.json({ error: profilesError.message }, { status: 500 });
+  }
+
+  // Merge profiles with agent profiles
+  const profileMap = new Map((profiles || []).map((p) => [p.id, p]));
+
+  const agents = agentProfiles.map((agentData) => {
+    const profile = profileMap.get(agentData.id);
     return {
-      id: p.id,
-      first_name: p.first_name || "",
-      last_name: p.last_name || "",
-      email: p.email || "",
-      phone: p.phone || "",
-      status: agentData?.status || "pending_approval",
-      rating: agentData?.rating || 5.0,
-      total_jobs: agentData?.total_jobs || 0,
-      total_earnings_cents: agentData?.total_earnings_cents || 0,
-      skills: agentData?.skills || [],
-      stripe_payouts_enabled: agentData?.stripe_payouts_enabled || false,
-      created_at: agentData?.created_at || null,
+      id: agentData.id,
+      first_name: profile?.first_name || "",
+      last_name: profile?.last_name || "",
+      email: profile?.email || "",
+      phone: profile?.phone || "",
+      status: agentData.status || "pending_approval",
+      rating: agentData.rating || 5.0,
+      total_jobs: agentData.total_jobs || 0,
+      total_earnings_cents: agentData.total_earnings_cents || 0,
+      skills: agentData.skills || [],
+      stripe_payouts_enabled: agentData.stripe_payouts_enabled || false,
+      created_at: agentData.created_at || null,
+      role: profile?.role || "client",
     };
   });
 
@@ -83,7 +83,7 @@ export async function GET() {
   agents.sort((a, b) => {
     if (a.status === "pending_approval" && b.status !== "pending_approval") return -1;
     if (a.status !== "pending_approval" && b.status === "pending_approval") return 1;
-    return 0;
+    return (a.created_at || "").localeCompare(b.created_at || "");
   });
 
   return NextResponse.json({ agents });

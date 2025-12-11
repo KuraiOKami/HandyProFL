@@ -63,5 +63,15 @@ export async function POST(
     return NextResponse.json({ error: error.message }, { status: 500 });
   }
 
+  // Ensure the profile is marked as an agent so they can access the portal
+  const { error: roleError } = await adminSupabase
+    .from("profiles")
+    .update({ role: "agent" })
+    .eq("id", agentId);
+
+  if (roleError) {
+    return NextResponse.json({ error: roleError.message }, { status: 500 });
+  }
+
   return NextResponse.json({ ok: true, status: "approved" });
 }
