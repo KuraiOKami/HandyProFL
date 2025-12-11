@@ -1,10 +1,6 @@
 import { NextResponse } from "next/server";
 import { createClient, createServiceRoleClient } from "@/utils/supabase/server";
-import Stripe from "stripe";
-
-const stripe = new Stripe(process.env.STRIPE_SECRET_KEY || "", {
-  apiVersion: "2025-11-17.clover",
-});
+import { stripe } from "@/lib/stripe";
 
 async function getAgentSession() {
   const supabase = await createClient();
@@ -35,6 +31,10 @@ async function getAgentSession() {
 
 // GET: Get Stripe account status
 export async function GET() {
+  if (!stripe) {
+    return NextResponse.json({ error: "Stripe not configured" }, { status: 500 });
+  }
+
   const auth = await getAgentSession();
   if ("error" in auth) return auth.error;
   const { supabase, session } = auth;
@@ -96,6 +96,10 @@ export async function GET() {
 
 // POST: Create or get Stripe Connect onboarding link
 export async function POST() {
+  if (!stripe) {
+    return NextResponse.json({ error: "Stripe not configured" }, { status: 500 });
+  }
+
   const auth = await getAgentSession();
   if ("error" in auth) return auth.error;
   const { supabase, session, email } = auth;

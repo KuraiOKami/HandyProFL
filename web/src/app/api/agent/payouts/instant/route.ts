@@ -1,10 +1,6 @@
 import { NextResponse } from "next/server";
 import { createClient, createServiceRoleClient } from "@/utils/supabase/server";
-import Stripe from "stripe";
-
-const stripe = new Stripe(process.env.STRIPE_SECRET_KEY || "", {
-  apiVersion: "2025-11-17.clover",
-});
+import { stripe } from "@/lib/stripe";
 
 // Instant payout fee: 1.5% with $0.50 minimum
 const INSTANT_FEE_PERCENT = 0.015;
@@ -38,6 +34,10 @@ async function getAgentSession() {
 }
 
 export async function POST() {
+  if (!stripe) {
+    return NextResponse.json({ error: "Stripe not configured" }, { status: 500 });
+  }
+
   const auth = await getAgentSession();
   if ("error" in auth) return auth.error;
   const { session, adminSupabase } = auth;
