@@ -1,8 +1,9 @@
 import { NextRequest, NextResponse } from "next/server";
 import { createClient, createServiceRoleClient } from "@/utils/supabase/server";
 
-// Agent payout percentage (70%)
+// Agent payout percentage (70%) and fallback rate when catalog pricing is missing
 const AGENT_PAYOUT_PERCENTAGE = 0.7;
+const DEFAULT_RATE_PER_MINUTE_CENTS = 150; // $90/hr fallback
 
 async function getApprovedAgentSession() {
   const supabase = await createClient();
@@ -59,7 +60,7 @@ export async function POST(
   // Get the service request
   const { data: request, error: reqError } = await adminSupabase
     .from("service_requests")
-    .select("id, service_type, status, assigned_agent_id")
+    .select("id, service_type, status, assigned_agent_id, estimated_minutes")
     .eq("id", requestId)
     .single();
 
@@ -78,12 +79,15 @@ export async function POST(
   // Get pricing from catalog
   const { data: catalogEntry } = await adminSupabase
     .from("service_catalog")
-    .select("price_cents")
+    .select("price_cents, base_minutes")
     .eq("id", request.service_type)
     .single();
 
-  const priceCents = catalogEntry?.price_cents || 0;
-  const agentPayoutCents = Math.round(priceCents * AGENT_PAYOUT_PERCENTAGE);
+  const estimatedMinutes = request.estimated_minutes || catalogEntry?.base_minutes || 60;
+  const priceCents =
+    catalogEntry?.price_cents ??
+    Math.round(estimatedMinutes * DEFAULT_RATE_PER_MINUTE_CENTS);
+  const agentPayoutCents = Math.max(1, Math.round(priceCents * AGENT_PAYOUT_PERCENTAGE));
   const platformFeeCents = priceCents - agentPayoutCents;
 
   // Create job assignment

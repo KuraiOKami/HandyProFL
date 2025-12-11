@@ -1,8 +1,9 @@
 import { NextResponse } from "next/server";
 import { createClient, createServiceRoleClient } from "@/utils/supabase/server";
 
-// Agent payout percentage (70%)
+// Agent payout percentage (70%) and fallback rate when catalog pricing is missing
 const AGENT_PAYOUT_PERCENTAGE = 0.7;
+const DEFAULT_RATE_PER_MINUTE_CENTS = 150; // $90/hr fallback
 
 async function getApprovedAgentSession() {
   const supabase = await createClient();
@@ -62,6 +63,7 @@ export async function GET() {
       user_id,
       job_latitude,
       job_longitude,
+      estimated_minutes,
       profiles:user_id (
         city,
         state
@@ -88,15 +90,18 @@ export async function GET() {
     const profileRaw = Array.isArray(req.profiles) ? req.profiles[0] : req.profiles;
     const profile = profileRaw as { city?: string; state?: string } | null;
     const catalogEntry = catalogMap.get(req.service_type);
-    const priceCents = catalogEntry?.price_cents || 0;
-    const agentPayoutCents = Math.round(priceCents * AGENT_PAYOUT_PERCENTAGE);
+    const estimatedMinutes = req.estimated_minutes || catalogEntry?.base_minutes || 60;
+    const priceCents =
+      catalogEntry?.price_cents ??
+      Math.round(estimatedMinutes * DEFAULT_RATE_PER_MINUTE_CENTS);
+    const agentPayoutCents = Math.max(1, Math.round(priceCents * AGENT_PAYOUT_PERCENTAGE));
 
     return {
       id: req.id,
       service_type: req.service_type,
       preferred_date: req.preferred_date,
       preferred_time: req.preferred_time,
-      estimated_minutes: req.estimated_minutes || catalogEntry?.base_minutes || 60,
+      estimated_minutes: estimatedMinutes,
       details: req.details,
       city: profile?.city || "Unknown",
       state: profile?.state || "FL",
