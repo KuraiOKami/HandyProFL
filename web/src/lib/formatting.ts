@@ -64,7 +64,7 @@ export function sanitizeDetailsForAgent(details: string | null | undefined): str
   // - "| Subtotal: $XXX.XX"
   // - "| Urgency surcharge: $XXX.XX"
   // - "| Estimated minutes: XX" (keep this one, it's useful)
-  let sanitized = details
+  const sanitized = details
     // Remove subtotal
     .replace(/\s*\|\s*Subtotal:\s*\$[\d,]+\.?\d*/gi, '')
     // Remove urgency surcharge
