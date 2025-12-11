@@ -68,10 +68,10 @@ export async function GET() {
         first_name,
         last_name,
         phone,
-        street_address,
+        street,
         city,
         state,
-        zip_code
+        postal_code
       )
     `)
     .in("status", ["pending", "confirmed"])
@@ -97,10 +97,10 @@ export async function GET() {
       first_name?: string;
       last_name?: string;
       phone?: string;
-      street_address?: string;
+      street?: string;
       city?: string;
       state?: string;
-      zip_code?: string;
+      postal_code?: string;
     } | null;
     const catalogEntry = catalogMap.get(req.service_type);
     const estimatedMinutes = req.estimated_minutes || catalogEntry?.base_minutes || 60;
@@ -119,10 +119,10 @@ export async function GET() {
       preferred_time: req.preferred_time,
       estimated_minutes: estimatedMinutes,
       details: req.details,
-      street_address: profile?.street_address || null,
+      street_address: profile?.street || null,
       city: profile?.city || "Unknown",
       state: profile?.state || "FL",
-      zip_code: profile?.zip_code || null,
+      zip_code: profile?.postal_code || null,
       price_cents: priceCents,
       agent_payout_cents: agentPayoutCents,
       client_name: clientName,
