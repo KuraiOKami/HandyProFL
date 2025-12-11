@@ -1,6 +1,7 @@
 'use client';
 
 import { useEffect, useState } from 'react';
+import { formatTime } from '@/lib/formatting';
 
 type AvailableGig = {
   id: string;
@@ -95,20 +96,6 @@ export default function AgentGigsContent() {
     const hours = Math.floor(minutes / 60);
     const mins = minutes % 60;
     return mins > 0 ? `${hours}h ${mins}m` : `${hours}h`;
-  };
-
-  const formatTime = (timeStr: string) => {
-    // Handle ISO datetime strings like "2025-12-11T15:00:00+00:00"
-    if (timeStr.includes('T')) {
-      const date = new Date(timeStr);
-      return date.toLocaleTimeString('en-US', {
-        hour: 'numeric',
-        minute: '2-digit',
-        hour12: true,
-      });
-    }
-    // Handle simple time strings like "9:00 AM" or "14:00"
-    return timeStr;
   };
 
   const getFilteredGigs = () => {

@@ -2,6 +2,7 @@
 
 import { useRouter } from 'next/navigation';
 import { useEffect, useMemo, useState } from 'react';
+import { formatTime } from '@/lib/formatting';
 
 type Request = {
   id: string;
@@ -283,7 +284,7 @@ export default function AdminRequestsTableEnhanced({ initial }: { initial: Reque
 
         <div className="mt-3 flex items-center gap-4 text-sm text-slate-500">
           <span>{formatRelativeDate(req.preferred_date)}</span>
-          {req.preferred_time && <span>{req.preferred_time}</span>}
+          {req.preferred_time && <span>{formatTime(req.preferred_time)}</span>}
           {req.estimated_minutes && <span>{req.estimated_minutes} min</span>}
         </div>
 

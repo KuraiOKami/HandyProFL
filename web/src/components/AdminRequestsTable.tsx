@@ -1,6 +1,7 @@
 'use client';
 
 import { useState } from 'react';
+import { formatTime } from '@/lib/formatting';
 
 type Request = {
   id: string;
@@ -62,7 +63,7 @@ export default function AdminRequestsTable({ initial }: { initial: Request[] }) 
                 </span>
               </div>
               <p className="text-xs text-slate-500">
-                {req.preferred_date || 'Date'} @ {req.preferred_time || 'Time'} | Est: {req.estimated_minutes ?? '—'} min
+                {req.preferred_date || 'Date'} @ {formatTime(req.preferred_time) || 'Time'} | Est: {req.estimated_minutes ?? '—'} min
               </p>
             </div>
             <p className="mt-1 text-xs text-slate-500">User: {req.user_id || 'Unknown'}</p>

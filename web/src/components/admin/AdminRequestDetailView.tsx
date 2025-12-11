@@ -2,6 +2,7 @@
 
 import Link from "next/link";
 import { useMemo, useState } from "react";
+import { formatTime } from "@/lib/formatting";
 
 export type RequestDetail = {
   id: string;
@@ -272,7 +273,7 @@ export default function AdminRequestDetailView({ request, client, otherRequests 
                     </div>
                     <div>
                       <label className="text-xs font-semibold uppercase tracking-wide text-slate-500">Preferred Time</label>
-                      <p className="mt-1 text-sm font-medium text-slate-900">{localRequest.preferred_time || "Not set"}</p>
+                      <p className="mt-1 text-sm font-medium text-slate-900">{formatTime(localRequest.preferred_time) || "Not set"}</p>
                     </div>
                     <div>
                       <label className="text-xs font-semibold uppercase tracking-wide text-slate-500">Duration</label>
@@ -407,7 +408,7 @@ export default function AdminRequestDetailView({ request, client, otherRequests 
                       <div className="min-w-0 flex-1">
                         <p className="truncate text-sm font-medium text-slate-900">{item.service_type || "Service"}</p>
                         <p className="mt-0.5 text-xs text-slate-500">
-                          {formatShortDate(item.preferred_date)} {item.preferred_time && `at ${item.preferred_time}`}
+                          {formatShortDate(item.preferred_date)} {item.preferred_time && `at ${formatTime(item.preferred_time)}`}
                         </p>
                       </div>
                       <StatusBadge status={item.status} />

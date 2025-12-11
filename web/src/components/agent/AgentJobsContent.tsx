@@ -2,6 +2,7 @@
 
 import { useEffect, useState } from 'react';
 import { useRouter } from 'next/navigation';
+import { formatTime } from '@/lib/formatting';
 
 type Job = {
   id: string;
@@ -199,7 +200,7 @@ export default function AgentJobsContent() {
                       </div>
                       <div className="flex items-center gap-1.5">
                         <span>🕐</span>
-                        <span>{job.preferred_time}</span>
+                        <span>{formatTime(job.preferred_time)}</span>
                       </div>
                       <div className="flex items-center gap-1.5">
                         <span>⏱️</span>

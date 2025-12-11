@@ -2,6 +2,7 @@
 
 import Link from 'next/link';
 import { useEffect, useMemo, useState } from 'react';
+import { formatTime } from '@/lib/formatting';
 
 type CalendarEvent = {
   id: string;
@@ -199,16 +200,6 @@ export default function AdminScheduleContent() {
     const dateStr = formatDateStr(day);
     const dayEvents = getEventsForDate(day);
     setSelectedDay({ date: dateStr, events: dayEvents });
-  };
-
-  const formatTime = (time: string | null) => {
-    if (!time) return '';
-    // Handle various time formats
-    if (time.includes('T')) {
-      const date = new Date(time);
-      return date.toLocaleTimeString([], { hour: 'numeric', minute: '2-digit' });
-    }
-    return time;
   };
 
   const getStatusStyle = (status: string | null) => {

@@ -2,6 +2,7 @@
 
 import { useEffect, useState } from 'react';
 import { getSupabaseClient } from '@/lib/supabaseClient';
+import { formatTime } from '@/lib/formatting';
 
 type DashboardStats = {
   pendingJobs: number;
@@ -258,7 +259,7 @@ export default function AgentDashboardContent() {
                       day: 'numeric',
                     })}
                   </p>
-                  <p className="text-sm text-slate-500">{job.preferred_time}</p>
+                  <p className="text-sm text-slate-500">{formatTime(job.preferred_time)}</p>
                 </div>
                 <span
                   className={`ml-4 rounded-full px-2.5 py-1 text-xs font-medium ${

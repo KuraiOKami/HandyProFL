@@ -3,6 +3,7 @@
 import { useEffect, useState, useCallback } from 'react';
 import { useParams, useRouter } from 'next/navigation';
 import { getSupabaseClient } from '@/lib/supabaseClient';
+import { formatTime } from '@/lib/formatting';
 import Image from 'next/image';
 
 type JobDetail = {
@@ -327,7 +328,7 @@ export default function JobDetailPage() {
                     day: 'numeric',
                   })}
                 </p>
-                <p className="text-sm text-slate-500">{job.preferred_time} • Est. {formatDuration(job.estimated_minutes)}</p>
+                <p className="text-sm text-slate-500">{formatTime(job.preferred_time)} • Est. {formatDuration(job.estimated_minutes)}</p>
               </div>
             </div>
 
