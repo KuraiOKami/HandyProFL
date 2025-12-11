@@ -11,8 +11,12 @@ type AvailableGig = {
   details: string | null;
   city: string;
   state: string;
+  zip_code?: string;
+  street_address?: string;
   price_cents: number;
   agent_payout_cents: number;
+  client_name?: string;
+  client_phone?: string;
 };
 
 export default function AgentGigsContent() {
@@ -21,6 +25,7 @@ export default function AgentGigsContent() {
   const [accepting, setAccepting] = useState<string | null>(null);
   const [error, setError] = useState<string | null>(null);
   const [filter, setFilter] = useState<'all' | 'today' | 'week'>('all');
+  const [selectedGig, setSelectedGig] = useState<AvailableGig | null>(null);
 
   useEffect(() => {
     loadGigs();
@@ -60,13 +65,22 @@ export default function AgentGigsContent() {
         throw new Error(data.error || 'Failed to accept gig');
       }
 
-      // Remove the accepted gig from the list
+      // Remove the accepted gig from the list and close modal
       setGigs((prev) => prev.filter((g) => g.id !== requestId));
+      setSelectedGig(null);
     } catch (err) {
       setError(err instanceof Error ? err.message : 'Failed to accept gig');
     } finally {
       setAccepting(null);
     }
+  };
+
+  const handleViewGig = (gig: AvailableGig) => {
+    setSelectedGig(gig);
+  };
+
+  const closeModal = () => {
+    setSelectedGig(null);
   };
 
   const formatCurrency = (cents: number) => {
@@ -168,7 +182,8 @@ export default function AgentGigsContent() {
           {filteredGigs.map((gig) => (
             <div
               key={gig.id}
-              className="flex flex-col rounded-xl border border-slate-200 bg-white shadow-sm transition hover:border-emerald-300 hover:shadow-md"
+              className="flex flex-col rounded-xl border border-slate-200 bg-white shadow-sm transition hover:border-emerald-300 hover:shadow-md cursor-pointer"
+              onClick={() => handleViewGig(gig)}
             >
               {/* Card Header */}
               <div className="border-b border-slate-100 px-5 py-4">
@@ -216,16 +231,165 @@ export default function AgentGigsContent() {
 
               {/* Card Footer */}
               <div className="border-t border-slate-100 px-5 py-4">
-                <button
-                  onClick={() => handleAcceptGig(gig.id)}
-                  disabled={accepting === gig.id}
-                  className="w-full rounded-lg bg-emerald-600 px-4 py-2.5 text-sm font-semibold text-white transition hover:bg-emerald-700 disabled:bg-emerald-400"
-                >
-                  {accepting === gig.id ? 'Accepting...' : 'Accept Gig'}
-                </button>
+                <div className="flex gap-2">
+                  <button
+                    onClick={(e) => {
+                      e.stopPropagation();
+                      handleViewGig(gig);
+                    }}
+                    className="flex-1 rounded-lg border border-slate-200 bg-white px-4 py-2.5 text-sm font-semibold text-slate-700 transition hover:bg-slate-50"
+                  >
+                    View Details
+                  </button>
+                  <button
+                    onClick={(e) => {
+                      e.stopPropagation();
+                      handleAcceptGig(gig.id);
+                    }}
+                    disabled={accepting === gig.id}
+                    className="flex-1 rounded-lg bg-emerald-600 px-4 py-2.5 text-sm font-semibold text-white transition hover:bg-emerald-700 disabled:bg-emerald-400"
+                  >
+                    {accepting === gig.id ? 'Accepting...' : 'Accept'}
+                  </button>
+                </div>
               </div>
             </div>
           ))}
+        </div>
+      )}
+
+      {/* Gig Detail Modal */}
+      {selectedGig && (
+        <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/50 p-4" onClick={closeModal}>
+          <div
+            className="w-full max-w-lg rounded-xl bg-white shadow-xl max-h-[90vh] overflow-y-auto"
+            onClick={(e) => e.stopPropagation()}
+          >
+            {/* Modal Header */}
+            <div className="flex items-start justify-between border-b border-slate-100 px-6 py-4">
+              <div>
+                <h2 className="text-xl font-bold text-slate-900">
+                  {formatServiceType(selectedGig.service_type)}
+                </h2>
+                <p className="mt-1 text-sm text-slate-500">Gig Details</p>
+              </div>
+              <button
+                onClick={closeModal}
+                className="rounded-lg p-2 text-slate-400 hover:bg-slate-100 hover:text-slate-600"
+              >
+                <svg className="h-5 w-5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                  <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M6 18L18 6M6 6l12 12" />
+                </svg>
+              </button>
+            </div>
+
+            {/* Modal Body */}
+            <div className="px-6 py-4 space-y-5">
+              {/* Earnings */}
+              <div className="rounded-lg bg-emerald-50 p-4">
+                <div className="flex items-center justify-between">
+                  <div>
+                    <p className="text-sm font-medium text-emerald-700">Your Earnings</p>
+                    <p className="text-2xl font-bold text-emerald-600">{formatCurrency(selectedGig.agent_payout_cents)}</p>
+                  </div>
+                  <div className="text-right">
+                    <p className="text-xs text-emerald-600">Total Job Value</p>
+                    <p className="text-sm text-emerald-700">{formatCurrency(selectedGig.price_cents)}</p>
+                  </div>
+                </div>
+              </div>
+
+              {/* Schedule */}
+              <div>
+                <h3 className="mb-2 text-sm font-semibold text-slate-900">Schedule</h3>
+                <div className="space-y-2">
+                  <div className="flex items-center gap-3 text-sm">
+                    <span className="text-lg">📅</span>
+                    <div>
+                      <p className="font-medium text-slate-900">
+                        {new Date(selectedGig.preferred_date).toLocaleDateString('en-US', {
+                          weekday: 'long',
+                          month: 'long',
+                          day: 'numeric',
+                          year: 'numeric',
+                        })}
+                      </p>
+                    </div>
+                  </div>
+                  <div className="flex items-center gap-3 text-sm">
+                    <span className="text-lg">🕐</span>
+                    <p className="font-medium text-slate-900">{selectedGig.preferred_time}</p>
+                  </div>
+                  <div className="flex items-center gap-3 text-sm">
+                    <span className="text-lg">⏱️</span>
+                    <p className="text-slate-600">Estimated {formatDuration(selectedGig.estimated_minutes)}</p>
+                  </div>
+                </div>
+              </div>
+
+              {/* Location */}
+              <div>
+                <h3 className="mb-2 text-sm font-semibold text-slate-900">Location</h3>
+                <div className="flex items-start gap-3 text-sm">
+                  <span className="text-lg">📍</span>
+                  <div>
+                    {selectedGig.street_address && (
+                      <p className="font-medium text-slate-900">{selectedGig.street_address}</p>
+                    )}
+                    <p className="text-slate-600">
+                      {selectedGig.city}, {selectedGig.state} {selectedGig.zip_code || ''}
+                    </p>
+                  </div>
+                </div>
+              </div>
+
+              {/* Client Info (if available) */}
+              {selectedGig.client_name && (
+                <div>
+                  <h3 className="mb-2 text-sm font-semibold text-slate-900">Client</h3>
+                  <div className="space-y-2">
+                    <div className="flex items-center gap-3 text-sm">
+                      <span className="text-lg">👤</span>
+                      <p className="text-slate-900">{selectedGig.client_name}</p>
+                    </div>
+                    {selectedGig.client_phone && (
+                      <div className="flex items-center gap-3 text-sm">
+                        <span className="text-lg">📞</span>
+                        <p className="text-slate-600">{selectedGig.client_phone}</p>
+                      </div>
+                    )}
+                  </div>
+                </div>
+              )}
+
+              {/* Job Details */}
+              {selectedGig.details && (
+                <div>
+                  <h3 className="mb-2 text-sm font-semibold text-slate-900">Job Details</h3>
+                  <p className="text-sm text-slate-600 whitespace-pre-wrap">{selectedGig.details}</p>
+                </div>
+              )}
+            </div>
+
+            {/* Modal Footer */}
+            <div className="border-t border-slate-100 px-6 py-4">
+              <div className="flex gap-3">
+                <button
+                  onClick={closeModal}
+                  className="flex-1 rounded-lg border border-slate-200 bg-white px-4 py-2.5 text-sm font-semibold text-slate-700 transition hover:bg-slate-50"
+                >
+                  Close
+                </button>
+                <button
+                  onClick={() => handleAcceptGig(selectedGig.id)}
+                  disabled={accepting === selectedGig.id}
+                  className="flex-1 rounded-lg bg-emerald-600 px-4 py-2.5 text-sm font-semibold text-white transition hover:bg-emerald-700 disabled:bg-emerald-400"
+                >
+                  {accepting === selectedGig.id ? 'Accepting...' : 'Accept This Gig'}
+                </button>
+              </div>
+            </div>
+          </div>
         </div>
       )}
     </div>
