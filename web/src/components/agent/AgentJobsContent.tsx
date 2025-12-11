@@ -27,12 +27,24 @@ type Job = {
   has_finished_photo: boolean;
 };
 
+function StatusPill({ label, active }: { label: string; active: boolean }) {
+  return (
+    <div
+      className={`flex items-center gap-1.5 rounded-full px-2.5 py-1 text-xs font-medium ${
+        active ? 'bg-emerald-100 text-emerald-700' : 'bg-slate-100 text-slate-500'
+      }`}
+    >
+      {active ? '✓' : '○'} {label}
+    </div>
+  );
+}
+
 export default function AgentJobsContent() {
   const router = useRouter();
   const [jobs, setJobs] = useState<Job[]>([]);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
-  const [filter, setFilter] = useState<'upcoming' | 'in_progress' | 'completed' | 'all'>('upcoming');
+  const [filter, setFilter] = useState<'upcoming' | 'in_progress' | 'submitted' | 'completed' | 'all'>('upcoming');
 
   useEffect(() => {
     loadJobs();
@@ -82,8 +94,10 @@ export default function AgentJobsContent() {
         return jobs.filter((j) => j.status === 'assigned');
       case 'in_progress':
         return jobs.filter((j) => j.status === 'in_progress');
+      case 'submitted':
+        return jobs.filter((j) => j.status === 'pending_verification');
       case 'completed':
-        return jobs.filter((j) => j.status === 'completed');
+        return jobs.filter((j) => ['verified', 'paid', 'completed'].includes(j.status));
       default:
         return jobs;
     }
@@ -97,6 +111,12 @@ export default function AgentJobsContent() {
         return <span className="rounded-full bg-amber-100 px-2.5 py-1 text-xs font-medium text-amber-700">Upcoming</span>;
       case 'in_progress':
         return <span className="rounded-full bg-blue-100 px-2.5 py-1 text-xs font-medium text-blue-700">In Progress</span>;
+      case 'pending_verification':
+        return <span className="rounded-full bg-indigo-100 px-2.5 py-1 text-xs font-medium text-indigo-700">Submitted</span>;
+      case 'verified':
+        return <span className="rounded-full bg-emerald-100 px-2.5 py-1 text-xs font-medium text-emerald-700">Verified</span>;
+      case 'paid':
+        return <span className="rounded-full bg-emerald-100 px-2.5 py-1 text-xs font-medium text-emerald-700">Paid</span>;
       case 'completed':
         return <span className="rounded-full bg-emerald-100 px-2.5 py-1 text-xs font-medium text-emerald-700">Completed</span>;
       case 'cancelled':
@@ -126,19 +146,27 @@ export default function AgentJobsContent() {
             {filteredJobs.length} {filteredJobs.length === 1 ? 'job' : 'jobs'}
           </p>
         </div>
-        <div className="flex items-center gap-2">
-          <div className="flex rounded-lg border border-slate-200 bg-white p-1">
-            {(['upcoming', 'in_progress', 'completed', 'all'] as const).map((f) => (
-              <button
-                key={f}
-                onClick={() => setFilter(f)}
-                className={`rounded-md px-3 py-1.5 text-sm font-medium transition ${
-                  filter === f
+          <div className="flex items-center gap-2">
+            <div className="flex rounded-lg border border-slate-200 bg-white p-1">
+              {(['upcoming', 'in_progress', 'submitted', 'completed', 'all'] as const).map((f) => (
+                <button
+                  key={f}
+                  onClick={() => setFilter(f)}
+                  className={`rounded-md px-3 py-1.5 text-sm font-medium transition ${
+                    filter === f
                     ? 'bg-emerald-600 text-white'
                     : 'text-slate-600 hover:bg-slate-100'
                 }`}
               >
-                {f === 'upcoming' ? 'Upcoming' : f === 'in_progress' ? 'In Progress' : f === 'completed' ? 'Completed' : 'All'}
+                {f === 'upcoming'
+                  ? 'Upcoming'
+                  : f === 'in_progress'
+                    ? 'In Progress'
+                    : f === 'submitted'
+                      ? 'Submitted'
+                      : f === 'completed'
+                        ? 'Completed'
+                        : 'All'}
               </button>
             ))}
           </div>
@@ -223,36 +251,29 @@ export default function AgentJobsContent() {
                       onClick={() => router.push(`/agent/jobs/${job.id}`)}
                       className="rounded-lg bg-slate-900 px-4 py-2 text-sm font-semibold text-white transition hover:bg-slate-800"
                     >
-                      {job.status === 'assigned' ? 'Start Job' : job.status === 'in_progress' ? 'Continue' : 'View Details'}
+                      {job.status === 'assigned'
+                        ? 'Start Job'
+                        : job.status === 'in_progress'
+                          ? 'Continue'
+                          : job.status === 'pending_verification'
+                            ? 'Submitted'
+                            : 'View Details'}
                     </button>
                   </div>
                 </div>
 
-                {/* Progress Indicators for In-Progress Jobs */}
-                {job.status === 'in_progress' && (
+                {/* Progress Indicators */}
+                {['in_progress', 'pending_verification', 'verified', 'paid', 'completed'].includes(job.status) && (
                   <div className="mt-4 border-t border-slate-100 pt-4">
                     <p className="mb-2 text-xs font-medium uppercase tracking-wide text-slate-500">Progress</p>
-                    <div className="flex gap-3">
-                      <div className={`flex items-center gap-1.5 rounded-full px-2.5 py-1 text-xs font-medium ${
-                        job.has_checkin ? 'bg-emerald-100 text-emerald-700' : 'bg-slate-100 text-slate-500'
-                      }`}>
-                        {job.has_checkin ? '✓' : '○'} Checked In
-                      </div>
-                      <div className={`flex items-center gap-1.5 rounded-full px-2.5 py-1 text-xs font-medium ${
-                        job.has_box_photo ? 'bg-emerald-100 text-emerald-700' : 'bg-slate-100 text-slate-500'
-                      }`}>
-                        {job.has_box_photo ? '✓' : '○'} Box Photo
-                      </div>
-                      <div className={`flex items-center gap-1.5 rounded-full px-2.5 py-1 text-xs font-medium ${
-                        job.has_finished_photo ? 'bg-emerald-100 text-emerald-700' : 'bg-slate-100 text-slate-500'
-                      }`}>
-                        {job.has_finished_photo ? '✓' : '○'} Finished Photo
-                      </div>
-                      <div className={`flex items-center gap-1.5 rounded-full px-2.5 py-1 text-xs font-medium ${
-                        job.has_checkout ? 'bg-emerald-100 text-emerald-700' : 'bg-slate-100 text-slate-500'
-                      }`}>
-                        {job.has_checkout ? '✓' : '○'} Checked Out
-                      </div>
+                    <div className="flex flex-wrap gap-3">
+                      <StatusPill label="Checked In" active={job.has_checkin || job.status !== 'assigned'} />
+                      <StatusPill label="Box Photo" active={job.has_box_photo || job.status !== 'assigned'} />
+                      <StatusPill label="Finished Photo" active={job.has_finished_photo || ['pending_verification', 'verified', 'paid', 'completed'].includes(job.status)} />
+                      <StatusPill label="Checked Out" active={job.has_checkout || ['pending_verification', 'verified', 'paid', 'completed'].includes(job.status)} />
+                      <StatusPill label="Verified" active={['verified', 'paid', 'completed'].includes(job.status)} />
+                      <StatusPill label="Paid" active={['paid', 'completed'].includes(job.status)} />
+                      <StatusPill label="Done" active={job.status === 'completed'} />
                     </div>
                   </div>
                 )}

@@ -52,3 +52,30 @@ export function formatDuration(minutes: number): string {
   const mins = minutes % 60;
   return mins > 0 ? `${hours}h ${mins}m` : `${hours}h`;
 }
+
+/**
+ * Sanitizes job details to remove pricing information before showing to agents.
+ * Removes: Subtotal, Urgency surcharge, and any dollar amounts
+ */
+export function sanitizeDetailsForAgent(details: string | null | undefined): string | null {
+  if (!details) return null;
+
+  // Remove pricing patterns:
+  // - "| Subtotal: $XXX.XX"
+  // - "| Urgency surcharge: $XXX.XX"
+  // - "| Estimated minutes: XX" (keep this one, it's useful)
+  let sanitized = details
+    // Remove subtotal
+    .replace(/\s*\|\s*Subtotal:\s*\$[\d,]+\.?\d*/gi, '')
+    // Remove urgency surcharge
+    .replace(/\s*\|\s*Urgency surcharge:\s*\$[\d,]+\.?\d*/gi, '')
+    // Remove any remaining standalone dollar amounts that might be pricing
+    .replace(/\s*\|\s*(?:Price|Cost|Fee|Total|Amount):\s*\$[\d,]+\.?\d*/gi, '')
+    // Clean up any double pipes or trailing pipes
+    .replace(/\|\s*\|/g, '|')
+    .replace(/\|\s*$/g, '')
+    .replace(/^\s*\|/g, '')
+    .trim();
+
+  return sanitized || null;
+}

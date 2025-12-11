@@ -61,8 +61,12 @@ export default function AgentDashboardContent() {
         .select('id, status')
         .eq('agent_id', agentId);
 
-      const pendingJobs = assignments?.filter((a) => a.status === 'assigned').length || 0;
-      const completedJobs = assignments?.filter((a) => a.status === 'completed').length || 0;
+      const pendingJobs = assignments?.filter((a) =>
+        ['assigned', 'in_progress', 'pending_verification'].includes(a.status)
+      ).length || 0;
+      const completedJobs = assignments?.filter((a) =>
+        ['verified', 'paid', 'completed'].includes(a.status)
+      ).length || 0;
 
       // Get earnings
       const { data: earnings } = await supabase
@@ -110,7 +114,7 @@ export default function AgentDashboardContent() {
           )
         `)
         .eq('agent_id', agentId)
-        .in('status', ['assigned', 'in_progress'])
+        .in('status', ['assigned', 'in_progress', 'pending_verification'])
         .order('assigned_at', { ascending: true })
         .limit(5);
 

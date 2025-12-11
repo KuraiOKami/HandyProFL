@@ -120,14 +120,15 @@ export async function POST(
   }
 
   const now = new Date();
-  const completedAt = now.toISOString();
+  const checkedOutAt = now.toISOString();
 
-  // Update job status to completed
+  // Update job status to pending_verification (awaiting admin review)
+  // Status flow: assigned -> in_progress -> pending_verification -> verified -> paid -> completed
   const { error: updateError } = await adminSupabase
     .from("job_assignments")
     .update({
-      status: "completed",
-      completed_at: completedAt,
+      status: "pending_verification",
+      checked_out_at: checkedOutAt,
     })
     .eq("id", jobId);
 
@@ -135,7 +136,7 @@ export async function POST(
     return NextResponse.json({ error: updateError.message }, { status: 500 });
   }
 
-  // Update service request status
+  // Update service request status to indicate work is done but pending verification
   const { data: assignmentFull } = await adminSupabase
     .from("job_assignments")
     .select("request_id")
@@ -145,40 +146,17 @@ export async function POST(
   if (assignmentFull?.request_id) {
     await adminSupabase
       .from("service_requests")
-      .update({ status: "complete" })
+      .update({ status: "pending_verification" })
       .eq("id", assignmentFull.request_id);
   }
 
-  // Create earnings record (available 2 hours after completion)
-  const availableAt = new Date(now.getTime() + 2 * 60 * 60 * 1000).toISOString();
-
-  const { error: earningsError } = await adminSupabase.from("agent_earnings").insert({
-    agent_id: session.user.id,
-    assignment_id: jobId,
-    amount_cents: assignment.agent_payout_cents,
-    status: "pending",
-    available_at: availableAt,
-  });
-
-  if (earningsError) {
-    console.error("Failed to create earnings record:", earningsError);
-    // Don't fail the checkout, just log the error
-  }
-
-  // Update agent profile stats (best effort)
-  try {
-    await adminSupabase.rpc("increment_agent_stats", {
-      p_agent_id: session.user.id,
-      p_amount_cents: assignment.agent_payout_cents,
-    });
-  } catch (err) {
-    console.warn("increment_agent_stats RPC missing or failed", err);
-  }
+  // NOTE: Earnings record is NOT created yet - it will be created when admin verifies and marks as paid
+  // This ensures agents only get paid after admin confirms the work quality
 
   return NextResponse.json({
     ok: true,
-    completed_at: completedAt,
-    earnings_available_at: availableAt,
-    earnings_amount_cents: assignment.agent_payout_cents,
+    checked_out_at: checkedOutAt,
+    status: "pending_verification",
+    message: "Job submitted for verification. You'll be paid once the work is confirmed.",
   });
 }

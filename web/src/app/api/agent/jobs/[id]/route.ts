@@ -1,5 +1,6 @@
 import { NextRequest, NextResponse } from "next/server";
 import { createClient, createServiceRoleClient } from "@/utils/supabase/server";
+import { sanitizeDetailsForAgent } from "@/lib/formatting";
 
 async function getAgentSession() {
   const supabase = await createClient();
@@ -112,7 +113,7 @@ export async function GET(
     preferred_date: (sr?.preferred_date as string) || "",
     preferred_time: (sr?.preferred_time as string) || "",
     estimated_minutes: (sr?.estimated_minutes as number) || 60,
-    details: (sr?.details as string) || null,
+    details: sanitizeDetailsForAgent(sr?.details as string),
     status: assignment.status,
     customer_name: profile
       ? `${(profile.first_name as string) || ""} ${(profile.last_name as string) || ""}`.trim()

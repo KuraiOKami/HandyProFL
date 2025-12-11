@@ -1,5 +1,6 @@
 import { NextResponse } from "next/server";
 import { createClient, createServiceRoleClient } from "@/utils/supabase/server";
+import { sanitizeDetailsForAgent } from "@/lib/formatting";
 
 // Agent payout percentage (70%) and fallback rate when catalog pricing is missing
 const AGENT_PAYOUT_PERCENTAGE = 0.7;
@@ -107,7 +108,7 @@ export async function GET() {
       preferred_date: req.preferred_date,
       preferred_time: req.preferred_time,
       estimated_minutes: estimatedMinutes,
-      details: req.details,
+      details: sanitizeDetailsForAgent(req.details),
       // Only general area - no street address or zip before accepting
       city: profile?.city || "Unknown",
       state: profile?.state || "FL",

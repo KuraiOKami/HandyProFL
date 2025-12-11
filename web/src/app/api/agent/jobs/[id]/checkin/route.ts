@@ -76,6 +76,7 @@ export async function POST(
       status,
       agent_id,
       service_requests (
+        id,
         job_latitude,
         job_longitude
       )
@@ -111,7 +112,7 @@ export async function POST(
   const srRaw = Array.isArray(assignment.service_requests)
     ? assignment.service_requests[0]
     : assignment.service_requests;
-  const sr = srRaw as { job_latitude: number | null; job_longitude: number | null } | null;
+  const sr = srRaw as { id?: string; job_latitude: number | null; job_longitude: number | null } | null;
   let distanceMeters: number | null = null;
   let locationVerified = false;
 
@@ -162,6 +163,11 @@ export async function POST(
 
   if (updateError) {
     return NextResponse.json({ error: updateError.message }, { status: 500 });
+  }
+
+  // Mirror status to service_requests so admins see progress
+  if (sr?.id) {
+    await adminSupabase.from("service_requests").update({ status: "in_progress" }).eq("id", sr.id);
   }
 
   return NextResponse.json({

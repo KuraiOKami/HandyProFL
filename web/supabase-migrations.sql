@@ -392,6 +392,12 @@ ALTER TABLE service_requests
   ADD COLUMN IF NOT EXISTS job_latitude DECIMAL(10,8),
   ADD COLUMN IF NOT EXISTS job_longitude DECIMAL(11,8);
 
+-- Add extended tracking for job lifecycle
+ALTER TABLE job_assignments
+  ADD COLUMN IF NOT EXISTS checked_out_at TIMESTAMPTZ,
+  ADD COLUMN IF NOT EXISTS verified_at TIMESTAMPTZ,
+  ADD COLUMN IF NOT EXISTS paid_at TIMESTAMPTZ;
+
 -- Create index for faster agent lookups
 CREATE INDEX IF NOT EXISTS idx_service_requests_assigned_agent
   ON service_requests(assigned_agent_id)
