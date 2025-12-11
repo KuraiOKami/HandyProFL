@@ -16,7 +16,18 @@ export async function POST(req: NextRequest) {
   }
 
   const body = await req.json().catch(() => null);
-  const { first_name, last_name, phone, bio, skills, service_area_miles } = body ?? {};
+  const {
+    first_name,
+    last_name,
+    phone,
+    bio,
+    skills,
+    service_area_miles,
+    street,
+    city,
+    state,
+    postal_code,
+  } = body ?? {};
 
   if (!first_name || !last_name) {
     return NextResponse.json({ error: "First and last name are required" }, { status: 400 });
@@ -35,16 +46,22 @@ export async function POST(req: NextRequest) {
     return NextResponse.json({ error: "Agent profile already exists" }, { status: 409 });
   }
 
-  // Update the main profile
-  const { error: profileError } = await adminSupabase
-    .from("profiles")
-    .update({
+  // Upsert the main profile so new users don't fail if their profile row doesn't exist yet
+  const { error: profileError } = await adminSupabase.from("profiles").upsert(
+    {
+      id: session.user.id,
       first_name,
       last_name,
       phone: phone || null,
+      email: session.user.email || null,
+      street: street || null,
+      city: city || null,
+      state: state || null,
+      postal_code: postal_code || null,
       role: "agent",
-    })
-    .eq("id", session.user.id);
+    },
+    { onConflict: "id" }
+  );
 
   if (profileError) {
     return NextResponse.json({ error: profileError.message }, { status: 500 });
