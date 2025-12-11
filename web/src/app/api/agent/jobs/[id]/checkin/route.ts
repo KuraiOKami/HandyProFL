@@ -73,6 +73,7 @@ export async function POST(
     .from("job_assignments")
     .select(`
       id,
+      request_id,
       status,
       agent_id,
       service_requests (
@@ -166,8 +167,9 @@ export async function POST(
   }
 
   // Mirror status to service_requests so admins see progress
-  if (sr?.id) {
-    await adminSupabase.from("service_requests").update({ status: "in_progress" }).eq("id", sr.id);
+  const requestId = assignment.request_id || sr?.id;
+  if (requestId) {
+    await adminSupabase.from("service_requests").update({ status: "in_progress" }).eq("id", requestId);
   }
 
   return NextResponse.json({
