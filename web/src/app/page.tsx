@@ -105,6 +105,47 @@ export default function Home() {
           ))}
         </div>
       </section>
+
+      <section className="grid gap-5 rounded-2xl bg-slate-900 px-6 py-7 text-white shadow-lg md:px-8">
+        <div className="flex flex-col gap-3 md:flex-row md:items-center md:justify-between">
+          <div>
+            <p className="text-xs uppercase tracking-[0.2em] text-emerald-200">Join the team</p>
+            <h3 className="text-2xl font-semibold leading-tight text-white md:text-3xl">
+              Handy pros wanted across Tampa Bay
+            </h3>
+            <p className="mt-2 max-w-2xl text-sm text-emerald-50">
+              Set your own schedule, pick the jobs you want, and keep 70% of every completed job. We handle marketing,
+              booking, support, and secure payouts.
+            </p>
+          </div>
+          <div className="flex flex-wrap gap-3">
+            <Link
+              href="/agent/onboarding"
+              className="inline-flex items-center gap-2 rounded-full bg-emerald-500 px-5 py-3 text-sm font-semibold text-slate-900 shadow-sm transition hover:bg-emerald-400"
+            >
+              Apply as an agent
+            </Link>
+            <Link
+              href="/agent"
+              className="inline-flex items-center gap-2 rounded-full border border-emerald-200/50 px-5 py-3 text-sm font-semibold text-white transition hover:bg-white/10"
+            >
+              Agent dashboard
+            </Link>
+          </div>
+        </div>
+        <div className="grid gap-3 md:grid-cols-3">
+          {[
+            { title: "Keep 70% per job", copy: "Transparent split with instant cash-out for approved agents." },
+            { title: "Pick your schedule", copy: "Claim gigs that fit your route and availability." },
+            { title: "Arrive prepared", copy: "Job details, notes, and hardware needs before you drive." },
+          ].map((item) => (
+            <div key={item.title} className="rounded-xl border border-white/10 bg-white/5 p-4 backdrop-blur">
+              <h4 className="text-base font-semibold text-white">{item.title}</h4>
+              <p className="mt-2 text-sm text-emerald-50">{item.copy}</p>
+            </div>
+          ))}
+        </div>
+      </section>
     </div>
   );
 }
