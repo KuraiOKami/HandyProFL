@@ -127,37 +127,38 @@ export default function AgentGigsContent() {
   }
 
   return (
-    <div className="space-y-6">
+    <div className="space-y-4">
       {/* Header with filters */}
-      <div className="flex flex-col gap-4 sm:flex-row sm:items-center sm:justify-between">
-        <div>
+      <div className="flex flex-col gap-3">
+        <div className="flex items-center justify-between">
           <p className="text-sm text-slate-600">
             {filteredGigs.length} {filteredGigs.length === 1 ? 'gig' : 'gigs'} available
           </p>
-        </div>
-        <div className="flex items-center gap-2">
-          <span className="text-sm text-slate-600">Show:</span>
-          <div className="flex rounded-lg border border-slate-200 bg-white p-1">
-            {(['all', 'today', 'week'] as const).map((f) => (
-              <button
-                key={f}
-                onClick={() => setFilter(f)}
-                className={`rounded-md px-3 py-1.5 text-sm font-medium transition ${
-                  filter === f
-                    ? 'bg-emerald-600 text-white'
-                    : 'text-slate-600 hover:bg-slate-100'
-                }`}
-              >
-                {f === 'all' ? 'All' : f === 'today' ? 'Today' : 'This Week'}
-              </button>
-            ))}
-          </div>
           <button
             onClick={loadGigs}
-            className="ml-2 rounded-lg border border-slate-200 bg-white px-3 py-1.5 text-sm font-medium text-slate-600 hover:bg-slate-50"
+            className="flex items-center gap-1.5 rounded-lg border border-slate-200 bg-white px-3 py-1.5 text-sm font-medium text-slate-600 hover:bg-slate-50"
           >
-            Refresh
+            <svg className="h-4 w-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+              <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M4 4v5h.582m15.356 2A8.001 8.001 0 004.582 9m0 0H9m11 11v-5h-.581m0 0a8.003 8.003 0 01-15.357-2m15.357 2H15" />
+            </svg>
+            <span className="hidden sm:inline">Refresh</span>
           </button>
+        </div>
+        {/* Filter pills - horizontal scroll on mobile */}
+        <div className="flex gap-2 overflow-x-auto pb-1 -mx-1 px-1">
+          {(['all', 'today', 'week'] as const).map((f) => (
+            <button
+              key={f}
+              onClick={() => setFilter(f)}
+              className={`shrink-0 rounded-full px-4 py-2 text-sm font-medium transition ${
+                filter === f
+                  ? 'bg-emerald-600 text-white'
+                  : 'bg-white border border-slate-200 text-slate-600 hover:bg-slate-50'
+              }`}
+            >
+              {f === 'all' ? 'All' : f === 'today' ? 'Today' : 'This Week'}
+            </button>
+          ))}
         </div>
       </div>
 

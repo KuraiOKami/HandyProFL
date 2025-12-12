@@ -229,13 +229,13 @@ export default function AgentDashboardContent() {
 
       {/* Upcoming Jobs Section */}
       <div className="rounded-xl border border-slate-200 bg-white shadow-sm">
-        <div className="border-b border-slate-200 px-5 py-4">
+        <div className="border-b border-slate-200 px-4 py-3 sm:px-5 sm:py-4">
           <h3 className="text-lg font-semibold text-slate-900">Upcoming Jobs</h3>
           <p className="text-sm text-slate-500">Your next scheduled jobs</p>
         </div>
 
         {upcomingJobs.length === 0 ? (
-          <div className="px-5 py-12 text-center">
+          <div className="px-4 py-10 text-center sm:px-5 sm:py-12">
             <div className="mb-3 text-4xl">🔍</div>
             <p className="text-slate-600">No upcoming jobs</p>
             <p className="mt-1 text-sm text-slate-500">Check available gigs to find your next job</p>
@@ -243,38 +243,48 @@ export default function AgentDashboardContent() {
         ) : (
           <div className="divide-y divide-slate-200">
             {upcomingJobs.map((job) => (
-              <div key={job.id} className="flex items-center justify-between px-5 py-4 hover:bg-slate-50">
-                <div className="flex items-center gap-4">
-                  <div className="flex h-10 w-10 items-center justify-center rounded-lg bg-slate-100 text-xl">
-                    🛠️
+              <a
+                key={job.id}
+                href={`/agent/jobs/${job.id}`}
+                className="block px-4 py-4 hover:bg-slate-50 active:bg-slate-100 sm:px-5"
+              >
+                {/* Mobile: Stacked layout */}
+                <div className="flex items-start justify-between gap-3">
+                  <div className="flex items-start gap-3 min-w-0 flex-1">
+                    <div className="flex h-10 w-10 shrink-0 items-center justify-center rounded-lg bg-slate-100 text-xl">
+                      🛠️
+                    </div>
+                    <div className="min-w-0 flex-1">
+                      <p className="font-medium text-slate-900 truncate">{formatServiceType(job.service_type)}</p>
+                      <p className="text-sm text-slate-500 truncate">
+                        {job.customer_name || 'Customer'} {job.city && `• ${job.city}`}
+                      </p>
+                      <div className="mt-1 flex items-center gap-2 text-sm text-slate-500">
+                        <span>
+                          {job.preferred_date ? new Date(job.preferred_date).toLocaleDateString('en-US', {
+                            weekday: 'short',
+                            month: 'short',
+                            day: 'numeric',
+                          }) : 'Date TBD'}
+                        </span>
+                        <span>•</span>
+                        <span>{formatTime(job.preferred_time) || 'Time TBD'}</span>
+                      </div>
+                    </div>
                   </div>
-                  <div>
-                    <p className="font-medium text-slate-900">{formatServiceType(job.service_type)}</p>
-                    <p className="text-sm text-slate-500">
-                      {job.customer_name} {job.city && `• ${job.city}`}
-                    </p>
-                  </div>
+                  <span
+                    className={`shrink-0 rounded-full px-2 py-1 text-xs font-medium ${
+                      job.status === 'in_progress'
+                        ? 'bg-blue-100 text-blue-700'
+                        : job.status === 'pending_verification'
+                        ? 'bg-indigo-100 text-indigo-700'
+                        : 'bg-amber-100 text-amber-700'
+                    }`}
+                  >
+                    {job.status === 'in_progress' ? 'Working' : job.status === 'pending_verification' ? 'Review' : 'Scheduled'}
+                  </span>
                 </div>
-                <div className="text-right">
-                  <p className="font-medium text-slate-900">
-                    {new Date(job.preferred_date).toLocaleDateString('en-US', {
-                      weekday: 'short',
-                      month: 'short',
-                      day: 'numeric',
-                    })}
-                  </p>
-                  <p className="text-sm text-slate-500">{formatTime(job.preferred_time)}</p>
-                </div>
-                <span
-                  className={`ml-4 rounded-full px-2.5 py-1 text-xs font-medium ${
-                    job.status === 'in_progress'
-                      ? 'bg-blue-100 text-blue-700'
-                      : 'bg-amber-100 text-amber-700'
-                  }`}
-                >
-                  {job.status === 'in_progress' ? 'In Progress' : 'Assigned'}
-                </span>
-              </div>
+              </a>
             ))}
           </div>
         )}
