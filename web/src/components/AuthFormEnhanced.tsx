@@ -31,9 +31,27 @@ export default function AuthFormEnhanced() {
       return;
     }
 
+    const checkProfileAndRedirect = async (userId: string) => {
+      // Check if user has completed their profile (has first_name)
+      const { data: profile } = await supabase
+        .from('profiles')
+        .select('first_name, last_name, role')
+        .eq('id', userId)
+        .single();
+
+      // If profile is incomplete, redirect to onboarding
+      if (!profile?.first_name || !profile?.last_name) {
+        router.push('/onboarding');
+      } else if (profile?.role === 'agent') {
+        router.push('/agent');
+      } else {
+        router.push('/settings');
+      }
+    };
+
     supabase.auth.getSession().then(({ data }) => {
       if (data.session) {
-        router.push('/settings');
+        checkProfileAndRedirect(data.session.user.id);
       } else {
         setCheckingSession(false);
       }
@@ -43,7 +61,7 @@ export default function AuthFormEnhanced() {
       data: { subscription },
     } = supabase.auth.onAuthStateChange((event, session) => {
       if (event === 'SIGNED_IN' && session) {
-        router.push('/settings');
+        checkProfileAndRedirect(session.user.id);
       }
     });
 
