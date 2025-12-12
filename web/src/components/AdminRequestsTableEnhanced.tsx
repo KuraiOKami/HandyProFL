@@ -21,22 +21,28 @@ type Request = {
 
 type ClientMap = Record<string, { name: string; email: string; phone: string }>;
 
-const statuses = ['pending', 'confirmed', 'in_progress', 'pending_verification', 'verified', 'paid', 'complete', 'cancelled'];
+// Status flow: pending -> confirmed -> scheduled (agent accepts) -> in_progress (agent checks in) -> pending_verification (agent checks out) -> complete (admin verifies)
+const statuses = ['pending', 'confirmed', 'scheduled', 'in_progress', 'pending_verification', 'complete', 'cancelled'];
 
-const statusConfig: Record<string, { bg: string; text: string; border: string; dot: string }> = {
-  pending: { bg: 'bg-amber-50', text: 'text-amber-700', border: 'border-amber-200', dot: 'bg-amber-500' },
-  confirmed: { bg: 'bg-emerald-50', text: 'text-emerald-700', border: 'border-emerald-200', dot: 'bg-emerald-500' },
-  in_progress: { bg: 'bg-blue-50', text: 'text-blue-700', border: 'border-blue-200', dot: 'bg-blue-500' },
-  pending_verification: { bg: 'bg-indigo-50', text: 'text-indigo-700', border: 'border-indigo-200', dot: 'bg-indigo-500' },
-  verified: { bg: 'bg-emerald-50', text: 'text-emerald-700', border: 'border-emerald-200', dot: 'bg-emerald-500' },
-  paid: { bg: 'bg-emerald-50', text: 'text-emerald-700', border: 'border-emerald-200', dot: 'bg-emerald-500' },
-  complete: { bg: 'bg-blue-50', text: 'text-blue-700', border: 'border-blue-200', dot: 'bg-blue-500' },
-  cancelled: { bg: 'bg-slate-100', text: 'text-slate-500', border: 'border-slate-200', dot: 'bg-slate-400' },
+const statusConfig: Record<string, { bg: string; text: string; border: string; dot: string; label: string }> = {
+  pending: { bg: 'bg-amber-50', text: 'text-amber-700', border: 'border-amber-200', dot: 'bg-amber-500', label: 'Pending' },
+  confirmed: { bg: 'bg-emerald-50', text: 'text-emerald-700', border: 'border-emerald-200', dot: 'bg-emerald-500', label: 'Confirmed' },
+  scheduled: { bg: 'bg-purple-50', text: 'text-purple-700', border: 'border-purple-200', dot: 'bg-purple-500', label: 'Scheduled' },
+  in_progress: { bg: 'bg-blue-50', text: 'text-blue-700', border: 'border-blue-200', dot: 'bg-blue-500', label: 'In Progress' },
+  pending_verification: { bg: 'bg-indigo-50', text: 'text-indigo-700', border: 'border-indigo-200', dot: 'bg-indigo-500', label: 'Pending Review' },
+  complete: { bg: 'bg-emerald-50', text: 'text-emerald-700', border: 'border-emerald-200', dot: 'bg-emerald-500', label: 'Complete' },
+  cancelled: { bg: 'bg-slate-100', text: 'text-slate-500', border: 'border-slate-200', dot: 'bg-slate-400', label: 'Cancelled' },
 };
 
 const ITEMS_PER_PAGE = 10;
 
-export default function AdminRequestsTableEnhanced({ initial }: { initial: Request[] }) {
+type Props = {
+  initial: Request[];
+  onRefresh?: () => void;
+  lastUpdated?: Date | null;
+};
+
+export default function AdminRequestsTableEnhanced({ initial, onRefresh, lastUpdated }: Props) {
   const router = useRouter();
   const [requests, setRequests] = useState<Request[]>(initial);
   const [clients, setClients] = useState<ClientMap>({});
@@ -52,6 +58,11 @@ export default function AdminRequestsTableEnhanced({ initial }: { initial: Reque
   // Drag and drop state
   const [draggedId, setDraggedId] = useState<string | null>(null);
   const [dragOverStatus, setDragOverStatus] = useState<string | null>(null);
+
+  // Sync requests when initial changes (from parent refresh)
+  useEffect(() => {
+    setRequests(initial);
+  }, [initial]);
 
   // Load client names
   useEffect(() => {
@@ -88,7 +99,9 @@ export default function AdminRequestsTableEnhanced({ initial }: { initial: Reque
         clientName.toLowerCase().includes(searchLower) ||
         clientInfo?.email?.toLowerCase().includes(searchLower);
 
-      const matchesStatus = statusFilter === 'all' || req.status === statusFilter;
+      const matchesStatus = statusFilter === 'all'
+        || (statusFilter === 'active' && ['confirmed', 'scheduled', 'in_progress', 'pending_verification'].includes(req.status || ''))
+        || req.status === statusFilter;
 
       return matchesSearch && matchesStatus;
     });
@@ -103,16 +116,8 @@ export default function AdminRequestsTableEnhanced({ initial }: { initial: Reque
 
   // Group by status for Kanban
   const groupedByStatus = useMemo(() => {
-    const groups: Record<string, Request[]> = {
-      pending: [],
-      confirmed: [],
-      in_progress: [],
-      pending_verification: [],
-      verified: [],
-      paid: [],
-      complete: [],
-      cancelled: [],
-    };
+    const groups: Record<string, Request[]> = {};
+    statuses.forEach((s) => { groups[s] = []; });
     filteredRequests.forEach((req) => {
       const status = req.status || 'pending';
       if (groups[status]) {
@@ -226,11 +231,11 @@ export default function AdminRequestsTableEnhanced({ initial }: { initial: Reque
     return formatDate(dateStr);
   };
 
-  // Stats
+  // Stats - count active work vs completed
   const stats = useMemo(() => ({
     total: requests.length,
     pending: requests.filter((r) => r.status === 'pending').length,
-    confirmed: requests.filter((r) => r.status === 'confirmed').length,
+    active: requests.filter((r) => ['confirmed', 'scheduled', 'in_progress', 'pending_verification'].includes(r.status || '')).length,
     complete: requests.filter((r) => r.status === 'complete').length,
   }), [requests]);
 
@@ -342,11 +347,11 @@ export default function AdminRequestsTableEnhanced({ initial }: { initial: Reque
           <p className="text-2xl font-bold text-amber-600">{stats.pending}</p>
         </button>
         <button
-          onClick={() => { setStatusFilter('confirmed'); setCurrentPage(1); }}
-          className={`rounded-xl border p-4 text-left transition hover:shadow-md ${statusFilter === 'confirmed' ? 'border-emerald-300 bg-emerald-50' : 'border-slate-200 bg-white'}`}
+          onClick={() => { setStatusFilter('active'); setCurrentPage(1); }}
+          className={`rounded-xl border p-4 text-left transition hover:shadow-md ${statusFilter === 'active' ? 'border-blue-300 bg-blue-50' : 'border-slate-200 bg-white'}`}
         >
-          <p className="text-xs font-medium uppercase tracking-wide text-slate-500">Confirmed</p>
-          <p className="text-2xl font-bold text-emerald-600">{stats.confirmed}</p>
+          <p className="text-xs font-medium uppercase tracking-wide text-slate-500">In Progress</p>
+          <p className="text-2xl font-bold text-blue-600">{stats.active}</p>
         </button>
         <button
           onClick={() => { setStatusFilter('complete'); setCurrentPage(1); }}
@@ -414,6 +419,26 @@ export default function AdminRequestsTableEnhanced({ initial }: { initial: Reque
             Kanban
           </button>
         </div>
+
+        {/* Refresh Button & Timestamp */}
+        <div className="flex items-center gap-3">
+          {lastUpdated && (
+            <span className="text-xs text-slate-400">
+              Updated {lastUpdated.toLocaleTimeString()}
+            </span>
+          )}
+          {onRefresh && (
+            <button
+              onClick={onRefresh}
+              className="flex items-center gap-1.5 rounded-lg border border-slate-200 px-3 py-1.5 text-sm font-medium text-slate-600 hover:bg-slate-50"
+            >
+              <svg className="h-4 w-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M4 4v5h.582m15.356 2A8.001 8.001 0 004.582 9m0 0H9m11 11v-5h-.581m0 0a8.003 8.003 0 01-15.357-2m15.357 2H15" />
+              </svg>
+              Refresh
+            </button>
+          )}
+        </div>
       </div>
 
       {error && (
@@ -466,53 +491,55 @@ export default function AdminRequestsTableEnhanced({ initial }: { initial: Reque
 
       {/* Kanban View */}
       {viewMode === 'kanban' && (
-        <div className="grid grid-cols-1 gap-4 md:grid-cols-2 lg:grid-cols-4">
-          {(['pending', 'confirmed', 'complete', 'cancelled'] as const).map((status) => {
-            const style = statusConfig[status];
-            const statusRequests = groupedByStatus[status] || [];
-            const isDropTarget = dragOverStatus === status;
+        <div className="overflow-x-auto pb-4">
+          <div className="flex gap-4 min-w-max">
+            {statuses.map((status) => {
+              const style = statusConfig[status];
+              const statusRequests = groupedByStatus[status] || [];
+              const isDropTarget = dragOverStatus === status;
 
-            return (
-              <div
-                key={status}
-                data-status={status}
-                onDragOver={(e) => handleDragOver(e, status)}
-                onDragLeave={handleDragLeave}
-                onDrop={(e) => handleDrop(e, status)}
-                className={`rounded-xl border-2 p-3 transition-all ${
-                  isDropTarget
-                    ? 'border-indigo-400 bg-indigo-50 ring-2 ring-indigo-200'
-                    : 'border-slate-200 bg-slate-50'
-                }`}
-              >
-                <div className="mb-3 flex items-center justify-between">
-                  <div className="flex items-center gap-2">
-                    <span className={`h-2.5 w-2.5 rounded-full ${style.dot}`}></span>
-                    <h3 className="font-semibold capitalize text-slate-900">{status}</h3>
-                  </div>
-                  <span className="rounded-full bg-white px-2 py-0.5 text-xs font-medium text-slate-600 ring-1 ring-slate-200">
-                    {statusRequests.length}
-                  </span>
-                </div>
-                <div className={`space-y-2 max-h-[600px] min-h-[100px] overflow-y-auto rounded-lg transition-colors ${
-                  isDropTarget ? 'bg-indigo-100/50' : ''
-                }`}>
-                  {statusRequests.map((req) => (
-                    <RequestCard key={req.id} req={req} compact draggable />
-                  ))}
-                  {statusRequests.length === 0 && (
-                    <div className={`rounded-lg border-2 border-dashed p-4 text-center transition-colors ${
-                      isDropTarget ? 'border-indigo-300 bg-indigo-50' : 'border-slate-200 bg-white'
-                    }`}>
-                      <p className="text-xs text-slate-400">
-                        {isDropTarget ? 'Drop here' : 'No requests'}
-                      </p>
+              return (
+                <div
+                  key={status}
+                  data-status={status}
+                  onDragOver={(e) => handleDragOver(e, status)}
+                  onDragLeave={handleDragLeave}
+                  onDrop={(e) => handleDrop(e, status)}
+                  className={`w-72 flex-shrink-0 rounded-xl border-2 p-3 transition-all ${
+                    isDropTarget
+                      ? 'border-indigo-400 bg-indigo-50 ring-2 ring-indigo-200'
+                      : 'border-slate-200 bg-slate-50'
+                  }`}
+                >
+                  <div className="mb-3 flex items-center justify-between">
+                    <div className="flex items-center gap-2">
+                      <span className={`h-2.5 w-2.5 rounded-full ${style.dot}`}></span>
+                      <h3 className="font-semibold text-slate-900">{style.label}</h3>
                     </div>
-                  )}
+                    <span className="rounded-full bg-white px-2 py-0.5 text-xs font-medium text-slate-600 ring-1 ring-slate-200">
+                      {statusRequests.length}
+                    </span>
+                  </div>
+                  <div className={`space-y-2 max-h-[600px] min-h-[100px] overflow-y-auto rounded-lg transition-colors ${
+                    isDropTarget ? 'bg-indigo-100/50' : ''
+                  }`}>
+                    {statusRequests.map((req) => (
+                      <RequestCard key={req.id} req={req} compact />
+                    ))}
+                    {statusRequests.length === 0 && (
+                      <div className={`rounded-lg border-2 border-dashed p-4 text-center transition-colors ${
+                        isDropTarget ? 'border-indigo-300 bg-indigo-50' : 'border-slate-200 bg-white'
+                      }`}>
+                        <p className="text-xs text-slate-400">
+                          {isDropTarget ? 'Drop here' : 'No requests'}
+                        </p>
+                      </div>
+                    )}
+                  </div>
                 </div>
-              </div>
-            );
-          })}
+              );
+            })}
+          </div>
         </div>
       )}
     </div>

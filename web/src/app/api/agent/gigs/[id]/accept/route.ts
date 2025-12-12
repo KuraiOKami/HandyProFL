@@ -113,10 +113,10 @@ export async function POST(
     return NextResponse.json({ error: assignError.message }, { status: 500 });
   }
 
-  // Update service request with assigned agent
+  // Update service request with assigned agent and status to scheduled
   const { error: updateError } = await adminSupabase
     .from("service_requests")
-    .update({ assigned_agent_id: session.user.id, status: "confirmed" })
+    .update({ assigned_agent_id: session.user.id, status: "scheduled" })
     .eq("id", requestId);
 
   if (updateError) {

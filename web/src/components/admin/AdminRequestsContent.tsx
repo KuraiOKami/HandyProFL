@@ -1,6 +1,6 @@
 'use client';
 
-import { useEffect, useState } from 'react';
+import { useCallback, useEffect, useState } from 'react';
 import { getSupabaseClient } from '@/lib/supabaseClient';
 import AdminRequestsTableEnhanced from '../AdminRequestsTableEnhanced';
 
@@ -16,35 +16,51 @@ type Request = {
   created_at?: string | null;
 };
 
+const REFRESH_INTERVAL = 30000; // 30 seconds
+
 export default function AdminRequestsContent() {
   const [requests, setRequests] = useState<Request[]>([]);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
+  const [lastUpdated, setLastUpdated] = useState<Date | null>(null);
 
-  useEffect(() => {
-    const loadRequests = async () => {
-      const supabase = getSupabaseClient();
-      if (!supabase) {
-        setError('Supabase not configured');
-        setLoading(false);
-        return;
-      }
+  const loadRequests = useCallback(async (showLoading = false) => {
+    if (showLoading) setLoading(true);
 
-      const { data, error: fetchError } = await supabase
-        .from('service_requests')
-        .select('id, user_id, service_type, preferred_date, preferred_time, details, status, estimated_minutes, created_at')
-        .order('created_at', { ascending: false });
-
-      if (fetchError) {
-        setError(fetchError.message);
-      } else {
-        setRequests(data ?? []);
-      }
+    const supabase = getSupabaseClient();
+    if (!supabase) {
+      setError('Supabase not configured');
       setLoading(false);
-    };
+      return;
+    }
 
-    loadRequests();
+    const { data, error: fetchError } = await supabase
+      .from('service_requests')
+      .select('id, user_id, service_type, preferred_date, preferred_time, details, status, estimated_minutes, created_at')
+      .order('created_at', { ascending: false });
+
+    if (fetchError) {
+      setError(fetchError.message);
+    } else {
+      setRequests(data ?? []);
+      setLastUpdated(new Date());
+    }
+    setLoading(false);
   }, []);
+
+  // Initial load
+  useEffect(() => {
+    loadRequests(true);
+  }, [loadRequests]);
+
+  // Auto-refresh every 30 seconds
+  useEffect(() => {
+    const interval = setInterval(() => {
+      loadRequests(false);
+    }, REFRESH_INTERVAL);
+
+    return () => clearInterval(interval);
+  }, [loadRequests]);
 
   if (loading) {
     return (
@@ -65,5 +81,11 @@ export default function AdminRequestsContent() {
     );
   }
 
-  return <AdminRequestsTableEnhanced initial={requests} />;
+  return (
+    <AdminRequestsTableEnhanced
+      initial={requests}
+      onRefresh={() => loadRequests(false)}
+      lastUpdated={lastUpdated}
+    />
+  );
 }
