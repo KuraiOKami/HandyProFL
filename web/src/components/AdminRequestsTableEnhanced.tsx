@@ -146,48 +146,19 @@ export default function AdminRequestsTableEnhanced({ initial }: { initial: Reque
 
   // Drag and drop handlers
   const handleDragStart = (e: React.DragEvent, id: string) => {
-    // Prevent text selection during drag
-    e.stopPropagation();
-
     setDraggedId(id);
     e.dataTransfer.effectAllowed = 'move';
     e.dataTransfer.setData('text/plain', id);
 
-    // Apply styles to body to prevent selection during drag
-    document.body.style.userSelect = 'none';
-    document.body.style.webkitUserSelect = 'none';
-    document.body.style.cursor = 'grabbing';
-
-    // Create a custom drag image
+    // Use the element itself as the drag image (no clone needed)
     const element = e.currentTarget as HTMLElement;
     const rect = element.getBoundingClientRect();
-    const dragImage = element.cloneNode(true) as HTMLElement;
-    dragImage.style.position = 'absolute';
-    dragImage.style.top = '-9999px';
-    dragImage.style.left = '-9999px';
-    dragImage.style.width = `${rect.width}px`;
-    dragImage.style.opacity = '0.9';
-    dragImage.style.transform = 'rotate(3deg)';
-    dragImage.style.boxShadow = '0 10px 25px rgba(0,0,0,0.15)';
-    dragImage.style.borderRadius = '12px';
-    dragImage.style.backgroundColor = 'white';
-    document.body.appendChild(dragImage);
-    e.dataTransfer.setDragImage(dragImage, rect.width / 2, 20);
-
-    // Clean up the drag image after a short delay
-    requestAnimationFrame(() => {
-      if (dragImage.parentNode) {
-        document.body.removeChild(dragImage);
-      }
-    });
+    e.dataTransfer.setDragImage(element, rect.width / 2, 20);
   };
 
   const handleDragEnd = () => {
     setDraggedId(null);
     setDragOverStatus(null);
-    document.body.style.userSelect = '';
-    document.body.style.webkitUserSelect = '';
-    document.body.style.cursor = '';
   };
 
   const handleDragOver = (e: React.DragEvent, status: string) => {
@@ -274,21 +245,26 @@ export default function AdminRequestsTableEnhanced({ initial }: { initial: Reque
       router.push(`/admin/requests/${req.id}`);
     };
 
+    const handleMouseDown = (e: React.MouseEvent) => {
+      // Prevent text selection when starting to drag
+      if (draggable && !(e.target as HTMLElement).closest('button')) {
+        e.preventDefault();
+      }
+    };
+
     return (
       <div
         id={`request-card-${req.id}`}
         draggable={draggable}
         onDragStart={draggable ? (e) => handleDragStart(e, req.id) : undefined}
         onDragEnd={draggable ? handleDragEnd : undefined}
-        onMouseDown={draggable ? (e) => e.currentTarget.style.cursor = 'grabbing' : undefined}
-        onMouseUp={draggable ? (e) => e.currentTarget.style.cursor = 'grab' : undefined}
+        onMouseDown={handleMouseDown}
         onClick={handleCardClick}
-        style={draggable ? { WebkitUserSelect: 'none', userSelect: 'none' } : undefined}
-        className={`rounded-xl border bg-white p-4 transition hover:shadow-md ${style.border} ${
+        className={`rounded-xl border bg-white p-4 transition hover:shadow-md select-none ${style.border} ${
           draggable ? 'cursor-grab active:cursor-grabbing' : 'cursor-pointer'
         } ${isDragging ? 'opacity-50 ring-2 ring-indigo-400 scale-[1.02]' : ''}`}
       >
-        <div className={`flex items-start justify-between gap-3 ${draggable ? 'pointer-events-none' : ''}`}>
+        <div className="flex items-start justify-between gap-3">
           <div className="flex-1 min-w-0">
             <div className="flex items-center gap-2">
               <span className={`inline-flex h-2 w-2 rounded-full ${style.dot}`}></span>
@@ -304,17 +280,17 @@ export default function AdminRequestsTableEnhanced({ initial }: { initial: Reque
           </span>
         </div>
 
-        <div className={`mt-3 flex items-center gap-4 text-sm text-slate-500 ${draggable ? 'pointer-events-none' : ''}`}>
+        <div className="mt-3 flex items-center gap-4 text-sm text-slate-500">
           <span>{formatRelativeDate(req.preferred_date)}</span>
           {req.preferred_time && <span>{formatTime(req.preferred_time)}</span>}
           {req.estimated_minutes && <span>{req.estimated_minutes} min</span>}
         </div>
 
         {!compact && req.details && (
-          <p className={`mt-2 text-sm text-slate-600 line-clamp-2 ${draggable ? 'pointer-events-none' : ''}`}>{req.details}</p>
+          <p className="mt-2 text-sm text-slate-600 line-clamp-2">{req.details}</p>
         )}
 
-        <div className="mt-3 flex items-center justify-between gap-2 pointer-events-auto">
+        <div className="mt-3 flex items-center justify-between gap-2">
           <div className="flex items-center gap-2">
             {req.status === 'pending' && (
               <button
