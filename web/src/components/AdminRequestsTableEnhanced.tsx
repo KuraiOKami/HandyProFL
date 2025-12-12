@@ -146,10 +146,16 @@ export default function AdminRequestsTableEnhanced({ initial }: { initial: Reque
 
   // Drag and drop handlers
   const handleDragStart = (e: React.DragEvent, id: string) => {
+    // Prevent text selection during drag
+    e.stopPropagation();
+
     setDraggedId(id);
     e.dataTransfer.effectAllowed = 'move';
     e.dataTransfer.setData('text/plain', id);
+
+    // Apply styles to body to prevent selection during drag
     document.body.style.userSelect = 'none';
+    document.body.style.webkitUserSelect = 'none';
     document.body.style.cursor = 'grabbing';
 
     // Create a custom drag image
@@ -163,19 +169,24 @@ export default function AdminRequestsTableEnhanced({ initial }: { initial: Reque
     dragImage.style.opacity = '0.9';
     dragImage.style.transform = 'rotate(3deg)';
     dragImage.style.boxShadow = '0 10px 25px rgba(0,0,0,0.15)';
+    dragImage.style.borderRadius = '12px';
+    dragImage.style.backgroundColor = 'white';
     document.body.appendChild(dragImage);
     e.dataTransfer.setDragImage(dragImage, rect.width / 2, 20);
 
     // Clean up the drag image after a short delay
-    setTimeout(() => {
-      document.body.removeChild(dragImage);
-    }, 0);
+    requestAnimationFrame(() => {
+      if (dragImage.parentNode) {
+        document.body.removeChild(dragImage);
+      }
+    });
   };
 
   const handleDragEnd = () => {
     setDraggedId(null);
     setDragOverStatus(null);
     document.body.style.userSelect = '';
+    document.body.style.webkitUserSelect = '';
     document.body.style.cursor = '';
   };
 
@@ -269,12 +280,15 @@ export default function AdminRequestsTableEnhanced({ initial }: { initial: Reque
         draggable={draggable}
         onDragStart={draggable ? (e) => handleDragStart(e, req.id) : undefined}
         onDragEnd={draggable ? handleDragEnd : undefined}
+        onMouseDown={draggable ? (e) => e.currentTarget.style.cursor = 'grabbing' : undefined}
+        onMouseUp={draggable ? (e) => e.currentTarget.style.cursor = 'grab' : undefined}
         onClick={handleCardClick}
+        style={draggable ? { WebkitUserSelect: 'none', userSelect: 'none' } : undefined}
         className={`rounded-xl border bg-white p-4 transition hover:shadow-md ${style.border} ${
-          draggable ? 'cursor-grab active:cursor-grabbing select-none' : 'cursor-pointer'
-        } ${isDragging ? 'opacity-50 ring-2 ring-indigo-400' : ''}`}
+          draggable ? 'cursor-grab active:cursor-grabbing' : 'cursor-pointer'
+        } ${isDragging ? 'opacity-50 ring-2 ring-indigo-400 scale-[1.02]' : ''}`}
       >
-        <div className="flex items-start justify-between gap-3">
+        <div className={`flex items-start justify-between gap-3 ${draggable ? 'pointer-events-none' : ''}`}>
           <div className="flex-1 min-w-0">
             <div className="flex items-center gap-2">
               <span className={`inline-flex h-2 w-2 rounded-full ${style.dot}`}></span>
@@ -290,17 +304,17 @@ export default function AdminRequestsTableEnhanced({ initial }: { initial: Reque
           </span>
         </div>
 
-        <div className="mt-3 flex items-center gap-4 text-sm text-slate-500">
+        <div className={`mt-3 flex items-center gap-4 text-sm text-slate-500 ${draggable ? 'pointer-events-none' : ''}`}>
           <span>{formatRelativeDate(req.preferred_date)}</span>
           {req.preferred_time && <span>{formatTime(req.preferred_time)}</span>}
           {req.estimated_minutes && <span>{req.estimated_minutes} min</span>}
         </div>
 
         {!compact && req.details && (
-          <p className="mt-2 text-sm text-slate-600 line-clamp-2">{req.details}</p>
+          <p className={`mt-2 text-sm text-slate-600 line-clamp-2 ${draggable ? 'pointer-events-none' : ''}`}>{req.details}</p>
         )}
 
-        <div className="mt-3 flex items-center justify-between gap-2">
+        <div className="mt-3 flex items-center justify-between gap-2 pointer-events-auto">
           <div className="flex items-center gap-2">
             {req.status === 'pending' && (
               <button

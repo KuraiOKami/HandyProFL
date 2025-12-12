@@ -6,6 +6,7 @@ import { usePathname, useRouter, useSearchParams } from 'next/navigation';
 // Lazy load admin section components
 const AdminDashboardContent = lazy(() => import('./admin/AdminDashboardContent'));
 const AdminRequestsContent = lazy(() => import('./admin/AdminRequestsContent'));
+const AdminJobsContent = lazy(() => import('./admin/AdminJobsContent'));
 const AdminClientsContent = lazy(() => import('./admin/AdminClientsContent'));
 const AdminScheduleContent = lazy(() => import('./admin/AdminScheduleContent'));
 const AdminServicesContent = lazy(() => import('./admin/AdminServicesContent'));
@@ -13,11 +14,12 @@ const AdminAgentsContent = lazy(() => import('./admin/AdminAgentsContent'));
 const AdminBillingContent = lazy(() => import('./admin/AdminBillingContent'));
 const AdminSettingsContent = lazy(() => import('./admin/AdminSettingsContent'));
 
-type Tab = 'dashboard' | 'requests' | 'clients' | 'schedule' | 'services' | 'agents' | 'billing' | 'settings';
+type Tab = 'dashboard' | 'requests' | 'jobs' | 'clients' | 'schedule' | 'services' | 'agents' | 'billing' | 'settings';
 
 const tabs: { id: Tab; label: string; icon: string }[] = [
   { id: 'dashboard', label: 'Dashboard', icon: '📊' },
   { id: 'requests', label: 'Requests', icon: '📋' },
+  { id: 'jobs', label: 'Jobs', icon: '✅' },
   { id: 'clients', label: 'Clients', icon: '👥' },
   { id: 'schedule', label: 'Schedule', icon: '📅' },
   { id: 'services', label: 'Services', icon: '🛠️' },
@@ -152,6 +154,7 @@ export default function AdminDashboardTabbed({ userEmail, userName }: Props) {
               <p className="text-sm text-slate-500">
                 {activeTab === 'dashboard' && 'Overview of your business'}
                 {activeTab === 'requests' && 'Manage service requests'}
+                {activeTab === 'jobs' && 'Review and verify agent work'}
                 {activeTab === 'clients' && 'CRM-style client management'}
                 {activeTab === 'schedule' && 'Availability and appointments'}
                 {activeTab === 'services' && 'Service catalog management'}
@@ -173,6 +176,7 @@ export default function AdminDashboardTabbed({ userEmail, userName }: Props) {
           <Suspense fallback={<LoadingSpinner />}>
             {activeTab === 'dashboard' && <AdminDashboardContent />}
             {activeTab === 'requests' && <AdminRequestsContent />}
+            {activeTab === 'jobs' && <AdminJobsContent />}
             {activeTab === 'clients' && <AdminClientsContent />}
             {activeTab === 'schedule' && <AdminScheduleContent />}
             {activeTab === 'services' && <AdminServicesContent />}
