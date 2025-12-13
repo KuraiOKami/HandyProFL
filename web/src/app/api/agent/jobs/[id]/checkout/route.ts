@@ -1,10 +1,11 @@
 import { NextRequest, NextResponse } from "next/server";
 import { createClient, createServiceRoleClient } from "@/utils/supabase/server";
+import { errorResponse } from "@/lib/api-errors";
 
 async function getAgentSession() {
   const supabase = await createClient();
   if (!supabase) {
-    return { error: NextResponse.json({ error: "Supabase not configured" }, { status: 500 }) };
+    return { error: errorResponse("service.unconfigured", "Supabase not configured", 500) };
   }
 
   const {
@@ -12,7 +13,7 @@ async function getAgentSession() {
   } = await supabase.auth.getSession();
 
   if (!session) {
-    return { error: NextResponse.json({ error: "Unauthorized" }, { status: 401 }) };
+    return { error: errorResponse("auth.missing", "Unauthorized", 401) };
   }
 
   const { data: profile } = await supabase
@@ -22,7 +23,7 @@ async function getAgentSession() {
     .single();
 
   if (profile?.role !== "agent") {
-    return { error: NextResponse.json({ error: "Agent access required" }, { status: 403 }) };
+    return { error: errorResponse("auth.not_agent", "Agent access required", 403) };
   }
 
   return { supabase, session, adminSupabase: createServiceRoleClient() ?? supabase };
@@ -49,19 +50,19 @@ export async function POST(
     .single();
 
   if (error || !assignment) {
-    return NextResponse.json({ error: "Job not found" }, { status: 404 });
+    return errorResponse("job.not_found", "Job not found", 404);
   }
 
   if (assignment.agent_id !== session.user.id) {
-    return NextResponse.json({ error: "Not your job" }, { status: 403 });
+    return errorResponse("job.not_assigned", "Not your job", 403);
   }
 
   if (assignment.status === "completed") {
-    return NextResponse.json({ error: "Job already completed" }, { status: 400 });
+    return errorResponse("job.invalid_status", "Job already completed", 400);
   }
 
   if (assignment.status !== "in_progress") {
-    return NextResponse.json({ error: "Must check in first" }, { status: 400 });
+    return errorResponse("job.invalid_status", "Must check in first", 400);
   }
 
   // Check if has checkin
@@ -73,7 +74,7 @@ export async function POST(
     .single();
 
   if (!checkin) {
-    return NextResponse.json({ error: "Must check in first" }, { status: 400 });
+    return errorResponse("job.invalid_status", "Must check in first", 400);
   }
 
   // Check if already checked out
@@ -85,7 +86,7 @@ export async function POST(
     .single();
 
   if (existingCheckout) {
-    return NextResponse.json({ error: "Already checked out" }, { status: 400 });
+    return errorResponse("job.invalid_status", "Already checked out", 400);
   }
 
   // Verify both photos are uploaded
@@ -98,9 +99,10 @@ export async function POST(
   const hasFinishedPhoto = proofs?.some((p) => p.type === "finished");
 
   if (!hasBoxPhoto || !hasFinishedPhoto) {
-    return NextResponse.json(
-      { error: "Must upload both box and finished photos before checkout" },
-      { status: 400 }
+    return errorResponse(
+      "request.invalid",
+      "Must upload both box and finished photos before checkout",
+      400
     );
   }
 
@@ -116,7 +118,7 @@ export async function POST(
   });
 
   if (checkoutError) {
-    return NextResponse.json({ error: checkoutError.message }, { status: 500 });
+    return errorResponse("internal.error", checkoutError.message, 500);
   }
 
   const now = new Date();
@@ -133,7 +135,7 @@ export async function POST(
     .eq("id", jobId);
 
   if (updateError) {
-    return NextResponse.json({ error: updateError.message }, { status: 500 });
+    return errorResponse("internal.error", updateError.message, 500);
   }
 
   // Update service request status to indicate work is done but pending verification

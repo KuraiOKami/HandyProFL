@@ -1,5 +1,6 @@
 import { NextRequest, NextResponse } from "next/server";
 import { createClient, createServiceRoleClient } from "@/utils/supabase/server";
+import { errorResponse } from "@/lib/api-errors";
 
 // Maximum distance from job location to check in (in meters)
 const MAX_CHECKIN_DISTANCE = 100;
@@ -27,7 +28,7 @@ function getDistanceInMeters(
 async function getAgentSession() {
   const supabase = await createClient();
   if (!supabase) {
-    return { error: NextResponse.json({ error: "Supabase not configured" }, { status: 500 }) };
+    return { error: errorResponse("service.unconfigured", "Supabase not configured", 500) };
   }
 
   const {
@@ -35,7 +36,7 @@ async function getAgentSession() {
   } = await supabase.auth.getSession();
 
   if (!session) {
-    return { error: NextResponse.json({ error: "Unauthorized" }, { status: 401 }) };
+    return { error: errorResponse("auth.missing", "Unauthorized", 401) };
   }
 
   const { data: profile } = await supabase
@@ -45,7 +46,7 @@ async function getAgentSession() {
     .single();
 
   if (profile?.role !== "agent") {
-    return { error: NextResponse.json({ error: "Agent access required" }, { status: 403 }) };
+    return { error: errorResponse("auth.not_agent", "Agent access required", 403) };
   }
 
   return { supabase, session, adminSupabase: createServiceRoleClient() ?? supabase };
@@ -65,7 +66,7 @@ export async function POST(
   const { latitude, longitude } = body ?? {};
 
   if (typeof latitude !== "number" || typeof longitude !== "number") {
-    return NextResponse.json({ error: "Location required" }, { status: 400 });
+    return errorResponse("request.invalid", "Location required", 400);
   }
 
   // Get the job assignment with request details
@@ -86,15 +87,15 @@ export async function POST(
     .single();
 
   if (error || !assignment) {
-    return NextResponse.json({ error: "Job not found" }, { status: 404 });
+    return errorResponse("job.not_found", "Job not found", 404);
   }
 
   if (assignment.agent_id !== session.user.id) {
-    return NextResponse.json({ error: "Not your job" }, { status: 403 });
+    return errorResponse("job.not_assigned", "Not your job", 403);
   }
 
   if (assignment.status !== "assigned") {
-    return NextResponse.json({ error: "Job already started or completed" }, { status: 400 });
+    return errorResponse("job.invalid_status", "Job already started or completed", 400);
   }
 
   // Check if already checked in
@@ -106,7 +107,7 @@ export async function POST(
     .single();
 
   if (existingCheckin) {
-    return NextResponse.json({ error: "Already checked in" }, { status: 400 });
+    return errorResponse("job.invalid_status", "Already checked in", 400);
   }
 
   // Verify location (geofencing)
@@ -125,12 +126,10 @@ export async function POST(
 
     if (!locationVerified) {
       return NextResponse.json(
-        {
-          error: "Too far from job location",
+        errorResponse("request.invalid", "Too far from job location", 400, {
           distance_meters: distanceMeters,
           max_distance: MAX_CHECKIN_DISTANCE,
-        },
-        { status: 400 }
+        })
       );
     }
   } else {
@@ -150,7 +149,7 @@ export async function POST(
   });
 
   if (checkinError) {
-    return NextResponse.json({ error: checkinError.message }, { status: 500 });
+    return errorResponse("internal.error", checkinError.message, 500);
   }
 
   // Update job status to in_progress
@@ -163,7 +162,7 @@ export async function POST(
     .eq("id", jobId);
 
   if (updateError) {
-    return NextResponse.json({ error: updateError.message }, { status: 500 });
+    return errorResponse("internal.error", updateError.message, 500);
   }
 
   // Mirror status to service_requests so admins see progress

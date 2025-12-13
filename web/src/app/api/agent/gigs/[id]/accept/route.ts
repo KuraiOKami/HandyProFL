@@ -1,5 +1,6 @@
 import { NextRequest, NextResponse } from "next/server";
 import { createClient, createServiceRoleClient } from "@/utils/supabase/server";
+import { errorResponse } from "@/lib/api-errors";
 
 // Agent payout percentage (70%) and fallback rate when catalog pricing is missing
 const AGENT_PAYOUT_PERCENTAGE = 0.7;
@@ -8,7 +9,7 @@ const DEFAULT_RATE_PER_MINUTE_CENTS = 150; // $90/hr fallback
 async function getApprovedAgentSession() {
   const supabase = await createClient();
   if (!supabase) {
-    return { error: NextResponse.json({ error: "Supabase not configured" }, { status: 500 }) };
+    return { error: errorResponse("service.unconfigured", "Supabase not configured", 500) };
   }
 
   const {
@@ -16,7 +17,7 @@ async function getApprovedAgentSession() {
   } = await supabase.auth.getSession();
 
   if (!session) {
-    return { error: NextResponse.json({ error: "Unauthorized" }, { status: 401 }) };
+    return { error: errorResponse("auth.missing", "Unauthorized", 401) };
   }
 
   const { data: profile } = await supabase
@@ -26,7 +27,7 @@ async function getApprovedAgentSession() {
     .single();
 
   if (profile?.role !== "agent") {
-    return { error: NextResponse.json({ error: "Agent access required" }, { status: 403 }) };
+    return { error: errorResponse("auth.not_agent", "Agent access required", 403) };
   }
 
   const adminSupabase = createServiceRoleClient() ?? supabase;
@@ -37,7 +38,7 @@ async function getApprovedAgentSession() {
     .single();
 
   if (agentProfile?.status !== "approved") {
-    return { error: NextResponse.json({ error: "Agent approval required" }, { status: 403 }) };
+    return { error: errorResponse("auth.forbidden", "Agent approval required", 403) };
   }
 
   return { supabase, session, adminSupabase };
@@ -54,7 +55,7 @@ export async function POST(
   const { id: requestId } = await params;
 
   if (!requestId) {
-    return NextResponse.json({ error: "Request ID required" }, { status: 400 });
+    return errorResponse("request.invalid", "Request ID required", 400);
   }
 
   // Get the service request
@@ -65,15 +66,15 @@ export async function POST(
     .single();
 
   if (reqError || !request) {
-    return NextResponse.json({ error: "Request not found" }, { status: 404 });
+    return errorResponse("request.not_found", "Request not found", 404);
   }
 
   if (!["pending", "confirmed"].includes(request.status || "")) {
-    return NextResponse.json({ error: "Request is not available" }, { status: 400 });
+    return errorResponse("gig.unavailable", "Request is not available", 400);
   }
 
   if (request.assigned_agent_id) {
-    return NextResponse.json({ error: "Request already assigned" }, { status: 409 });
+    return errorResponse("request.conflict", "Request already assigned", 409);
   }
 
   // Get pricing from catalog
@@ -108,9 +109,9 @@ export async function POST(
   if (assignError) {
     // Check if it's a unique constraint violation (already assigned)
     if (assignError.code === "23505") {
-      return NextResponse.json({ error: "Request already assigned" }, { status: 409 });
+      return errorResponse("request.conflict", "Request already assigned", 409);
     }
-    return NextResponse.json({ error: assignError.message }, { status: 500 });
+    return errorResponse("internal.error", assignError.message, 500);
   }
 
   // Update service request with assigned agent and status to scheduled
@@ -122,7 +123,7 @@ export async function POST(
   if (updateError) {
     // Rollback the assignment
     await adminSupabase.from("job_assignments").delete().eq("id", assignment.id);
-    return NextResponse.json({ error: updateError.message }, { status: 500 });
+    return errorResponse("internal.error", updateError.message, 500);
   }
 
   return NextResponse.json({

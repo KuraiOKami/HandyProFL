@@ -1,6 +1,7 @@
 import { NextResponse } from "next/server";
 import { createClient, createServiceRoleClient } from "@/utils/supabase/server";
 import { sanitizeDetailsForAgent } from "@/lib/formatting";
+import { errorResponse } from "@/lib/api-errors";
 
 // Agent payout percentage (70%) and fallback rate when catalog pricing is missing
 const AGENT_PAYOUT_PERCENTAGE = 0.7;
@@ -9,7 +10,7 @@ const DEFAULT_RATE_PER_MINUTE_CENTS = 150; // $90/hr fallback
 async function getApprovedAgentSession() {
   const supabase = await createClient();
   if (!supabase) {
-    return { error: NextResponse.json({ error: "Supabase not configured" }, { status: 500 }) };
+    return { error: errorResponse("service.unconfigured", "Supabase not configured", 500) };
   }
 
   const {
@@ -17,7 +18,7 @@ async function getApprovedAgentSession() {
   } = await supabase.auth.getSession();
 
   if (!session) {
-    return { error: NextResponse.json({ error: "Unauthorized" }, { status: 401 }) };
+    return { error: errorResponse("auth.missing", "Unauthorized", 401) };
   }
 
   const { data: profile } = await supabase
@@ -27,7 +28,7 @@ async function getApprovedAgentSession() {
     .single();
 
   if (profile?.role !== "agent") {
-    return { error: NextResponse.json({ error: "Agent access required" }, { status: 403 }) };
+    return { error: errorResponse("auth.not_agent", "Agent access required", 403) };
   }
 
   // Check if agent is approved
@@ -39,7 +40,7 @@ async function getApprovedAgentSession() {
     .single();
 
   if (agentProfile?.status !== "approved") {
-    return { error: NextResponse.json({ error: "Agent approval required to view gigs" }, { status: 403 }) };
+    return { error: errorResponse("auth.forbidden", "Agent approval required to view gigs", 403) };
   }
 
   return { supabase, session, adminSupabase };
@@ -76,7 +77,7 @@ export async function GET() {
     .order("preferred_time", { ascending: true });
 
   if (error) {
-    return NextResponse.json({ error: error.message }, { status: 500 });
+    return errorResponse("internal.error", error.message, 500);
   }
 
   // Get service catalog for pricing

@@ -1,10 +1,11 @@
 import { NextRequest, NextResponse } from "next/server";
 import { createClient, createServiceRoleClient } from "@/utils/supabase/server";
+import { errorResponse } from "@/lib/api-errors";
 
 async function getAgentSession() {
   const supabase = await createClient();
   if (!supabase) {
-    return { error: NextResponse.json({ error: "Supabase not configured" }, { status: 500 }) };
+    return { error: errorResponse("service.unconfigured", "Supabase not configured", 500) };
   }
 
   const {
@@ -12,7 +13,7 @@ async function getAgentSession() {
   } = await supabase.auth.getSession();
 
   if (!session) {
-    return { error: NextResponse.json({ error: "Unauthorized" }, { status: 401 }) };
+    return { error: errorResponse("auth.missing", "Unauthorized", 401) };
   }
 
   const { data: profile } = await supabase
@@ -22,7 +23,7 @@ async function getAgentSession() {
     .single();
 
   if (profile?.role !== "agent") {
-    return { error: NextResponse.json({ error: "Agent access required" }, { status: 403 }) };
+    return { error: errorResponse("auth.not_agent", "Agent access required", 403) };
   }
 
   return { supabase, session, adminSupabase: createServiceRoleClient() ?? supabase };
@@ -42,11 +43,11 @@ export async function POST(
   const { type, photo_url, notes } = body ?? {};
 
   if (!type || !photo_url) {
-    return NextResponse.json({ error: "Type and photo_url required" }, { status: 400 });
+    return errorResponse("request.invalid", "Type and photo_url required", 400);
   }
 
   if (!["box", "finished"].includes(type)) {
-    return NextResponse.json({ error: "Type must be 'box' or 'finished'" }, { status: 400 });
+    return errorResponse("request.invalid", "Type must be 'box' or 'finished'", 400);
   }
 
   // Get the job assignment
@@ -57,11 +58,11 @@ export async function POST(
     .single();
 
   if (error || !assignment) {
-    return NextResponse.json({ error: "Job not found" }, { status: 404 });
+    return errorResponse("job.not_found", "Job not found", 404);
   }
 
   if (assignment.agent_id !== session.user.id) {
-    return NextResponse.json({ error: "Not your job" }, { status: 403 });
+    return errorResponse("job.not_assigned", "Not your job", 403);
   }
 
   if (assignment.status === "completed") {
@@ -77,7 +78,7 @@ export async function POST(
     .single();
 
   if (existingProof) {
-    return NextResponse.json({ error: `${type} photo already uploaded` }, { status: 400 });
+    return errorResponse("proof.duplicate", `${type} photo already uploaded`, 400);
   }
 
   // Create proof record
@@ -94,7 +95,7 @@ export async function POST(
     .single();
 
   if (proofError) {
-    return NextResponse.json({ error: proofError.message }, { status: 500 });
+    return errorResponse("internal.error", proofError.message, 500);
   }
 
   return NextResponse.json({ ok: true, proof_id: proof.id });
@@ -119,7 +120,7 @@ export async function GET(
     .single();
 
   if (!assignment) {
-    return NextResponse.json({ error: "Job not found" }, { status: 404 });
+    return errorResponse("job.not_found", "Job not found", 404);
   }
 
   // Get proofs
@@ -130,7 +131,7 @@ export async function GET(
     .order("uploaded_at", { ascending: true });
 
   if (error) {
-    return NextResponse.json({ error: error.message }, { status: 500 });
+    return errorResponse("internal.error", error.message, 500);
   }
 
   return NextResponse.json({ proofs: proofs || [] });
