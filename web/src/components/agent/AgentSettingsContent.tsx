@@ -1,6 +1,7 @@
 'use client';
 
 import { useEffect, useState } from 'react';
+import { useThemePreference } from '@/hooks/useThemePreference';
 
 type AgentProfile = {
   id: string;
@@ -37,6 +38,7 @@ export default function AgentSettingsContent() {
   const [error, setError] = useState<string | null>(null);
   const [success, setSuccess] = useState<string | null>(null);
   const [connectingStripe, setConnectingStripe] = useState(false);
+  const { theme, setTheme } = useThemePreference();
 
   // Form state
   const [firstName, setFirstName] = useState('');
@@ -170,6 +172,29 @@ export default function AgentSettingsContent() {
 
   return (
     <div className="mx-auto max-w-3xl space-y-6">
+      {/* Appearance */}
+      <div className="rounded-xl border border-slate-200 bg-white p-5 shadow-sm">
+        <div className="flex items-center justify-between gap-3">
+          <div>
+            <h3 className="text-lg font-semibold text-slate-900">Appearance</h3>
+            <p className="text-sm text-slate-500">Switch between light and dark mode</p>
+          </div>
+          <div className="flex rounded-full border border-slate-200 bg-slate-50 p-1 text-xs font-semibold text-slate-700">
+            {(['light', 'dark', 'system'] as const).map((value) => (
+              <button
+                key={value}
+                className={`rounded-full px-3 py-1 transition ${
+                  theme === value ? 'bg-white shadow-sm ring-1 ring-slate-200' : ''
+                }`}
+                onClick={() => setTheme(value)}
+              >
+                {value === 'system' ? 'System' : value === 'dark' ? 'Dark' : 'Light'}
+              </button>
+            ))}
+          </div>
+        </div>
+      </div>
+
       {/* Account Status */}
       <div className="rounded-xl border border-slate-200 bg-white p-5 shadow-sm">
         <div className="flex items-center justify-between">
