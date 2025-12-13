@@ -194,6 +194,12 @@ export default function AdminDashboardTabbed({ userEmail, userName }: Props) {
               <div className="min-w-0 flex-1">
                 <p className="truncate text-sm font-medium">{userName || 'Admin'}</p>
                 <p className="truncate text-xs text-slate-400">{userEmail || 'admin@handyprofl.com'}</p>
+                <button
+                  onClick={handleSignOut}
+                  className="mt-2 inline-flex items-center gap-1 rounded-md bg-white/10 px-2 py-1 text-xs font-medium text-white transition hover:bg-white/20"
+                >
+                  Sign out
+                </button>
               </div>
             )}
           </div>
