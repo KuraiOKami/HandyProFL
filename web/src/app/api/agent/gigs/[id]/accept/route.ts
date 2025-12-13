@@ -1,6 +1,7 @@
 import { NextRequest, NextResponse } from "next/server";
 import { createClient, createServiceRoleClient } from "@/utils/supabase/server";
 import { errorResponse } from "@/lib/api-errors";
+import * as Sentry from "@sentry/nextjs";
 
 // Agent payout percentage (70%) and fallback rate when catalog pricing is missing
 const AGENT_PAYOUT_PERCENTAGE = 0.7;
@@ -48,11 +49,14 @@ export async function POST(
   req: NextRequest,
   { params }: { params: Promise<{ id: string }> }
 ) {
-  const auth = await getApprovedAgentSession();
-  if ("error" in auth) return auth.error;
-  const { session, adminSupabase } = auth;
+  return Sentry.startSpan({ op: "job.accept", name: "Agent accepts gig" }, async (span) => {
+    const auth = await getApprovedAgentSession();
+    if ("error" in auth) return auth.error;
+    const { session, adminSupabase } = auth;
 
-  const { id: requestId } = await params;
+    const { id: requestId } = await params;
+    span.setAttribute("request_id", requestId);
+    span.setAttribute("agent_id", session.user.id);
 
   if (!requestId) {
     return errorResponse("request.invalid", "Request ID required", 400);
@@ -65,9 +69,9 @@ export async function POST(
     .eq("id", requestId)
     .single();
 
-  if (reqError || !request) {
-    return errorResponse("request.not_found", "Request not found", 404);
-  }
+    if (reqError || !request) {
+      return errorResponse("request.not_found", "Request not found", 404);
+    }
 
   if (!["pending", "confirmed"].includes(request.status || "")) {
     return errorResponse("gig.unavailable", "Request is not available", 400);
@@ -85,10 +89,13 @@ export async function POST(
     .single();
 
   const estimatedMinutes = request.estimated_minutes || catalogEntry?.base_minutes || 60;
-  const priceCents =
-    catalogEntry?.price_cents ??
-    Math.round(estimatedMinutes * DEFAULT_RATE_PER_MINUTE_CENTS);
-  const agentPayoutCents = Math.max(1, Math.round(priceCents * AGENT_PAYOUT_PERCENTAGE));
+    const priceCents =
+      catalogEntry?.price_cents ??
+      Math.round(estimatedMinutes * DEFAULT_RATE_PER_MINUTE_CENTS);
+    const agentPayoutCents = Math.max(1, Math.round(priceCents * AGENT_PAYOUT_PERCENTAGE));
+    span.setAttribute("service_type", request.service_type);
+    span.setAttribute("price_cents", priceCents);
+    span.setAttribute("agent_payout_cents", agentPayoutCents);
   const platformFeeCents = priceCents - agentPayoutCents;
 
   // Create job assignment
@@ -126,9 +133,10 @@ export async function POST(
     return errorResponse("internal.error", updateError.message, 500);
   }
 
-  return NextResponse.json({
-    ok: true,
-    assignment_id: assignment.id,
-    agent_payout_cents: agentPayoutCents,
+    return NextResponse.json({
+      ok: true,
+      assignment_id: assignment.id,
+      agent_payout_cents: agentPayoutCents,
+    });
   });
 }
