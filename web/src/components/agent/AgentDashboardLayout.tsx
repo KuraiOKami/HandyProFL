@@ -2,6 +2,7 @@
 
 import { lazy, Suspense, useEffect, useMemo, useState } from 'react';
 import { usePathname, useRouter, useSearchParams } from 'next/navigation';
+import { getSupabaseClient } from '@/lib/supabaseClient';
 
 // Lazy load agent section components
 const AgentDashboardContent = lazy(() => import('./AgentDashboardContent'));
@@ -51,6 +52,7 @@ export default function AgentDashboardLayout({ userEmail, userName, agentStatus,
   const [activeTab, setActiveTab] = useState<Tab>(() => normalizeTab(searchParams.get('tab')));
   const [sidebarOpen, setSidebarOpen] = useState(false);
   const [sidebarCollapsed, setSidebarCollapsed] = useState(false);
+  const supabase = getSupabaseClient();
 
   useEffect(() => {
     setActiveTab(normalizeTab(searchParams.get('tab')));
@@ -74,6 +76,12 @@ export default function AgentDashboardLayout({ userEmail, userName, agentStatus,
     }
     const query = params.toString();
     router.replace(query ? `${pathname}?${query}` : pathname, { scroll: false });
+  };
+
+  const handleSignOut = async () => {
+    if (!supabase) return;
+    await supabase.auth.signOut();
+    router.push('/auth');
   };
 
   const initials = userName
@@ -215,6 +223,13 @@ export default function AgentDashboardLayout({ userEmail, userName, agentStatus,
                   {getStatusBadge()}
                 </div>
                 <p className="truncate text-xs text-slate-400">{userEmail}</p>
+                <button
+                  onClick={handleSignOut}
+                  className="mt-2 inline-flex items-center gap-1 rounded-md bg-white/10 px-2 py-1 text-xs font-semibold text-white transition hover:bg-white/20"
+                >
+                  <span>⎋</span>
+                  <span>Sign out</span>
+                </button>
               </div>
             )}
           </div>
