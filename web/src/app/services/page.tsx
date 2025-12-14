@@ -24,7 +24,7 @@ const formatDuration = (minutes: number) => {
 };
 
 async function loadServiceCatalog(): Promise<ServiceCatalogItem[]> {
-  const hdrs = headers();
+  const hdrs = await headers();
   const host = hdrs.get("host");
   const proto = hdrs.get("x-forwarded-proto") ?? "https";
   const origin = process.env.NEXT_PUBLIC_SITE_URL ?? (host ? `${proto}://${host}` : "http://localhost:3000");
