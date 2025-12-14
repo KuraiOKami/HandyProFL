@@ -11,8 +11,9 @@ export async function GET() {
 
   const { data, error } = await client
     .from('service_catalog')
-    .select('id, base_minutes, price_cents')
-    .order('id', { ascending: true });
+    .select('id, name, category, description, base_minutes, price_cents')
+    .order('category', { ascending: true })
+    .order('name', { ascending: true });
 
   if (error) {
     return NextResponse.json({ error: error.message }, { status: 500 });
