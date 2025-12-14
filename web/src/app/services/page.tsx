@@ -1,4 +1,16 @@
-import { coreServices, serviceCatalog, ServiceCatalogItem } from "@/lib/services";
+import { coreServices, serviceCatalog as fallbackCatalog, ServiceCatalogItem } from "@/lib/services";
+import { createClient, createServiceRoleClient } from "@/utils/supabase/server";
+
+type ServiceCatalogRow = {
+  id: string;
+  name?: string | null;
+  category?: string | null;
+  base_minutes?: number | null;
+  price_cents?: number | null;
+  description?: string | null;
+};
+
+export const revalidate = 60; // refresh catalog data hourly if cached
 
 const formatPrice = (cents: number) => `$${(cents / 100).toFixed(0)}`;
 
@@ -10,11 +22,44 @@ const formatDuration = (minutes: number) => {
   return `${mins}m`;
 };
 
-export default function ServicesPage() {
-  const grouped = serviceCatalog.reduce<Record<string, ServiceCatalogItem[]>>((acc, item) => {
+async function loadServiceCatalog(): Promise<ServiceCatalogItem[]> {
+  const admin = createServiceRoleClient();
+  const client = admin ?? (await createClient());
+  if (!client) return fallbackCatalog;
+
+  const { data, error } = await client
+    .from("service_catalog")
+    .select("id, name, category, base_minutes, price_cents, description")
+    .order("category", { ascending: true })
+    .order("name", { ascending: true });
+
+  if (error) {
+    console.error("Error loading service catalog:", error.message);
+    return fallbackCatalog;
+  }
+
+  const rows = (data ?? []) as ServiceCatalogRow[];
+  const mapped = rows.map<ServiceCatalogItem>((row) => ({
+    id: row.id,
+    name: row.name ?? row.id,
+    category: row.category ?? "Uncategorized",
+    baseMinutes: row.base_minutes ?? 60,
+    priceCents: row.price_cents ?? 0,
+    description: row.description ?? undefined,
+  }));
+
+  return mapped.length ? mapped : fallbackCatalog;
+}
+
+export default async function ServicesPage() {
+  const catalog = await loadServiceCatalog();
+
+  const grouped = catalog.reduce<Record<string, ServiceCatalogItem[]>>((acc, item) => {
     acc[item.category] = acc[item.category] ? [...acc[item.category], item] : [item];
     return acc;
   }, {});
+
+  const featured = catalog.slice(0, 6);
 
   return (
     <div className="grid gap-8">
@@ -27,20 +72,35 @@ export default function ServicesPage() {
         <div className="rounded-2xl border border-slate-200 bg-white p-5 shadow-sm md:col-span-2">
           <p className="text-xs uppercase tracking-[0.2em] text-indigo-700">Most requested</p>
           <div className="mt-3 grid gap-3 sm:grid-cols-2">
-            {coreServices.map((service) => (
-              <div key={service.name} className="rounded-xl border border-slate-200 p-4">
-                <div className="flex items-start justify-between gap-3">
-                  <div>
-                    <h2 className="text-lg font-semibold text-slate-900">{service.name}</h2>
-                    <p className="mt-2 text-sm text-slate-600">{service.description}</p>
+            {featured.length
+              ? featured.map((service) => (
+                  <div key={service.id} className="rounded-xl border border-slate-200 p-4">
+                    <div className="flex items-start justify-between gap-3">
+                      <div>
+                        <h2 className="text-lg font-semibold text-slate-900">{service.name}</h2>
+                        {service.description && <p className="mt-2 text-sm text-slate-600">{service.description}</p>}
+                      </div>
+                      <div className="text-right">
+                        <p className="text-sm font-semibold text-slate-900">{formatPrice(service.priceCents)}</p>
+                        <p className="text-xs text-slate-500">{formatDuration(service.baseMinutes)}</p>
+                      </div>
+                    </div>
                   </div>
-                  <div className="text-right">
-                    {service.price && <p className="text-sm font-semibold text-slate-900">{service.price}</p>}
-                    <p className="text-xs text-slate-500">{service.duration}</p>
+                ))
+              : coreServices.map((service) => (
+                  <div key={service.name} className="rounded-xl border border-slate-200 p-4">
+                    <div className="flex items-start justify-between gap-3">
+                      <div>
+                        <h2 className="text-lg font-semibold text-slate-900">{service.name}</h2>
+                        <p className="mt-2 text-sm text-slate-600">{service.description}</p>
+                      </div>
+                      <div className="text-right">
+                        {service.price && <p className="text-sm font-semibold text-slate-900">{service.price}</p>}
+                        <p className="text-xs text-slate-500">{service.duration}</p>
+                      </div>
+                    </div>
                   </div>
-                </div>
-              </div>
-            ))}
+                ))}
           </div>
         </div>
         <div className="rounded-2xl border border-indigo-200 bg-indigo-50 p-5 text-sm text-indigo-900">

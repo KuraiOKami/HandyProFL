@@ -1,11 +1,10 @@
 'use client';
 
 import { forwardRef, useCallback, useImperativeHandle } from 'react';
-import { useRequestWizard, services, type ServiceId, type Step } from '@/hooks/useRequestWizard';
+import { useRequestWizard, type ServiceId, type Step } from '@/hooks/useRequestWizard';
 import WizardProgress from './wizard/WizardProgress';
 import ServiceSelector from './wizard/ServiceSelector';
 import SchedulingPicker from './wizard/SchedulingPicker';
-import PaymentMethodSelector from './wizard/PaymentMethodSelector';
 import DetailsStep from './wizard/DetailsStep';
 import ReviewStep from './wizard/ReviewStep';
 
