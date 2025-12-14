@@ -10,7 +10,8 @@ type ServiceCatalogRow = {
   description?: string | null;
 };
 
-export const revalidate = 60; // refresh catalog data hourly if cached
+export const revalidate = 0; // always fetch fresh data
+export const dynamic = "force-dynamic";
 
 const formatPrice = (cents: number) => `$${(cents / 100).toFixed(0)}`;
 
