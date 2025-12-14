@@ -1,4 +1,4 @@
-import { coreServices, serviceCatalog as fallbackCatalog, ServiceCatalogItem } from "@/lib/services";
+import type { ServiceCatalogItem } from "@/lib/services";
 import { createClient, createServiceRoleClient } from "@/utils/supabase/server";
 
 type ServiceCatalogRow = {
@@ -71,12 +71,29 @@ async function loadServiceCatalog(): Promise<ServiceCatalogItem[]> {
     }
   }
 
-  console.error("Using fallback service catalog (static). Configure Supabase keys/RLS for live data.");
-  return fallbackCatalog;
+  throw new Error("Service catalog unavailable. Check Supabase config/RLS.");
 }
 
 export default async function ServicesPage() {
-  const catalog = await loadServiceCatalog();
+  let catalog: ServiceCatalogItem[] = [];
+  try {
+    catalog = await loadServiceCatalog();
+  } catch (err) {
+    console.error(err);
+  }
+
+  if (!catalog.length) {
+    return (
+      <div className="grid gap-4 rounded-2xl border border-amber-200 bg-amber-50 p-6 text-amber-900">
+        <p className="text-lg font-semibold">Service catalog unavailable</p>
+        <p className="text-sm">
+          Unable to load services from Supabase. Confirm environment variables (`NEXT_PUBLIC_SUPABASE_URL`,
+          `NEXT_PUBLIC_SUPABASE_ANON_KEY`, `SUPABASE_SERVICE_ROLE_KEY`) and row-level security allow reads on
+          `service_catalog`.
+        </p>
+      </div>
+    );
+  }
 
   const grouped = catalog.reduce<Record<string, ServiceCatalogItem[]>>((acc, item) => {
     acc[item.category] = acc[item.category] ? [...acc[item.category], item] : [item];
