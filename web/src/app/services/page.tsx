@@ -1,5 +1,5 @@
-import { headers } from "next/headers";
 import { coreServices, serviceCatalog as fallbackCatalog, ServiceCatalogItem } from "@/lib/services";
+import { createClient, createServiceRoleClient } from "@/utils/supabase/server";
 
 type ServiceCatalogRow = {
   id: string;
@@ -24,20 +24,26 @@ const formatDuration = (minutes: number) => {
 };
 
 async function loadServiceCatalog(): Promise<ServiceCatalogItem[]> {
-  const hdrs = await headers();
-  const host = hdrs.get("host");
-  const proto = hdrs.get("x-forwarded-proto") ?? "https";
-  const origin = process.env.NEXT_PUBLIC_SITE_URL ?? (host ? `${proto}://${host}` : "http://localhost:3000");
-
-  const res = await fetch(`${origin}/api/catalog/services`, { cache: "no-store" });
-  const body = (await res.json().catch(() => null)) as { services?: ServiceCatalogRow[]; error?: string } | null;
-
-  if (!res.ok || !body?.services) {
-    console.error("Falling back to static service catalog:", body?.error ?? res.statusText);
+  // Prefer service role for public catalog; fall back to anon client if service role not set.
+  const admin = createServiceRoleClient();
+  const client = admin ?? (await createClient());
+  if (!client) {
+    console.error("Supabase not configured; using fallback catalog");
     return fallbackCatalog;
   }
 
-  const rows = body.services;
+  const { data, error } = await client
+    .from("service_catalog")
+    .select("id, name, category, base_minutes, price_cents, description")
+    .order("category", { ascending: true })
+    .order("name", { ascending: true });
+
+  if (error) {
+    console.error("Error loading service catalog; using fallback:", error.message);
+    return fallbackCatalog;
+  }
+
+  const rows = (data ?? []) as ServiceCatalogRow[];
   const mapped = rows.map<ServiceCatalogItem>((row) => ({
     id: row.id,
     name: row.name ?? row.id,
