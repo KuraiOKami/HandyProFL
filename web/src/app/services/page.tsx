@@ -27,33 +27,52 @@ async function loadServiceCatalog(): Promise<ServiceCatalogItem[]> {
   // Prefer service role for public catalog; fall back to anon client if service role not set.
   const admin = createServiceRoleClient();
   const client = admin ?? (await createClient());
-  if (!client) {
-    console.error("Supabase not configured; using fallback catalog");
-    return fallbackCatalog;
+  const mapRows = (rows: ServiceCatalogRow[]) =>
+    rows.map<ServiceCatalogItem>((row) => ({
+      id: row.id,
+      name: row.name ?? row.id,
+      category: row.category ?? "Uncategorized",
+      baseMinutes: row.base_minutes ?? 60,
+      priceCents: row.price_cents ?? 0,
+      description: row.description ?? undefined,
+    }));
+
+  // Attempt via server Supabase client (service role preferred)
+  if (client) {
+    const { data, error } = await client
+      .from("service_catalog")
+      .select("id, name, category, base_minutes, price_cents, description")
+      .order("category", { ascending: true })
+      .order("name", { ascending: true });
+
+    if (!error && data?.length) {
+      return mapRows(data as ServiceCatalogRow[]);
+    }
+    console.error("Service catalog via Supabase client failed; trying anon fetch", error?.message);
   }
 
-  const { data, error } = await client
-    .from("service_catalog")
-    .select("id, name, category, base_minutes, price_cents, description")
-    .order("category", { ascending: true })
-    .order("name", { ascending: true });
-
-  if (error) {
-    console.error("Error loading service catalog; using fallback:", error.message);
-    return fallbackCatalog;
+  // Fallback: fetch via REST API with anon key (works if RLS allows public read)
+  const supabaseUrl = process.env.NEXT_PUBLIC_SUPABASE_URL;
+  const anonKey = process.env.NEXT_PUBLIC_SUPABASE_ANON_KEY;
+  if (supabaseUrl && anonKey) {
+    try {
+      const res = await fetch(
+        `${supabaseUrl}/rest/v1/service_catalog?select=id,name,category,base_minutes,price_cents,description&order=category.asc&order=name.asc`,
+        { headers: { apikey: anonKey, Authorization: `Bearer ${anonKey}` } },
+      );
+      if (res.ok) {
+        const rows = (await res.json()) as ServiceCatalogRow[];
+        if (rows.length) return mapRows(rows);
+      } else {
+        console.error("Anon REST fetch for service catalog failed:", res.status, res.statusText);
+      }
+    } catch (err) {
+      console.error("Anon REST fetch for service catalog threw:", err);
+    }
   }
 
-  const rows = (data ?? []) as ServiceCatalogRow[];
-  const mapped = rows.map<ServiceCatalogItem>((row) => ({
-    id: row.id,
-    name: row.name ?? row.id,
-    category: row.category ?? "Uncategorized",
-    baseMinutes: row.base_minutes ?? 60,
-    priceCents: row.price_cents ?? 0,
-    description: row.description ?? undefined,
-  }));
-
-  return mapped.length ? mapped : fallbackCatalog;
+  console.error("Using fallback service catalog (static). Configure Supabase keys/RLS for live data.");
+  return fallbackCatalog;
 }
 
 export default async function ServicesPage() {
