@@ -148,9 +148,9 @@ export function useRequestWizard() {
   const [submitting, setSubmitting] = useState(false);
   const [requestId, setRequestId] = useState<string | null>(null);
 
-  const reset = useCallback(() => {
+  const reset = useCallback((nextService: ServiceId = 'tv_mount') => {
     setStep(1);
-    setService('tv_mount');
+    setService(nextService);
     setTvSize('55"');
     setWallType('Drywall');
     setHasMount('yes');
@@ -172,8 +172,8 @@ export function useRequestWizard() {
     setRequestId(null);
   }, []);
 
-  const resetItemFields = useCallback(() => {
-    setService('tv_mount');
+  const resetItemFields = useCallback((nextService: ServiceId = 'tv_mount') => {
+    setService(nextService);
     setTvSize('55"');
     setWallType('Drywall');
     setHasMount('yes');

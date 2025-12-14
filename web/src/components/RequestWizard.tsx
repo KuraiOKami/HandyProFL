@@ -1,329 +1,59 @@
 'use client';
 
-import { useCallback, useEffect, useImperativeHandle, useMemo, useState, forwardRef, FormEvent, ReactNode } from 'react';
-import { CardElement, Elements, useElements, useStripe } from '@stripe/react-stripe-js';
-import { loadStripe } from '@stripe/stripe-js';
-import { getSupabaseClient } from '@/lib/supabaseClient';
-import { useSupabaseSession } from '@/hooks/useSupabaseSession';
-import { serviceCatalog } from '@/lib/services';
-
-type Step = 1 | 2 | 3 | 4 | 5;
-
-export type ServiceId = 'tv_mount' | 'assembly' | 'electrical' | 'punch';
-
-type Slot = { time: string; available: boolean; startIso: string };
-type PaymentMethod = {
-  id: string;
-  brand?: string | null;
-  last4?: string | null;
-  exp_month?: number | null;
-  exp_year?: number | null;
-};
-
-type RequestItem = {
-  service: ServiceId;
-  tvSize: string;
-  wallType: string;
-  hasMount: 'yes' | 'no';
-  assemblyType: string;
-  assemblyOther: string;
-  extraItems: string[];
-  notes: string;
-  photoNames: string[];
-  catalogServiceId?: string | null;
-  catalogFollowup?: string | null;
-  hasPaint?: boolean;
-  paintSupplyTier?: 'budget' | 'standard' | 'premium';
-  paintColor?: string | null;
-};
-
-export const services: Record<
-  ServiceId,
-  {
-    name: string;
-    description: string;
-    icon: string;
-    options?: {
-      sizes?: string[];
-      wallTypes?: string[];
-      hasMount?: boolean;
-      assemblyTypes?: string[];
-    };
-  }
-> = {
-  tv_mount: {
-    name: 'TV Mounting',
-    description: 'Mount TV, hide cables, secure to studs/brick.',
-    icon: '📺',
-    options: {
-      sizes: ['43"', '55"', '65"', '75"+'],
-      wallTypes: ['Drywall', 'Brick', 'Concrete', 'Plaster'],
-      hasMount: true,
-    },
-  },
-  assembly: {
-    name: 'Furniture Assembly',
-    description: 'Beds, dressers, desks, patio sets, and more.',
-    icon: '🛠️',
-    options: {
-      assemblyTypes: ['Chair', 'Sofa', 'Table/Desk', 'Bed', 'Dresser', 'Patio set', 'Lamp', 'Other'],
-    },
-  },
-  electrical: {
-    name: 'Light/Fan Swap',
-    description: 'Replace fixtures, fans, dimmers, or switches.',
-    icon: '💡',
-  },
-  punch: {
-    name: 'General Handyman (Hourly)',
-    description: 'Mixed small jobs, billed hourly with materials as needed.',
-    icon: '📋',
-  },
-};
-
-const DISPLAY_TIME_ZONE = 'America/New_York';
-
-const defaultSlots: Slot[] = [];
-const publishableKey = process.env.NEXT_PUBLIC_STRIPE_PUBLISHABLE_KEY ?? '';
-const stripePromise = publishableKey ? loadStripe(publishableKey) : null;
-
-const cardElementOptions = {
-  hidePostalCode: true,
-  style: {
-    base: {
-      fontSize: '16px',
-      color: '#0f172a',
-      '::placeholder': {
-        color: '#94a3b8',
-      },
-    },
-    invalid: {
-      color: '#e11d48',
-    },
-  },
-} as const;
+import { forwardRef, useCallback, useImperativeHandle } from 'react';
+import { useRequestWizard, services, type ServiceId, type Step } from '@/hooks/useRequestWizard';
+import WizardProgress from './wizard/WizardProgress';
+import ServiceSelector from './wizard/ServiceSelector';
+import SchedulingPicker from './wizard/SchedulingPicker';
+import PaymentMethodSelector from './wizard/PaymentMethodSelector';
+import DetailsStep from './wizard/DetailsStep';
+import ReviewStep from './wizard/ReviewStep';
 
 export type RequestWizardHandle = {
   open: (service?: ServiceId) => void;
 };
 
-function nextDays(days = 14) {
-  const out: { label: string; value: string }[] = [];
-  const formatter = new Intl.DateTimeFormat('en-US', { weekday: 'short', month: 'short', day: 'numeric' });
-  for (let i = 0; i < days; i++) {
-    const d = new Date();
-    d.setDate(d.getDate() + i);
-    const value = d.toISOString().slice(0, 10);
-    out.push({ label: formatter.format(d), value });
-  }
-  return out;
-}
+export { services, type ServiceId } from '@/hooks/useRequestWizard';
+
+const DISPLAY_TIME_ZONE = 'America/New_York';
 
 const RequestWizard = forwardRef<RequestWizardHandle>((_props, ref) => {
-  const { session } = useSupabaseSession();
-  const supabase = getSupabaseClient();
+  const wizard = useRequestWizard();
 
-  const [open, setOpen] = useState(false);
-  const [step, setStep] = useState<Step>(1);
-  const [service, setService] = useState<ServiceId>('tv_mount');
-  const [tvSize, setTvSize] = useState('55"');
-  const [wallType, setWallType] = useState('Drywall');
-  const [hasMount, setHasMount] = useState<'yes' | 'no'>('yes');
-  const [assemblyType, setAssemblyType] = useState('Other');
-  const [assemblyOther, setAssemblyOther] = useState('');
-  const [notes, setNotes] = useState('');
-  const [extraItems, setExtraItems] = useState<string[]>([]);
-  const [newItem, setNewItem] = useState('');
-  const [photoNames, setPhotoNames] = useState<string[]>([]);
-  const [date, setDate] = useState('');
-  const [slot, setSlot] = useState<{ time: string; startIso: string } | null>(null);
-  const [status, setStatus] = useState<string | null>(null);
-  const [error, setError] = useState<string | null>(null);
-  const [submitting, setSubmitting] = useState(false);
-  const [items, setItems] = useState<RequestItem[]>([]);
-
-  const dates = useMemo(() => nextDays(14), []);
-  const [availableSlots, setAvailableSlots] = useState<Record<string, Slot[]>>({});
-  const [serviceDurations, setServiceDurations] = useState<Record<string, number>>({});
-  const [servicePrices, setServicePrices] = useState<Record<string, number>>({});
-  const selectedSlots = useMemo(() => availableSlots[date] ?? defaultSlots, [availableSlots, date]);
-  const [slotDurationMinutes, setSlotDurationMinutes] = useState<number | null>(null);
-  const [payMethod, setPayMethod] = useState<'new_card' | 'card_on_file'>('new_card');
-  const [paymentMethods, setPaymentMethods] = useState<PaymentMethod[]>([]);
-  const [walletLoading, setWalletLoading] = useState(false);
-  const [walletError, setWalletError] = useState<string | null>(null);
-  const [selectedPaymentMethodId, setSelectedPaymentMethodId] = useState<string | null>(null);
-  const [requestId, setRequestId] = useState<string | null>(null);
-  const [setupClientSecret, setSetupClientSecret] = useState<string | null>(null);
-  const [newPaymentMethodId, setNewPaymentMethodId] = useState<string | null>(null);
-  const [cardStatus, setCardStatus] = useState<string | null>(null);
-  const [cardError, setCardError] = useState<string | null>(null);
-  const [preparingCard, setPreparingCard] = useState(false);
-  const [catalogServiceId, setCatalogServiceId] = useState<string | null>(null);
-  const [serviceSearch, setServiceSearch] = useState('');
-  const [catalogFollowup, setCatalogFollowup] = useState<string>('');
-  const [hasPaint, setHasPaint] = useState(true);
-  const [paintSupplyTier, setPaintSupplyTier] = useState<'budget' | 'standard' | 'premium'>('standard');
-  const [paintColor, setPaintColor] = useState('');
-
-  const formatPrice = (cents: number) => `$${Math.max(0, cents / 100).toFixed(0)}`;
-  const isPaintingService = (id: string) => id.includes('paint');
-  const MOUNT_SURCHARGE_CENTS = 3000;
-  const PAINT_SURCHARGE = useMemo(
-    () => ({
-      budget: 3500,
-      standard: 6000,
-      premium: 9000,
-    } as const),
-    [],
-  );
-  const URGENCY_SURCHARGE = useMemo(
-    () => ({
-      sameDay: 5000,
-      nextDay: 3000,
-      twoDay: 1500,
-    }),
-    [],
-  );
-  const FALLBACK_PRICE_CENTS = useMemo<Record<string, number>>(
-    () => ({
-      punch: 12000, // default hourly handyman
-    }),
-    [],
-  );
-
-  const catalogMap = useMemo(
-    () =>
-      serviceCatalog.reduce<Record<string, (typeof serviceCatalog)[number]>>((acc, item) => {
-        acc[item.id] = item;
-        return acc;
-      }, {}),
-    [],
-  );
-
-  const deriveBaseService = useCallback(
-    (catalogId: string | null) => {
-      if (!catalogId) return 'punch' as ServiceId;
-      const catalogItem = catalogMap[catalogId];
-      if (catalogId.startsWith('tv_mount') || catalogItem?.category === 'TV & Media') return 'tv_mount';
-      if (catalogId.startsWith('assembly') || catalogItem?.category === 'Assembly') return 'assembly';
-      if (catalogItem?.category === 'Electrical & Lighting') return 'electrical';
-      return 'punch';
+  const openWizard = useCallback(
+    (svc?: ServiceId) => {
+      wizard.reset(svc ?? 'tv_mount');
+      wizard.setOpen(true);
     },
-    [catalogMap],
+    [wizard],
   );
 
-  const selectedCatalogItem = useMemo(() => (catalogServiceId ? catalogMap[catalogServiceId] : null), [catalogServiceId, catalogMap]);
+  useImperativeHandle(ref, () => ({ open: openWizard }), [openWizard]);
 
-  const filteredCatalog = useMemo(() => {
-    const term = serviceSearch.trim().toLowerCase();
-    if (!term) return serviceCatalog.slice(0, 12);
-    return serviceCatalog
-      .filter((item) => item.name.toLowerCase().includes(term) || item.category.toLowerCase().includes(term))
-      .slice(0, 12);
-  }, [serviceSearch]);
+  const handleLoadSlots = useCallback(
+    async (selectedDate: string) => {
+      if (!wizard.supabase || !selectedDate) return;
 
-  const reset = useCallback((svc?: ServiceId) => {
-    setStep(1);
-    setService(svc ?? 'tv_mount');
-    setTvSize('55"');
-    setWallType('Drywall');
-    setHasMount('yes');
-    setAssemblyType('Other');
-    setAssemblyOther('');
-    setNotes('');
-    setExtraItems([]);
-    setNewItem('');
-    setPhotoNames([]);
-    setDate('');
-    setSlot(null);
-    setStatus(null);
-    setError(null);
-    setItems([]);
-    setPayMethod('new_card');
-    setPaymentMethods([]);
-    setWalletError(null);
-    setSelectedPaymentMethodId(null);
-    setRequestId(null);
-    setSetupClientSecret(null);
-    setNewPaymentMethodId(null);
-    setCardStatus(null);
-    setCardError(null);
-    setPreparingCard(false);
-    setCatalogServiceId(null);
-    setServiceSearch('');
-    setCatalogFollowup('');
-    setHasPaint(true);
-    setPaintSupplyTier('standard');
-    setPaintColor('');
-  }, []);
+      const dayStartLocal = `${selectedDate}T00:00:00`;
+      const dayEndLocal = `${selectedDate}T23:59:59`;
 
-  const startRequest = useCallback((svc?: ServiceId) => {
-    reset(svc);
-    setOpen(true);
-  }, [reset]);
-
-  useImperativeHandle(
-    ref,
-    () => ({
-      open: (svc?: ServiceId) => startRequest(svc),
-    }),
-    [startRequest],
-  );
-
-  const chooseCatalogService = (id: string) => {
-    setCatalogServiceId(id);
-    setCatalogFollowup('');
-    setService(deriveBaseService(id));
-  };
-
-  // Load service catalog durations (server API so anon/mobile sees prices)
-  useEffect(() => {
-    const loadDurations = async () => {
-      const res = await fetch('/api/catalog/services');
-      const body = await res.json().catch(() => null);
-      if (!res.ok || !body?.services) {
-        console.error('Error loading service catalog', body?.error ?? 'unknown error');
-        return;
-      }
-      const map: Record<string, number> = {};
-      const priceMap: Record<string, number> = {};
-      (body.services as Array<{ id: string; base_minutes?: number | null; price_cents?: number | null }>).forEach(
-        (row) => {
-          map[row.id] = row.base_minutes ?? 60;
-          priceMap[row.id] = row.price_cents ?? 0;
-        },
-      );
-      setServiceDurations(map);
-      setServicePrices(priceMap);
-    };
-    loadDurations();
-  }, []);
-
-  // Fetch available slots for selected date
-  useEffect(() => {
-    const loadSlots = async () => {
-      if (!supabase || !date) return;
-
-      // Pull the full day in local time, then filter to 9 AM–7 PM Eastern.
-      const dayStartLocal = `${date}T00:00:00`;
-      const dayEndLocal = `${date}T23:59:59`;
-
-      const { data, error } = await supabase
+      const { data, error } = await wizard.supabase
         .from('available_slots')
         .select('slot_start, slot_end, is_booked')
         .gte('slot_start', dayStartLocal)
         .lte('slot_start', dayEndLocal)
         .order('slot_start', { ascending: true });
+
       if (error) {
         console.error('Error loading slots', error.message);
         return;
       }
+
       if (data && data.length) {
         const durationMs = new Date(data[0].slot_end).getTime() - new Date(data[0].slot_start).getTime();
-        setSlotDurationMinutes(Math.max(1, Math.round(durationMs / 60000)));
+        wizard.setSlotDurationMinutes(Math.max(1, Math.round(durationMs / 60000)));
       } else {
-        setSlotDurationMinutes(30);
+        wizard.setSlotDurationMinutes(30);
       }
 
       const normalized = (data ?? [])
@@ -347,1167 +77,149 @@ const RequestWizard = forwardRef<RequestWizardHandle>((_props, ref) => {
           });
           return { time, available: !row.is_booked, startIso: row.slot_start };
         })
-        .filter(Boolean) as Slot[];
+        .filter(Boolean) as { time: string; available: boolean; startIso: string }[];
 
-      setAvailableSlots((prev) => ({ ...prev, [date]: normalized.length ? normalized : [] }));
-    };
-    loadSlots();
-  }, [date, supabase]);
-
-  const buildCurrentItem = useCallback((): RequestItem => ({
-    service,
-    tvSize,
-    wallType,
-    hasMount,
-    assemblyType,
-    assemblyOther,
-    extraItems,
-    notes,
-    photoNames,
-    catalogServiceId,
-    catalogFollowup: catalogFollowup || null,
-    hasPaint,
-    paintSupplyTier,
-    paintColor: paintColor || null,
-  }), [
-    service,
-    tvSize,
-    wallType,
-    hasMount,
-    assemblyType,
-    assemblyOther,
-    extraItems,
-    notes,
-    photoNames,
-    catalogServiceId,
-    catalogFollowup,
-    hasPaint,
-    paintSupplyTier,
-    paintColor,
-  ]);
-
-  const getServiceId = (item: RequestItem) => {
-    if (item.catalogServiceId) return item.catalogServiceId;
-    if (item.service === 'tv_mount') {
-      if (item.tvSize === '75"+') return 'tv_mount_75';
-      if (item.tvSize === '65"') return 'tv_mount_65';
-      return 'tv_mount_55';
-    }
-    if (item.service === 'assembly') {
-      switch (item.assemblyType) {
-        case 'Table/Desk':
-          return 'assembly_table';
-        case 'Bed':
-          return 'assembly_bed';
-        case 'Dresser':
-          return 'assembly_dresser';
-        case 'Patio set':
-          return 'assembly_patio';
-        case 'Sofa':
-          return 'assembly_sofa';
-        case 'Chair':
-        case 'Lamp':
-          return 'assembly_chair';
-        case 'Other':
-        default:
-          return 'assembly_other';
-      }
-    }
-    if (item.service === 'electrical') return 'electrical';
-    return 'punch';
-  };
-
-  const getMinutesForItem = useCallback(
-    (item: RequestItem) => {
-      const id = getServiceId(item);
-
-      return (
-        serviceDurations[id] ??
-        (item.service === 'tv_mount'
-          ? 60
-          : item.service === 'assembly'
-            ? 60
-            : item.service === 'electrical'
-              ? 60
-              : 60)
-      );
+      wizard.setAvailableSlots((prev) => ({ ...prev, [selectedDate]: normalized.length ? normalized : [] }));
     },
-    [serviceDurations],
+    [wizard],
   );
 
-  const getPriceForItem = useCallback(
-    (item: RequestItem) => {
-      const id = getServiceId(item);
-      let base = servicePrices[id] ?? FALLBACK_PRICE_CENTS[id] ?? 0;
-      if (id === 'bike_assemble') {
-        const follow = (item.catalogFollowup ?? '').toLowerCase();
-        if (follow.includes('electric')) base += 5000;
-        else if (follow.includes('adult')) base += 2000;
-        else if (follow.includes('tricycle') || follow.includes('trike')) base += 2000;
-        else if (follow.includes('kids') || follow.includes('kid')) base += 0;
-      }
-      if (item.service === 'tv_mount' && item.hasMount === 'no') {
-        base += MOUNT_SURCHARGE_CENTS;
-      }
-      if (isPaintingService(id) && item.hasPaint === false) {
-        base += PAINT_SURCHARGE[item.paintSupplyTier ?? 'standard'];
-      }
-      return base;
-    },
-    [servicePrices, PAINT_SURCHARGE, FALLBACK_PRICE_CENTS],
-  );
+  const handleAddItem = useCallback(() => {
+    wizard.setItems((prev) => [...prev, wizard.buildCurrentItem()]);
+    wizard.resetItemFields();
+  }, [wizard]);
 
-  const daysUntilDate = (dateStr: string | null) => {
-    if (!dateStr) return null;
-    const today = new Date();
-    const target = new Date(dateStr);
-    const diffMs = target.setHours(0, 0, 0, 0) - today.setHours(0, 0, 0, 0);
-    return Math.floor(diffMs / (1000 * 60 * 60 * 24));
-  };
+  if (!wizard.open) return null;
 
-  const urgencySurchargeCents = useMemo(() => {
-    const days = daysUntilDate(date);
-    if (days == null) return 0;
-    if (days <= 0) return URGENCY_SURCHARGE.sameDay;
-    if (days === 1) return URGENCY_SURCHARGE.nextDay;
-    if (days === 2) return URGENCY_SURCHARGE.twoDay;
-    return 0;
-  }, [date, URGENCY_SURCHARGE]);
-
-  const getServiceLabel = useCallback(
-    (item: RequestItem) => {
-      if (item.catalogServiceId) {
-        return catalogMap[item.catalogServiceId]?.name ?? 'Service request';
-      }
-      return services[item.service].name;
-    },
-    [catalogMap],
-  );
-
-  const totalPriceCents = useMemo(() => {
-    const allItems = [...items, buildCurrentItem()];
-    return allItems.map(getPriceForItem).reduce((sum, n) => sum + n, 0);
-  }, [items, buildCurrentItem, getPriceForItem]);
-
-  const totalChargeCents = useMemo(() => totalPriceCents + urgencySurchargeCents, [totalPriceCents, urgencySurchargeCents]);
-
-  const totalMinutes = useMemo(() => {
-    const allItems = [...items, buildCurrentItem()];
-    return allItems.map(getMinutesForItem).reduce((sum, n) => sum + n, 0);
-  }, [items, buildCurrentItem, getMinutesForItem]);
-
-  const requiredMinutes = Math.max(30, totalMinutes || 30);
-
-  const requiredSlots = useMemo(() => {
-    if (!slotDurationMinutes) return 1;
-    return Math.max(1, Math.ceil(requiredMinutes / slotDurationMinutes));
-  }, [requiredMinutes, slotDurationMinutes]);
-
-  const hasPaymentMethods = paymentMethods.length > 0;
-
-  const loadPaymentMethods = useCallback(async () => {
-    if (!session) return;
-    setWalletLoading(true);
-    setWalletError(null);
-    const res = await fetch('/api/payments/wallet');
-    const body = await res.json().catch(() => ({}));
-    if (!res.ok) {
-      setWalletError(body.error || 'Unable to load saved cards.');
-      setPaymentMethods([]);
-      setWalletLoading(false);
-      return;
-    }
-    const methods = (body.payment_methods as PaymentMethod[] | undefined) ?? [];
-    setPaymentMethods(methods);
-    setSelectedPaymentMethodId(methods[0]?.id ?? null);
-    setWalletLoading(false);
-  }, [session]);
-
-  useEffect(() => {
-    if (step === 4 && session) {
-      loadPaymentMethods();
-    }
-  }, [step, session, loadPaymentMethods]);
-
-  const startCardSetup = useCallback(async () => {
-    if (!session) {
-      setCardError('Sign in to add a card.');
-      return;
-    }
-    if (!stripePromise) {
-      setCardError('Card payments are not configured.');
-      return;
-    }
-    setPreparingCard(true);
-    setCardError(null);
-    setCardStatus(null);
-    const res = await fetch('/api/payments/wallet', { method: 'POST' });
-    const body = await res.json().catch(() => ({}));
-    if (!res.ok || !body?.client_secret) {
-      setCardError(body.error || 'Could not start card setup.');
-      setPreparingCard(false);
-      return;
-    }
-    setSetupClientSecret(body.client_secret as string);
-    setPreparingCard(false);
-  }, [session]);
-
-  useEffect(() => {
-    if (open && step === 4 && payMethod === 'new_card' && !setupClientSecret && !preparingCard && !cardError) {
-      startCardSetup();
-    }
-  }, [open, step, payMethod, setupClientSecret, preparingCard, startCardSetup, cardError]);
-
-  const handleCardSaved = useCallback(
-    (paymentMethodId: string) => {
-      setNewPaymentMethodId(paymentMethodId);
-      setSelectedPaymentMethodId(paymentMethodId);
-      setCardStatus('Card saved for this booking.');
-      setCardError(null);
-      loadPaymentMethods();
-    },
-    [loadPaymentMethods],
-  );
-
-  const resetItemFields = () => {
-    setService('tv_mount');
-    setTvSize('55"');
-    setWallType('Drywall');
-    setHasMount('yes');
-    setAssemblyType('Chair');
-    setAssemblyOther('');
-    setNotes('');
-    setExtraItems([]);
-    setNewItem('');
-    setPhotoNames([]);
-    setStep(1);
-    setCatalogServiceId(null);
-    setCatalogFollowup('');
-  };
-
-  const onSubmit = async () => {
-    if (!session?.user || !supabase) {
-      setError('Sign in to submit a request.');
-      return;
-    }
-    if (!date || !slot) {
-      setError('Select a date and time slot.');
-      setStep(2);
-      return;
-    }
-    let paymentMethodToUse: string | null = null;
-    if (totalChargeCents <= 0) {
-      setError('Total must be greater than $0. Update the request items.');
-      return;
-    }
-    if (payMethod === 'card_on_file') {
-      if (!hasPaymentMethods) {
-        setError('Add a card in Settings > Wallet first.');
-        return;
-      }
-      if (!selectedPaymentMethodId) {
-        setError('Select a saved card to charge.');
-        return;
-      }
-      paymentMethodToUse = selectedPaymentMethodId;
-    }
-    if (payMethod === 'new_card') {
-      if (!stripePromise) {
-        setError('Card payments are not configured.');
-        return;
-      }
-      if (!newPaymentMethodId) {
-        setError('Add your card to continue.');
-        return;
-      }
-      paymentMethodToUse = newPaymentMethodId;
-    }
-
-    setSubmitting(true);
-    setError(null);
-    setStatus(null);
-
-    const itemsToSave: RequestItem[] = [...items, buildCurrentItem()];
-    const primaryItem = itemsToSave[0];
-    const primaryLabel = primaryItem ? getServiceLabel(primaryItem) : services[service].name;
-
-    const details = itemsToSave
-      .map((item, idx) => {
-        const label = getServiceLabel(item);
-        const parts = [
-          `Item ${idx + 1}: ${label}`,
-          item.catalogFollowup ? `Details: ${item.catalogFollowup}` : null,
-          item.service === 'tv_mount' ? `TV size: ${item.tvSize}` : null,
-          item.service === 'tv_mount' ? `Wall: ${item.wallType}` : null,
-          item.service === 'tv_mount' ? `Mount provided: ${item.hasMount === 'yes' ? 'Yes' : 'No'}` : null,
-          isPaintingService(getServiceId(item)) ? `Has paint: ${item.hasPaint === false ? 'No' : 'Yes'}` : null,
-          isPaintingService(getServiceId(item)) && item.hasPaint === false
-            ? `Paint tier: ${item.paintSupplyTier ?? 'standard'}${item.paintColor ? `, Color: ${item.paintColor}` : ''}`
-            : null,
-          item.service === 'assembly' ? `Assembly type: ${item.assemblyType}` : null,
-          item.service === 'assembly' && item.assemblyType === 'Other' && item.assemblyOther
-            ? `Other: ${item.assemblyOther}`
-            : null,
-          item.extraItems.length ? `Additional items: ${item.extraItems.join(', ')}` : null,
-          item.photoNames.length ? `Photos: ${item.photoNames.join(', ')}` : null,
-          item.notes ? `Notes: ${item.notes}` : null,
-        ]
-          .filter(Boolean)
-          .join(' | ');
-        return parts;
-      })
-      .join(' || ');
-    const detailsWithDuration = `${details}${details ? ' | ' : ''}Estimated minutes: ${requiredMinutes} | Subtotal: ${(totalPriceCents / 100).toLocaleString(undefined, { style: 'currency', currency: 'USD' })}${urgencySurchargeCents ? ` | Urgency surcharge: ${(urgencySurchargeCents / 100).toLocaleString(undefined, { style: 'currency', currency: 'USD' })}` : ''}`;
-
-    const selectedIdx = selectedSlots.findIndex((s) => s.startIso === slot?.startIso);
-    const chosenSlots = selectedIdx >= 0 ? selectedSlots.slice(selectedIdx, selectedIdx + requiredSlots) : [];
-    const slotStartIso = chosenSlots.map((s) => s.startIso).filter(Boolean);
-
-    if (!slotStartIso.length || slotStartIso.length < requiredSlots) {
-      setError('Selected time no longer available. Please pick another slot.');
-      setSubmitting(false);
-      return;
-    }
-
-    let newRequestId = requestId;
-    if (!newRequestId) {
-      const res = await fetch('/api/requests/book', {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({
-          user_id: session.user.id,
-          service_type: primaryLabel,
-          date,
-          slots: slotStartIso,
-          required_minutes: requiredMinutes,
-          details: detailsWithDuration || null,
-        }),
-      });
-
-      const body = await res.json().catch(() => ({}));
-      if (!res.ok) {
-        setError(body.error || 'Failed to submit request.');
-        setSubmitting(false);
-        return;
-      }
-      newRequestId = (body.request_id as string | undefined) ?? null;
-      setRequestId(newRequestId);
-    }
-
-    if (paymentMethodToUse) {
-      const chargeRes = await fetch('/api/payments/charge', {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({
-          amount_cents: totalChargeCents,
-          currency: 'usd',
-          payment_method_id: paymentMethodToUse,
-          request_id: newRequestId,
-        }),
-      });
-      const chargeBody = await chargeRes.json().catch(() => ({}));
-      const chargeStatus = (chargeBody.status as string | undefined) ?? null;
-      const paymentIntentId = (chargeBody.payment_intent_id as string | undefined) ?? null;
-      if (!chargeRes.ok || chargeStatus !== 'succeeded') {
-        setStatus('Request submitted, but your card was not charged.');
-        setError(
-          chargeBody.error ||
-            (chargeStatus
-              ? `Card charge incomplete (status: ${chargeStatus}). We will confirm payment manually.`
-              : 'Card charge failed. We will confirm payment manually.'),
-        );
-        setSubmitting(false);
-        setStep(5);
-        return;
-      }
-      setStatus(
-        `Request submitted and card charged. Payment intent: ${paymentIntentId ?? 'created'}. See you soon!`,
-      );
-    } else {
-      setStatus('Request submitted. We will confirm your slot shortly.');
-    }
-
-    setSubmitting(false);
-    setStep(5);
-  };
-
-  const InlineCardSetup = ({ clientSecret }: { clientSecret: string }) => {
-    const stripe = useStripe();
-    const elements = useElements();
-    const [saving, setSaving] = useState(false);
-
-    const submit = async (e: FormEvent<HTMLFormElement>) => {
-      e.preventDefault();
-      if (!stripe || !elements) {
-        setCardError('Stripe failed to load. Please refresh.');
-        return;
-      }
-      const card = elements.getElement(CardElement);
-      if (!card) {
-        setCardError('Card field is not ready yet.');
-        return;
-      }
-      setSaving(true);
-      const { error, setupIntent } = await stripe.confirmCardSetup(clientSecret, {
-        payment_method: { card },
-      });
-      if (error) {
-        setCardError(error.message ?? 'We could not save the card.');
-        setSaving(false);
-        return;
-      }
-      if (setupIntent?.status === 'succeeded' && setupIntent.payment_method) {
-        handleCardSaved(String(setupIntent.payment_method));
-        setCardStatus('Card added and ready to charge.');
-      } else {
-        setCardError('We could not confirm the card. Please try again.');
-      }
-      setSaving(false);
-    };
-
-    return (
-      <form onSubmit={submit} className="grid gap-3">
-        <div className="rounded-lg border border-slate-200 bg-slate-50 px-3 py-3">
-          <CardElement options={cardElementOptions} />
-        </div>
-        <div className="flex flex-wrap items-center gap-2">
-          <button
-            type="submit"
-            disabled={saving || preparingCard || !stripe || !elements}
-            className="rounded-lg bg-indigo-700 px-4 py-2 text-sm font-semibold text-white shadow-sm hover:bg-indigo-800 disabled:cursor-not-allowed disabled:bg-slate-300"
-          >
-            {saving ? 'Saving...' : 'Save card'}
-          </button>
-          <p className="text-xs text-slate-500">Cards are vaulted securely with Stripe.</p>
-        </div>
-      </form>
-    );
-  };
+  const itemsForReview = [...wizard.items, wizard.buildCurrentItem()];
 
   return (
-    <div className="grid gap-4">
-      <button
-        onClick={() => startRequest()}
-        className="inline-flex w-full items-center justify-center rounded-lg bg-indigo-700 px-5 py-3 text-sm font-semibold text-white shadow-md shadow-indigo-200 transition hover:bg-indigo-800 sm:w-auto"
-      >
-        Start a request
-      </button>
+    <div className="fixed inset-0 z-40 flex items-center justify-center bg-slate-900/40 p-0 sm:p-4">
+      <div className="relative flex h-full w-full max-w-4xl flex-col bg-white shadow-2xl ring-1 ring-slate-200 sm:h-auto sm:max-h-[90vh] sm:rounded-2xl">
+        <div className="flex flex-shrink-0 items-center justify-between border-b border-slate-200 px-4 py-3 sm:px-6 sm:py-4">
+          <div>
+            <p className="text-xs uppercase tracking-[0.2em] text-indigo-700">Request</p>
+            <h2 className="text-lg font-semibold text-slate-900 sm:text-xl">Book a handyman visit</h2>
+          </div>
+          <button
+            onClick={() => wizard.setOpen(false)}
+            className="rounded-full border border-slate-200 px-3 py-1 text-xs font-semibold text-slate-700 hover:border-indigo-600 hover:text-indigo-700 sm:text-sm"
+          >
+            Close
+          </button>
+        </div>
 
-      {open && (
-        <div className="fixed inset-0 z-40 overflow-y-auto bg-slate-900/50 backdrop-blur-sm">
-          <div className="mx-auto flex min-h-full w-full max-w-4xl flex-col p-3 sm:p-4">
-            <div className="relative flex flex-col overflow-hidden rounded-2xl bg-white shadow-2xl ring-1 ring-slate-200">
-              <div className="sticky top-0 z-10 flex flex-wrap items-center justify-between gap-3 border-b border-slate-200 bg-white/95 px-4 py-3 backdrop-blur sm:px-6 sm:py-4">
-                <div>
-                  <p className="text-xs uppercase tracking-[0.2em] text-indigo-700">Request</p>
-                  <h2 className="text-xl font-semibold text-slate-900">Book a handyman visit</h2>
-                </div>
+        <div className="grid flex-1 gap-4 overflow-y-auto px-4 py-4 sm:px-6 sm:py-5">
+          <WizardProgress currentStep={wizard.step} />
+
+          {wizard.step === 1 && (
+            <ServiceSelector
+              service={wizard.service}
+              onServiceChange={wizard.setService}
+              tvSize={wizard.tvSize}
+              onTvSizeChange={wizard.setTvSize}
+              wallType={wizard.wallType}
+              onWallTypeChange={wizard.setWallType}
+              hasMount={wizard.hasMount}
+              onHasMountChange={wizard.setHasMount}
+              assemblyType={wizard.assemblyType}
+              onAssemblyTypeChange={wizard.setAssemblyType}
+              assemblyOther={wizard.assemblyOther}
+              onAssemblyOtherChange={wizard.setAssemblyOther}
+            />
+          )}
+
+          {wizard.step === 2 && (
+            <SchedulingPicker
+              date={wizard.date}
+              onDateChange={wizard.setDate}
+              slot={wizard.slot}
+              onSlotChange={wizard.setSlot}
+              availableSlots={wizard.availableSlots}
+              onLoadSlots={handleLoadSlots}
+              slotDurationMinutes={wizard.slotDurationMinutes}
+              requiredSlots={wizard.requiredSlots}
+            />
+          )}
+
+          {wizard.step === 3 && (
+            <DetailsStep
+              notes={wizard.notes}
+              onNotesChange={wizard.setNotes}
+              photoNames={wizard.photoNames}
+              onPhotoNamesChange={wizard.setPhotoNames}
+              items={wizard.items}
+              currentItem={wizard.buildCurrentItem()}
+              onAddItem={handleAddItem}
+            />
+          )}
+
+          {wizard.step === 4 && (
+            <ReviewStep
+              items={itemsForReview}
+              getPriceForItem={wizard.getPriceForItem}
+              totalPriceCents={wizard.totalPriceCents}
+              requiredMinutes={wizard.requiredMinutes}
+              date={wizard.date}
+              slot={wizard.slot}
+            />
+          )}
+
+          {wizard.step === 5 && (
+            <div className="grid gap-3 rounded-xl border border-green-200 bg-green-50 p-4">
+              <p className="text-sm font-semibold text-green-800">All set</p>
+              <p className="text-sm text-green-900">{wizard.status}</p>
+              <button
+                onClick={() => wizard.setOpen(false)}
+                className="inline-flex w-fit items-center justify-center rounded-lg bg-indigo-700 px-4 py-2 text-sm font-semibold text-white shadow-sm hover:bg-indigo-800"
+              >
+                Close
+              </button>
+            </div>
+          )}
+
+          {wizard.error && <p className="rounded-md bg-rose-50 px-3 py-2 text-sm text-rose-800">{wizard.error}</p>}
+        </div>
+
+        {wizard.step < 5 && (
+          <div className="flex flex-shrink-0 flex-col items-start justify-between gap-3 border-t border-slate-200 bg-white px-4 py-3 sm:flex-row sm:items-center sm:px-6 sm:py-4">
+            <div className="text-xs text-slate-600 sm:text-sm">
+              {wizard.step === 1 && 'Choose the service and options.'}
+              {wizard.step === 2 && 'Select a date and a time slot.'}
+              {wizard.step === 3 && 'Add any extra context.'}
+              {wizard.step === 4 && 'Review subtotal and payment preference.'}
+            </div>
+            <div className="flex w-full gap-2 sm:w-auto">
+              <button
+                onClick={() =>
+                  wizard.step === 1 ? wizard.setOpen(false) : wizard.setStep((prev) => (prev - 1) as Step)
+                }
+                className="flex-1 rounded-lg border border-slate-300 px-4 py-2.5 text-sm font-semibold text-slate-800 hover:border-indigo-600 hover:text-indigo-700 sm:flex-initial"
+              >
+                {wizard.step === 1 ? 'Cancel' : 'Back'}
+              </button>
+              {wizard.step < 4 && (
                 <button
-                  onClick={() => {
-                    setOpen(false);
-                  }}
-                  className="rounded-full border border-slate-200 px-3 py-1 text-sm font-semibold text-slate-700 hover:border-indigo-600 hover:text-indigo-700"
+                  onClick={() => wizard.setStep((prev) => (prev + 1) as Step)}
+                  className="flex-1 rounded-lg bg-indigo-700 px-4 py-2.5 text-sm font-semibold text-white shadow-sm hover:bg-indigo-800 disabled:cursor-not-allowed disabled:bg-slate-300 sm:flex-initial"
+                  disabled={wizard.step === 2 && (!wizard.slot || Object.keys(wizard.availableSlots).length === 0)}
                 >
-                  Close
+                  Continue
                 </button>
-              </div>
-
-              <div className="grid gap-4 px-4 py-4 sm:px-6 sm:py-5">
-                <div className="-mx-2 overflow-x-auto px-2 pb-2">
-                  <Stepper step={step} />
-                </div>
-
-              {step === 1 && (
-                <div className="grid gap-5">
-                  <div className="flex flex-wrap items-center justify-between gap-3">
-                    <div>
-                      <p className="text-xs uppercase tracking-[0.2em] text-indigo-700">Choose a service</p>
-                      <p className="text-sm text-slate-600">Pick a quick category or search the full catalog.</p>
-                    </div>
-                    <div className="rounded-full border border-slate-200 bg-slate-50 px-4 py-2 text-xs font-semibold text-slate-700">
-                      Selected: {selectedCatalogItem?.name ?? services[service].name}
-                    </div>
-                  </div>
-
-                  <div className="grid gap-3 md:grid-cols-2">
-                    {Object.entries(services).map(([id, svc]) => (
-                      <button
-                        key={id}
-                        onClick={() => { setService(id as ServiceId); setCatalogServiceId(null); }}
-                        className={`flex h-full flex-col items-start gap-2 rounded-xl border px-4 py-4 text-left transition ${
-                          service === id && !catalogServiceId
-                            ? 'border-indigo-600 bg-indigo-50 shadow-sm'
-                            : 'border-slate-200 bg-white hover:border-indigo-200'
-                        }`}
-                      >
-                        <span className="text-2xl">{svc.icon}</span>
-                        <div className="grid gap-1">
-                          <span className="text-base font-semibold text-slate-900">{svc.name}</span>
-                          <span className="text-sm text-slate-600">{svc.description}</span>
-                        </div>
-                        <span className="text-xs font-semibold text-indigo-700">Quick pick</span>
-                      </button>
-                    ))}
-                  </div>
-
-                  {service === 'tv_mount' && (
-                    <div className="grid gap-3 rounded-xl border border-slate-200 bg-slate-50 p-4">
-                      <div className="flex flex-wrap gap-3">
-                        <FieldLabel>TV size</FieldLabel>
-                        <div className="flex flex-wrap gap-2">
-                          {services.tv_mount.options?.sizes?.map((size) => (
-                            <Chip key={size} selected={tvSize === size} onClick={() => setTvSize(size)}>
-                              {size}
-                            </Chip>
-                          ))}
-                        </div>
-                      </div>
-                      <div className="flex flex-wrap gap-3">
-                        <FieldLabel>Wall type</FieldLabel>
-                        <div className="flex flex-wrap gap-2">
-                          {services.tv_mount.options?.wallTypes?.map((type) => (
-                            <Chip key={type} selected={wallType === type} onClick={() => setWallType(type)}>
-                              {type}
-                            </Chip>
-                          ))}
-                        </div>
-                      </div>
-                      <div className="flex items-center gap-3">
-                        <FieldLabel>Mount provided?</FieldLabel>
-                        <div className="flex gap-2">
-                          <Chip selected={hasMount === 'yes'} onClick={() => setHasMount('yes')}>
-                            Yes
-                          </Chip>
-                          <Chip selected={hasMount === 'no'} onClick={() => setHasMount('no')}>
-                            No
-                          </Chip>
-                        </div>
-                      </div>
-                    </div>
-                  )}
-
-                  {service === 'assembly' && (
-                    <div className="grid gap-2 rounded-xl border border-slate-200 bg-slate-50 p-4">
-                      <p className="text-sm text-slate-700">Add notes on the next step and we will scope the assembly.</p>
-                    </div>
-                  )}
-
-                  <div className="grid gap-3 rounded-xl border border-slate-200 bg-white p-4 shadow-sm">
-                    <div className="flex flex-wrap items-center justify-between gap-3">
-                      <div>
-                        <p className="text-sm font-semibold text-slate-900">Browse full catalog</p>
-                        <p className="text-xs text-slate-600">Search any task and we will preload timing and pricing.</p>
-                      </div>
-                      <div className="relative w-full max-w-xs">
-                        <input
-                          type="search"
-                          value={serviceSearch}
-                          onChange={(e) => setServiceSearch(e.target.value)}
-                          placeholder="Search services..."
-                          className="w-full rounded-lg border border-slate-200 bg-slate-50 py-2 pl-9 pr-3 text-sm focus:border-indigo-500 focus:bg-white focus:outline-none focus:ring-1 focus:ring-indigo-500"
-                        />
-                        <span className="absolute left-3 top-1/2 -translate-y-1/2 text-slate-400">🔍</span>
-                      </div>
-                    </div>
-                    <div className="grid gap-2 sm:grid-cols-2 lg:grid-cols-3">
-                      {filteredCatalog.map((item) => {
-                        const isSelected = catalogServiceId === item.id;
-                        return (
-                          <button
-                            key={item.id}
-                            onClick={() => chooseCatalogService(item.id)}
-                            className={`flex h-full flex-col items-start gap-2 rounded-lg border px-3 py-3 text-left transition ${
-                              isSelected ? 'border-indigo-600 bg-indigo-50' : 'border-slate-200 hover:border-indigo-200'
-                            }`}
-                          >
-                            <span className="text-xs font-semibold uppercase tracking-[0.08em] text-slate-500">{item.category}</span>
-                            <span className="text-sm font-semibold text-slate-900">{item.name}</span>
-                            <span className="text-xs text-slate-600">
-                              {formatPrice(item.priceCents)} · {item.baseMinutes} min
-                            </span>
-                            {isSelected && <span className="text-[11px] font-semibold text-indigo-700">Selected</span>}
-                          </button>
-                        );
-                      })}
-                    </div>
-                    <p className="text-xs text-slate-500">Don&apos;t see it? Pick the closest and add notes on the next step.</p>
-                  </div>
-                  {selectedCatalogItem && (
-                    <div className="grid gap-3 rounded-xl border border-slate-200 bg-slate-50 p-4">
-                      <p className="text-sm font-semibold text-slate-900">A few details</p>
-                      {selectedCatalogItem.id === 'assembly_sofa' && (
-                        <div className="grid gap-2">
-                          <FieldLabel>Sofa size</FieldLabel>
-                          <div className="flex flex-wrap gap-2">
-                            {['Loveseat', '3-seat sofa', 'Sectional', 'Full set (sofa + loveseat + chair)'].map((opt) => (
-                              <Chip key={opt} selected={catalogFollowup === opt} onClick={() => setCatalogFollowup(opt)}>
-                                {opt}
-                              </Chip>
-                            ))}
-                          </div>
-                        </div>
-                      )}
-                      {selectedCatalogItem.id === 'tv_mount_premium' && (
-                        <div className="grid gap-2">
-                          <FieldLabel>Mount style</FieldLabel>
-                          <div className="flex flex-wrap gap-2">
-                            {['Standard wall', 'Above fireplace', 'Brick/stone', 'With wire concealment'].map((opt) => (
-                              <Chip key={opt} selected={catalogFollowup === opt} onClick={() => setCatalogFollowup(opt)}>
-                                {opt}
-                              </Chip>
-                            ))}
-                          </div>
-                        </div>
-                      )}
-                      {selectedCatalogItem.category === 'Electrical & Lighting' && (
-                        <div className="grid gap-2">
-                          <FieldLabel>Ceiling height</FieldLabel>
-                          <div className="flex flex-wrap gap-2">
-                            {['8 ft', '9-10 ft', 'Vaulted/over 10 ft'].map((opt) => (
-                              <Chip key={opt} selected={catalogFollowup === opt} onClick={() => setCatalogFollowup(opt)}>
-                                {opt}
-                              </Chip>
-                            ))}
-                          </div>
-                        </div>
-                      )}
-                      {(selectedCatalogItem.id === 'assembly_patio' || selectedCatalogItem.id === 'assembly_table') && (
-                        <div className="grid gap-2">
-                          <FieldLabel>Pieces included</FieldLabel>
-                          <div className="flex flex-wrap gap-2">
-                            {['1-2 pieces', '3-5 pieces', '6+ pieces'].map((opt) => (
-                              <Chip key={opt} selected={catalogFollowup === opt} onClick={() => setCatalogFollowup(opt)}>
-                                {opt}
-                              </Chip>
-                            ))}
-                          </div>
-                        </div>
-                      )}
-                      {selectedCatalogItem.id === 'pressure_wash_house' && (
-                        <div className="grid gap-2">
-                          <FieldLabel>Home size</FieldLabel>
-                          <div className="flex flex-wrap gap-2">
-                            {['Single story', 'Two story', 'Townhome', 'Other'].map((opt) => (
-                              <Chip key={opt} selected={catalogFollowup === opt} onClick={() => setCatalogFollowup(opt)}>
-                                {opt}
-                              </Chip>
-                            ))}
-                          </div>
-                        </div>
-                      )}
-                      {selectedCatalogItem.id === 'bike_assemble' && (
-                        <div className="grid gap-2">
-                          <FieldLabel>Bike type</FieldLabel>
-                          <div className="flex flex-wrap gap-2">
-                            {['Kids bike', 'Adult bike', 'Electric bike', 'Tricycle', 'Other'].map((opt) => (
-                              <Chip key={opt} selected={catalogFollowup === opt} onClick={() => setCatalogFollowup(opt)}>
-                                {opt}
-                              </Chip>
-                            ))}
-                          </div>
-                          <p className="text-xs text-slate-500">
-                            Electric and tricycle builds add a bit more time and cost.
-                          </p>
-                        </div>
-                      )}
-                      {isPaintingService(selectedCatalogItem.id) && (
-                        <div className="grid gap-3">
-                          <div className="flex flex-wrap gap-3">
-                            <FieldLabel>Do you have paint?</FieldLabel>
-                            <div className="flex flex-wrap gap-2">
-                              <Chip selected={hasPaint === true} onClick={() => setHasPaint(true)}>Yes</Chip>
-                              <Chip selected={hasPaint === false} onClick={() => setHasPaint(false)}>No</Chip>
-                            </div>
-                          </div>
-                          {hasPaint === false && (
-                            <div className="grid gap-2 rounded-lg border border-slate-200 bg-white p-3">
-                              <div className="grid gap-2">
-                                <FieldLabel>Paint quality</FieldLabel>
-                                <div className="flex flex-wrap gap-2">
-                                  {[
-                                    { id: 'budget', label: 'Budget (builder grade)' },
-                                    { id: 'standard', label: 'Standard' },
-                                    { id: 'premium', label: 'Premium' },
-                                  ].map((opt) => (
-                                    <Chip
-                                      key={opt.id}
-                                      selected={paintSupplyTier === opt.id}
-                                      onClick={() => setPaintSupplyTier(opt.id as typeof paintSupplyTier)}
-                                    >
-                                      {opt.label}
-                                    </Chip>
-                                  ))}
-                                </div>
-                              </div>
-                              <label className="grid gap-1 text-sm text-slate-700">
-                                Preferred color (optional)
-                                <input
-                                  type="text"
-                                  value={paintColor}
-                                  onChange={(e) => setPaintColor(e.target.value)}
-                                  className="w-full rounded-lg border border-slate-300 px-3 py-2 text-slate-900 shadow-inner shadow-slate-100 focus:border-indigo-600 focus:outline-none focus:ring-2 focus:ring-indigo-100"
-                                  placeholder="e.g., Snowbound, Agreeable Gray"
-                                />
-                              </label>
-                              <p className="text-xs text-slate-500">
-                                We&apos;ll source paint at your selected tier and add the material cost to your booking.
-                              </p>
-                            </div>
-                          )}
-                        </div>
-                      )}
-                      {!catalogFollowup && (
-                        <p className="text-xs text-slate-500">Select one so we can bring the right hardware and time.</p>
-                      )}
-                    </div>
-                  )}
-                </div>
               )}
-
-              {step === 2 && (
-                <div className="grid gap-4 md:grid-cols-[1.5fr_1fr]">
-                  <div className="grid gap-3 rounded-xl border border-slate-200 p-4">
-                    <p className="text-sm font-semibold text-slate-900">Pick a date</p>
-                    <div className="grid grid-cols-3 gap-2 sm:grid-cols-4">
-                      {dates.map((d) => (
-                        <button
-                          key={d.value}
-                          onClick={() => setDate(d.value)}
-                          className={`rounded-lg border px-3 py-2 text-left text-sm ${
-                            date === d.value
-                              ? 'border-indigo-600 bg-indigo-50 text-indigo-800'
-                              : 'border-slate-200 hover:border-indigo-200'
-                          }`}
-                        >
-                          {d.label}
-                        </button>
-                      ))}
-                    </div>
-                  </div>
-                  <div className="grid gap-3 rounded-xl border border-slate-200 p-4">
-                    <p className="text-sm font-semibold text-slate-900">Pick a time</p>
-                    {date ? (
-                      selectedSlots.length ? (
-                        <div className="grid grid-cols-2 gap-2">
-                          {selectedSlots.map((s, idx) => {
-                            const fits =
-                              slotDurationMinutes != null &&
-                              selectedSlots
-                                .slice(idx, idx + requiredSlots)
-                                .length === requiredSlots &&
-                              selectedSlots.slice(idx, idx + requiredSlots).every((slotObj) => slotObj.available);
-                            const disabled = !fits;
-                            return (
-                              <button
-                                key={s.startIso}
-                                onClick={() => !disabled && setSlot({ time: s.time, startIso: s.startIso })}
-                                disabled={disabled}
-                                className={`rounded-lg border px-3 py-2 text-sm ${
-                                  slot?.startIso === s.startIso
-                                    ? 'border-indigo-600 bg-indigo-50 text-indigo-800'
-                                    : 'border-slate-200 hover:border-indigo-200'
-                                } ${
-                                  disabled
-                                    ? 'cursor-not-allowed bg-slate-100 text-slate-400 opacity-70 line-through'
-                                    : ''
-                                }`}
-                              >
-                                {s.time}
-                                {fits ? '' : ' (unavailable)'}
-                              </button>
-                            );
-                          })}
-                        </div>
-                      ) : (
-                        <p className="text-sm text-slate-600">No slots available for this date.</p>
-                      )
-                    ) : (
-                      <p className="text-sm text-slate-600">Select a date to see available times.</p>
-                    )}
-                  </div>
-                </div>
-              )}
-
-              {step === 3 && (
-                <div className="grid gap-3 rounded-xl border border-slate-200 p-4">
-                  <p className="text-sm font-semibold text-slate-900">Details</p>
-                  <div className="grid gap-2 rounded-lg border border-slate-200 bg-slate-50 p-3">
-                    <div className="flex items-center justify-between">
-                      <p className="text-sm font-semibold text-slate-900">Extra items</p>
-                    </div>
-                    <div className="flex flex-wrap gap-2">
-                      {extraItems.map((item, idx) => (
-                        <span
-                          key={idx}
-                          className="flex items-center gap-2 rounded-full border border-slate-200 bg-white px-3 py-1 text-xs font-semibold text-slate-800"
-                        >
-                          {item}
-                          <button
-                            type="button"
-                            onClick={() => setExtraItems((prev) => prev.filter((_, i) => i !== idx))}
-                            className="text-slate-500 hover:text-rose-600"
-                          >
-                            ✕
-                          </button>
-                        </span>
-                      ))}
-                      {!extraItems.length && <span className="text-xs text-slate-500">No extra items added yet.</span>}
-                    </div>
-                    <div className="flex flex-wrap items-center gap-2 pt-2">
-                      <input
-                        type="text"
-                        value={newItem}
-                        onChange={(e) => setNewItem(e.target.value)}
-                        className="w-full rounded-lg border border-slate-300 px-3 py-2 text-slate-900 shadow-inner shadow-slate-100 focus:border-indigo-600 focus:outline-none focus:ring-2 focus:ring-indigo-100 sm:w-auto sm:min-w-[240px] sm:flex-1"
-                        placeholder="Add another item (e.g., side table, lamp)"
-                      />
-                      <button
-                        onClick={() => {
-                          if (!newItem.trim()) return;
-                          setExtraItems((prev) => [...prev, newItem.trim()]);
-                          setNewItem('');
-                        }}
-                        className="rounded-lg bg-indigo-700 px-3 py-2 text-xs font-semibold text-white shadow-sm hover:bg-indigo-800"
-                        type="button"
-                      >
-                        Add item
-                      </button>
-                    </div>
-                  </div>
-                  <textarea
-                    value={notes}
-                    onChange={(e) => setNotes(e.target.value)}
-                    rows={4}
-                    className="w-full rounded-lg border border-slate-300 px-3 py-2 text-slate-900 shadow-inner shadow-slate-100 focus:border-indigo-600 focus:outline-none focus:ring-2 focus:ring-indigo-100"
-                    placeholder="Access details, parking, special requests, photos link, etc."
-                  />
-                  <div className="grid gap-2">
-                    <label className="text-sm font-semibold text-slate-900">Add photos (optional)</label>
-                    <input
-                      type="file"
-                      accept="image/*"
-                      multiple
-                      onChange={(e) => {
-                        const files = Array.from(e.target.files ?? []);
-                        setPhotoNames(files.map((f) => f.name));
-                      }}
-                      className="text-sm text-slate-700 file:mr-3 file:rounded-md file:border file:border-slate-300 file:bg-white file:px-3 file:py-1.5 file:text-sm file:font-semibold file:text-slate-800 hover:file:border-indigo-600 hover:file:text-indigo-700"
-                    />
-                    {photoNames.length > 0 && (
-                      <p className="text-xs text-slate-600">Attached: {photoNames.join(', ')}</p>
-                    )}
-                    <p className="text-xs text-slate-500">
-                      Upload support is coming soon—files are noted with your request for now.
-                    </p>
-                  </div>
-                  <div className="grid gap-2">
-                    <div className="flex items-center justify-between">
-                      <p className="text-sm font-semibold text-slate-900">Items in this request</p>
-                      <span className="text-xs font-semibold text-indigo-700">
-                        {items.length + 1} {items.length + 1 === 1 ? 'item' : 'items'}
-                      </span>
-                    </div>
-                    <div className="grid gap-2">
-                      {[...items, buildCurrentItem()].map((item, idx) => (
-                        <div key={idx} className="rounded-lg border border-slate-200 bg-white p-3 text-sm text-slate-800">
-                          <div className="flex items-center gap-2">
-                            <span className="rounded-full bg-indigo-50 px-2 py-0.5 text-[11px] font-semibold text-indigo-700">
-                              Item {idx + 1}
-                            </span>
-                            <span className="font-semibold">{services[item.service].name}</span>
-                          </div>
-                          <p className="text-xs text-slate-600">
-                            {item.service === 'tv_mount'
-                              ? `TV ${item.tvSize} | ${item.wallType} | Mount: ${item.hasMount === 'yes' ? 'Yes' : 'No'}`
-                              : item.service === 'assembly'
-                                ? `Assembly: ${item.assemblyType}${
-                                    item.assemblyType === 'Other' && item.assemblyOther ? ` (${item.assemblyOther})` : ''
-                                  }`
-                                : 'Standard service'}
-                          </p>
-                          {item.extraItems.length > 0 && (
-                            <p className="text-xs text-slate-500">Extras: {item.extraItems.join(', ')}</p>
-                          )}
-                          {item.photoNames.length > 0 && (
-                            <p className="text-xs text-slate-500">Photos: {item.photoNames.join(', ')}</p>
-                          )}
-                          {item.notes && <p className="text-xs text-slate-500">Notes: {item.notes}</p>}
-                        </div>
-                      ))}
-                    </div>
-                    <div className="flex flex-wrap gap-2">
-                      <button
-                        type="button"
-                        onClick={() => {
-                          setItems((prev) => [...prev, buildCurrentItem()]);
-                          resetItemFields();
-                        }}
-                        className="rounded-lg border border-slate-300 px-3 py-2 text-sm font-semibold text-slate-800 hover:border-indigo-600 hover:text-indigo-700"
-                      >
-                        Add this item & start another
-                      </button>
-                    </div>
-                  </div>
-                  <p className="text-xs text-slate-500">
-                    We’ll follow up by email/SMS to confirm and gather any photos if needed.
-                  </p>
-                </div>
-              )}
-
-              {step === 4 && (
-                  <div className="grid gap-3 rounded-xl border border-slate-200 p-4">
-                    <p className="text-sm font-semibold text-slate-900">Review & payment</p>
-                    <div className="grid gap-2">
-                      <div className="flex items-center justify-between">
-                        <p className="text-sm font-semibold text-slate-900">Items</p>
-                      <span className="text-xs font-semibold text-indigo-700">
-                        {items.length + 1} {items.length + 1 === 1 ? 'item' : 'items'}
-                      </span>
-                    </div>
-                    <div className="grid gap-2">
-                      {[...items, buildCurrentItem()].map((item, idx) => (
-                        <div key={idx} className="rounded-lg border border-slate-200 bg-white p-3 text-sm text-slate-800">
-                          <div className="flex items-center justify-between">
-                            <div className="flex items-center gap-2">
-                              <span className="rounded-full bg-indigo-50 px-2 py-0.5 text-[11px] font-semibold text-indigo-700">
-                                Item {idx + 1}
-                              </span>
-                              <span className="font-semibold">{getServiceLabel(item)}</span>
-                            </div>
-                            <span className="text-xs font-semibold text-slate-700">
-                              {(getPriceForItem(item) / 100).toLocaleString(undefined, { style: 'currency', currency: 'USD' })}
-                            </span>
-                          </div>
-                          <p className="text-xs text-slate-600">
-                            {item.service === 'tv_mount'
-                              ? `TV ${item.tvSize} | ${item.wallType} | Mount: ${item.hasMount === 'yes' ? 'Yes' : 'No'}`
-                              : item.service === 'assembly'
-                                ? `Assembly: ${item.assemblyType}${
-                                    item.assemblyType === 'Other' && item.assemblyOther ? ` (${item.assemblyOther})` : ''
-                                  }`
-                                : 'Standard service'}
-                          </p>
-                          {item.extraItems.length > 0 && (
-                            <p className="text-xs text-slate-500">Extras: {item.extraItems.join(', ')}</p>
-                          )}
-                          {item.notes && <p className="text-xs text-slate-500">Notes: {item.notes}</p>}
-                        </div>
-                      ))}
-                    </div>
-                  </div>
-                  <div className="grid gap-2 rounded-lg border border-slate-200 bg-slate-50 p-3 text-sm">
-                    <div className="flex items-center justify-between">
-                      <span className="text-slate-700">Subtotal</span>
-                      <span className="font-semibold text-slate-900">
-                        {(totalPriceCents / 100).toLocaleString(undefined, { style: 'currency', currency: 'USD' })}
-                      </span>
-                    </div>
-                    {urgencySurchargeCents > 0 && (
-                      <div className="flex items-center justify-between text-amber-700">
-                        <span className="text-sm font-semibold">Urgency (within 3 days)</span>
-                        <span className="font-semibold">
-                          {(urgencySurchargeCents / 100).toLocaleString(undefined, { style: 'currency', currency: 'USD' })}
-                        </span>
-                      </div>
-                    )}
-                    <div className="flex items-center justify-between border-t border-slate-200 pt-2">
-                      <span className="text-slate-800 font-semibold">Total</span>
-                      <span className="text-base font-bold text-slate-900">
-                        {(totalChargeCents / 100).toLocaleString(undefined, { style: 'currency', currency: 'USD' })}
-                      </span>
-                    </div>
-                    <div className="flex items-center justify-between">
-                      <span className="text-slate-700">Estimated time</span>
-                      <span className="font-semibold text-slate-900">{requiredMinutes} min</span>
-                    </div>
-                    <div className="flex items-center justify-between">
-                      <span className="text-slate-700">Selected slot</span>
-                      <span className="font-semibold text-slate-900">
-                        {date && slot
-                          ? `${new Date(date).toLocaleDateString('en-US', {
-                              month: 'long',
-                              day: 'numeric',
-                              year: 'numeric',
-                            })} @ ${slot.time}`
-                          : 'Not selected'}
-                      </span>
-                    </div>
-                  </div>
-                  <div className="grid gap-3 rounded-lg border border-slate-200 bg-slate-50 p-3">
-                    <div className="flex items-center justify-between">
-                      <p className="text-sm font-semibold text-slate-900">Payment</p>
-                      <button
-                        type="button"
-                        onClick={loadPaymentMethods}
-                        disabled={walletLoading}
-                        className="text-xs font-semibold text-indigo-700 hover:text-indigo-800 disabled:cursor-not-allowed disabled:opacity-60"
-                      >
-                        {walletLoading ? 'Refreshing…' : 'Refresh cards'}
-                      </button>
-                    </div>
-
-                    <div className="grid gap-2 rounded-lg border border-slate-200 bg-white p-3">
-                      <label className="flex items-center gap-2 text-sm font-semibold text-slate-900">
-                        <input
-                          type="radio"
-                          name="pay_method"
-                          checked={payMethod === 'new_card'}
-                          onChange={() => setPayMethod('new_card')}
-                          className="h-4 w-4 text-indigo-700 focus:ring-indigo-600"
-                        />
-                        Use a new card
-                      </label>
-                    {payMethod === 'new_card' && (
-                      <div className="grid gap-2 rounded-lg border border-slate-200 bg-slate-50 p-3">
-                        {!stripePromise && (
-                          <p className="text-sm text-rose-700">
-                            Card payments are not configured. Add a Stripe publishable key.
-                          </p>
-                        )}
-                        <div className="flex items-center gap-2 text-slate-600">
-                          <span className="text-xs font-semibold uppercase tracking-[0.12em] text-slate-500">We accept</span>
-                          <span className="flex items-center gap-1 rounded-full border border-slate-200 bg-white px-2 py-1 text-[10px] font-semibold text-slate-700">
-                            <span className="rounded bg-slate-900 px-1.5 py-0.5 text-white">VISA</span>
-                            <span className="rounded bg-indigo-600 px-1.5 py-0.5 text-white">MC</span>
-                            <span className="rounded bg-orange-500 px-1.5 py-0.5 text-white">DISC</span>
-                            <span className="rounded bg-slate-200 px-1.5 py-0.5 text-slate-800">AMEX</span>
-                          </span>
-                        </div>
-                        {stripePromise && setupClientSecret && (
-                          <Elements stripe={stripePromise} options={{ clientSecret: setupClientSecret }}>
-                            <InlineCardSetup clientSecret={setupClientSecret} />
-                          </Elements>
-                        )}
-                          {stripePromise && !setupClientSecret && (
-                            <p className="text-sm text-slate-600">
-                              {preparingCard ? 'Preparing card form…' : 'Starting secure card entry...'}
-                            </p>
-                          )}
-                          {cardStatus && <p className="text-xs font-semibold text-emerald-700">{cardStatus}</p>}
-                          {cardError && (
-                            <p className="rounded-md bg-rose-50 px-3 py-2 text-xs text-rose-800">{cardError}</p>
-                          )}
-                        </div>
-                      )}
-                    </div>
-
-                    <div className="grid gap-2 rounded-lg border border-slate-200 bg-white p-3">
-                      <label
-                        className={`flex items-center gap-2 text-sm font-semibold text-slate-900 ${!hasPaymentMethods ? 'opacity-60' : ''}`}
-                      >
-                        <input
-                          type="radio"
-                          name="pay_method"
-                          checked={payMethod === 'card_on_file'}
-                          onChange={() => setPayMethod('card_on_file')}
-                          disabled={!hasPaymentMethods}
-                          className="h-4 w-4 text-indigo-700 focus:ring-indigo-600"
-                        />
-                        Use a saved card
-                      </label>
-                      {walletError && (
-                        <p className="rounded-md bg-rose-50 px-3 py-2 text-xs text-rose-800">{walletError}</p>
-                      )}
-                      {payMethod === 'card_on_file' && (
-                        <div className="grid gap-2 text-sm">
-                          {hasPaymentMethods ? (
-                            paymentMethods.map((pm) => (
-                              <label
-                                key={pm.id}
-                                className={`flex items-center justify-between gap-3 rounded-lg border px-3 py-2 ${
-                                  selectedPaymentMethodId === pm.id
-                                    ? 'border-indigo-600 bg-indigo-50'
-                                    : 'border-slate-200'
-                                }`}
-                              >
-                                <div className="flex flex-col">
-                                  <span className="text-sm font-semibold text-slate-900">
-                                    {pm.brand ? pm.brand.toUpperCase() : 'Card'} •••• {pm.last4 ?? '••••'}
-                                  </span>
-                                  <span className="text-xs text-slate-600">
-                                    Expires {pm.exp_month ?? '??'}/{pm.exp_year ?? '??'}
-                                  </span>
-                                </div>
-                                <input
-                                  type="radio"
-                                  name="selected_payment_method"
-                                  checked={selectedPaymentMethodId === pm.id}
-                                  onChange={() => setSelectedPaymentMethodId(pm.id)}
-                                  className="h-4 w-4 text-indigo-700 focus:ring-indigo-600"
-                                />
-                              </label>
-                            ))
-                          ) : (
-                            <p className="text-sm text-slate-700">
-                              No saved cards. Add one in <a href="/settings?tab=wallet" className="text-indigo-700 underline">Settings → Wallet</a>.
-                            </p>
-                          )}
-                          <p className="text-xs text-slate-500">
-                            We charge your card now to lock in the booking. Payment is processed securely via Stripe.
-                          </p>
-                        </div>
-                      )}
-                    </div>
-                  </div>
-                </div>
-              )}
-
-              {step === 5 && (
-                <div className="grid gap-3 rounded-xl border border-green-200 bg-green-50 p-4">
-                  <p className="text-sm font-semibold text-green-800">All set</p>
-                  <p className="text-sm text-green-900">{status}</p>
-                  <button
-                    onClick={() => setOpen(false)}
-                    className="inline-flex w-fit items-center justify-center rounded-lg bg-indigo-700 px-4 py-2 text-sm font-semibold text-white shadow-sm hover:bg-indigo-800"
-                  >
-                    Close
-                  </button>
-                </div>
-              )}
-
-              {error && <p className="rounded-md bg-rose-50 px-3 py-2 text-sm text-rose-800">{error}</p>}
-
-              {step < 5 && (
-                <div className="sticky bottom-0 left-0 right-0 -mx-4 flex flex-col gap-3 border-t border-slate-200 bg-white/95 px-4 py-3 backdrop-blur sm:static sm:m-0 sm:border-0 sm:bg-transparent sm:p-0">
-                  <div className="text-sm text-slate-600">
-                    {step === 1 && 'Choose the service and options.'}
-                    {step === 2 && 'Select a date and a time slot.'}
-                    {step === 3 && 'Add any extra context.'}
-                    {step === 4 && 'Review subtotal and payment.'}
-                  </div>
-                  <div className="flex flex-wrap gap-2">
-                    <button
-                      onClick={() => (step === 1 ? setOpen(false) : setStep((prev) => (prev - 1) as Step))}
-                      className="w-full rounded-lg border border-slate-300 px-4 py-2 text-sm font-semibold text-slate-800 hover:border-indigo-600 hover:text-indigo-700 sm:w-auto"
-                    >
-                      {step === 1 ? 'Cancel' : 'Back'}
-                    </button>
-                    {step < 4 && (
-                      <button
-                        onClick={() => setStep((prev) => (prev + 1) as Step)}
-                        className="w-full rounded-lg bg-indigo-700 px-4 py-2 text-sm font-semibold text-white shadow-sm hover:bg-indigo-800 disabled:cursor-not-allowed disabled:bg-slate-300 sm:w-auto"
-                        disabled={step === 2 && (!slot || selectedSlots.length === 0)}
-                      >
-                        Continue
-                      </button>
-                    )}
-                    {step === 4 && (
-                      <button
-                        onClick={onSubmit}
-                        disabled={submitting}
-                        className="w-full rounded-lg bg-indigo-700 px-4 py-2 text-sm font-semibold text-white shadow-sm hover:bg-indigo-800 disabled:cursor-not-allowed disabled:bg-slate-300 sm:w-auto"
-                      >
-                        {submitting ? 'Submitting...' : 'Submit request'}
-                      </button>
-                    )}
-                  </div>
-                </div>
+              {wizard.step === 4 && (
+                <button
+                  onClick={wizard.onSubmit}
+                  disabled={wizard.submitting}
+                  className="flex-1 rounded-lg bg-indigo-700 px-4 py-2.5 text-sm font-semibold text-white shadow-sm hover:bg-indigo-800 disabled:cursor-not-allowed disabled:bg-slate-300 sm:flex-initial"
+                >
+                  {wizard.submitting ? 'Submitting...' : 'Submit request'}
+                </button>
               )}
             </div>
           </div>
-        </div>
+        )}
       </div>
-      )}
     </div>
   );
 });
@@ -1515,59 +227,3 @@ const RequestWizard = forwardRef<RequestWizardHandle>((_props, ref) => {
 RequestWizard.displayName = 'RequestWizard';
 
 export default RequestWizard;
-
-function Stepper({ step }: { step: Step }) {
-  const steps = [
-    { id: 1, label: 'Service' },
-    { id: 2, label: 'Schedule' },
-    { id: 3, label: 'Details' },
-    { id: 4, label: 'Review' },
-    { id: 5, label: 'Done' },
-  ];
-  return (
-    <div className="grid grid-cols-5 gap-2 text-xs font-semibold uppercase tracking-wide text-slate-600">
-      {steps.map((s) => (
-        <div
-          key={s.id}
-          className={`flex items-center gap-2 rounded-lg border px-3 py-2 ${
-            step === s.id ? 'border-indigo-600 bg-indigo-50 text-indigo-800' : 'border-slate-200 bg-slate-50'
-          }`}
-        >
-          <span
-            className={`flex h-6 w-6 items-center justify-center rounded-full text-[11px] font-bold ${
-              step >= s.id ? 'bg-indigo-700 text-white' : 'bg-slate-200 text-slate-700'
-            }`}
-          >
-            {s.id}
-          </span>
-          <span className="hidden sm:inline">{s.label}</span>
-        </div>
-      ))}
-    </div>
-  );
-}
-
-function Chip({
-  children,
-  selected,
-  onClick,
-}: {
-  children: ReactNode;
-  selected: boolean;
-  onClick: () => void;
-}) {
-  return (
-    <button
-      onClick={onClick}
-      className={`rounded-full border px-3 py-1 text-xs font-semibold transition ${
-        selected ? 'border-indigo-600 bg-indigo-50 text-indigo-800' : 'border-slate-200 hover:border-indigo-200'
-      }`}
-    >
-      {children}
-    </button>
-  );
-}
-
-function FieldLabel({ children }: { children: ReactNode }) {
-  return <span className="text-xs font-semibold uppercase tracking-[0.12em] text-slate-700">{children}</span>;
-}
