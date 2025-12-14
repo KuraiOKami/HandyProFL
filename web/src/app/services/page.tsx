@@ -113,35 +113,26 @@ export default async function ServicesPage() {
         <div className="rounded-2xl border border-slate-200 bg-white p-5 shadow-sm md:col-span-2">
           <p className="text-xs uppercase tracking-[0.2em] text-indigo-700">Most requested</p>
           <div className="mt-3 grid gap-3 sm:grid-cols-2">
-            {featured.length
-              ? featured.map((service) => (
-                  <div key={service.id} className="rounded-xl border border-slate-200 p-4">
-                    <div className="flex items-start justify-between gap-3">
-                      <div>
-                        <h2 className="text-lg font-semibold text-slate-900">{service.name}</h2>
-                        {service.description && <p className="mt-2 text-sm text-slate-600">{service.description}</p>}
-                      </div>
-                      <div className="text-right">
-                        <p className="text-sm font-semibold text-slate-900">{formatPrice(service.priceCents)}</p>
-                        <p className="text-xs text-slate-500">{formatDuration(service.baseMinutes)}</p>
-                      </div>
+            {featured.length ? (
+              featured.map((service) => (
+                <div key={service.id} className="rounded-xl border border-slate-200 p-4">
+                  <div className="flex items-start justify-between gap-3">
+                    <div>
+                      <h2 className="text-lg font-semibold text-slate-900">{service.name}</h2>
+                      {service.description && <p className="mt-2 text-sm text-slate-600">{service.description}</p>}
+                    </div>
+                    <div className="text-right">
+                      <p className="text-sm font-semibold text-slate-900">{formatPrice(service.priceCents)}</p>
+                      <p className="text-xs text-slate-500">{formatDuration(service.baseMinutes)}</p>
                     </div>
                   </div>
-                ))
-              : coreServices.map((service) => (
-                  <div key={service.name} className="rounded-xl border border-slate-200 p-4">
-                    <div className="flex items-start justify-between gap-3">
-                      <div>
-                        <h2 className="text-lg font-semibold text-slate-900">{service.name}</h2>
-                        <p className="mt-2 text-sm text-slate-600">{service.description}</p>
-                      </div>
-                      <div className="text-right">
-                        {service.price && <p className="text-sm font-semibold text-slate-900">{service.price}</p>}
-                        <p className="text-xs text-slate-500">{service.duration}</p>
-                      </div>
-                    </div>
-                  </div>
-                ))}
+                </div>
+              ))
+            ) : (
+              <div className="rounded-xl border border-amber-200 bg-amber-50 p-4 text-sm text-amber-900">
+                No featured services available.
+              </div>
+            )}
           </div>
         </div>
         <div className="rounded-2xl border border-indigo-200 bg-indigo-50 p-5 text-sm text-indigo-900">
