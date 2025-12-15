@@ -214,7 +214,6 @@ export default function AdminDashboardTabbed({ userEmail, userName }: Props) {
               <p className="text-sm text-slate-500">
                 {activeTab === 'dashboard' && 'Overview of your business'}
                 {activeTab === 'requests' && 'Manage service requests'}
-                {activeTab === 'jobs' && 'Review and verify agent work'}
                 {activeTab === 'clients' && 'CRM-style client management'}
                 {activeTab === 'schedule' && 'Availability and appointments'}
                 {activeTab === 'services' && 'Service catalog management'}
