@@ -335,6 +335,13 @@ create policy "Authenticated update proof-of-work files"
   using (bucket_id = 'proof-of-work')
   with check (bucket_id = 'proof-of-work');
 
+-- Broad allow for authenticated users to insert/update/delete in proof-of-work bucket
+create policy "Authenticated manage proof-of-work objects"
+  on storage.objects for all
+  to authenticated
+  using (bucket_id = 'proof-of-work')
+  with check (bucket_id = 'proof-of-work');
+
 -- Agent earnings per job
 CREATE TABLE IF NOT EXISTS agent_earnings (
   id UUID PRIMARY KEY DEFAULT gen_random_uuid(),
