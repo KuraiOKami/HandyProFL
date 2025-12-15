@@ -483,6 +483,13 @@ BEGIN
 END;
 $$;
 
+-- Allow assigned agents to update their service requests (e.g., status to pending_verification)
+create policy "Agents can update assigned service requests"
+  on service_requests for update
+  to authenticated
+  using (assigned_agent_id = auth.uid())
+  with check (assigned_agent_id = auth.uid());
+
 -- Grant permissions
 GRANT ALL ON agent_profiles TO authenticated;
 GRANT ALL ON job_assignments TO authenticated;
