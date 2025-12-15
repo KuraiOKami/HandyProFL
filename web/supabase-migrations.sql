@@ -329,11 +329,11 @@ create policy "Authenticated upload proof-of-work files"
   to authenticated
   with check (bucket_id = 'proof-of-work');
 
-create policy "Authenticated update own proof-of-work files"
+create policy "Authenticated update proof-of-work files"
   on storage.objects for update
   to authenticated
-  using (bucket_id = 'proof-of-work' and owner = auth.uid())
-  with check (bucket_id = 'proof-of-work' and owner = auth.uid());
+  using (bucket_id = 'proof-of-work')
+  with check (bucket_id = 'proof-of-work');
 
 -- Agent earnings per job
 CREATE TABLE IF NOT EXISTS agent_earnings (
