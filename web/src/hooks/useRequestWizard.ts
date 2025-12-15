@@ -139,8 +139,7 @@ export function useRequestWizard() {
   const [availableSlots, setAvailableSlots] = useState<Record<string, Slot[]>>({});
   const [slotDurationMinutes, setSlotDurationMinutes] = useState<number | null>(null);
 
-  // Payment state
-  const [payMethod, setPayMethod] = useState<'pay_later' | 'card_on_file'>('pay_later');
+  // Payment state (card-only, charged on submit)
   const [paymentMethods, setPaymentMethods] = useState<PaymentMethod[]>([]);
   const [walletLoading, setWalletLoading] = useState(false);
   const [walletError, setWalletError] = useState<string | null>(null);
@@ -177,7 +176,6 @@ export function useRequestWizard() {
     setStatus(null);
     setError(null);
     setItems([]);
-    setPayMethod('pay_later');
     setPaymentMethods([]);
     setWalletError(null);
     setSelectedPaymentMethodId(null);
@@ -312,20 +310,18 @@ export function useRequestWizard() {
       return;
     }
 
-    const hasPaymentMethods = paymentMethods.length > 0;
-    if (payMethod === 'card_on_file') {
-      if (!hasPaymentMethods) {
-        setError('Add a card in Settings > Wallet first.');
-        return;
-      }
-      if (!selectedPaymentMethodId) {
-        setError('Select a saved card to charge.');
-        return;
-      }
-      if (totalPriceCents <= 0) {
-        setError('Total must be greater than $0. Update the request items.');
-        return;
-      }
+    // Card payment is required
+    if (paymentMethods.length === 0) {
+      setError('Add a card to continue. Your card will be charged when you submit.');
+      return;
+    }
+    if (!selectedPaymentMethodId) {
+      setError('Select a saved card to charge.');
+      return;
+    }
+    if (totalPriceCents <= 0) {
+      setError('Total must be greater than $0. Update the request items.');
+      return;
     }
 
     setSubmitting(true);
@@ -396,38 +392,35 @@ export function useRequestWizard() {
       setRequestId(newRequestId);
     }
 
-    if (payMethod === 'card_on_file' && selectedPaymentMethodId) {
-      const chargeRes = await fetch('/api/payments/charge', {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({
-          amount_cents: totalPriceCents,
-          currency: 'usd',
-          payment_method_id: selectedPaymentMethodId,
-          request_id: newRequestId,
-        }),
-      });
-      const chargeBody = await chargeRes.json().catch(() => ({}));
-      const chargeStatus = (chargeBody.status as string | undefined) ?? null;
-      const paymentIntentId = (chargeBody.payment_intent_id as string | undefined) ?? null;
-      if (!chargeRes.ok || chargeStatus !== 'succeeded') {
-        setStatus('Request submitted, but your card was not charged.');
-        setError(
-          chargeBody.error ||
-            (chargeStatus
-              ? `Card charge incomplete (status: ${chargeStatus}). We will confirm payment manually.`
-              : 'Card charge failed. We will confirm payment manually.'),
-        );
-        setSubmitting(false);
-        setStep(5);
-        return;
-      }
-      setStatus(
-        `Request submitted and card charged. Payment intent: ${paymentIntentId ?? 'created'}. See you soon!`,
+    // Always charge the card
+    const chargeRes = await fetch('/api/payments/charge', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({
+        amount_cents: totalPriceCents,
+        currency: 'usd',
+        payment_method_id: selectedPaymentMethodId,
+        request_id: newRequestId,
+      }),
+    });
+    const chargeBody = await chargeRes.json().catch(() => ({}));
+    const chargeStatus = (chargeBody.status as string | undefined) ?? null;
+    const paymentIntentId = (chargeBody.payment_intent_id as string | undefined) ?? null;
+    if (!chargeRes.ok || chargeStatus !== 'succeeded') {
+      setStatus('Request submitted, but your card was not charged.');
+      setError(
+        chargeBody.error ||
+          (chargeStatus
+            ? `Card charge incomplete (status: ${chargeStatus}). We will confirm payment manually.`
+            : 'Card charge failed. We will confirm payment manually.'),
       );
-    } else {
-      setStatus('Request submitted. We will confirm your slot shortly.');
+      setSubmitting(false);
+      setStep(5);
+      return;
     }
+    setStatus(
+      `Request submitted and card charged. Payment ID: ${paymentIntentId ?? 'created'}. See you soon!`,
+    );
 
     setSubmitting(false);
     setStep(5);
@@ -436,7 +429,6 @@ export function useRequestWizard() {
     supabase,
     date,
     slot,
-    payMethod,
     paymentMethods,
     selectedPaymentMethodId,
     totalPriceCents,
@@ -493,9 +485,7 @@ export function useRequestWizard() {
     slotDurationMinutes,
     setSlotDurationMinutes,
 
-    // Payment
-    payMethod,
-    setPayMethod,
+    // Payment (card-only)
     paymentMethods,
     walletLoading,
     walletError,

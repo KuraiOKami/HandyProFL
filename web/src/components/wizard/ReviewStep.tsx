@@ -10,8 +10,6 @@ type ReviewStepProps = {
   date: string;
   slot: { time: string; startIso: string } | null;
   // Payment props
-  payMethod: 'pay_later' | 'card_on_file';
-  onPayMethodChange: (method: 'pay_later' | 'card_on_file') => void;
   paymentMethods: PaymentMethod[];
   selectedPaymentMethodId: string | null;
   onSelectedPaymentMethodIdChange: (id: string | null) => void;
@@ -28,8 +26,6 @@ export default function ReviewStep({
   requiredMinutes,
   date,
   slot,
-  payMethod,
-  onPayMethodChange,
   paymentMethods,
   selectedPaymentMethodId,
   onSelectedPaymentMethodIdChange,
@@ -84,8 +80,6 @@ export default function ReviewStep({
         </div>
       </div>
       <PaymentMethodSelector
-        payMethod={payMethod}
-        onPayMethodChange={onPayMethodChange}
         paymentMethods={paymentMethods}
         selectedPaymentMethodId={selectedPaymentMethodId}
         onSelectedPaymentMethodIdChange={onSelectedPaymentMethodIdChange}

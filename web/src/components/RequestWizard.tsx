@@ -163,8 +163,6 @@ const RequestWizard = forwardRef<RequestWizardHandle>((_props, ref) => {
               requiredMinutes={wizard.requiredMinutes}
               date={wizard.date}
               slot={wizard.slot}
-              payMethod={wizard.payMethod}
-              onPayMethodChange={wizard.setPayMethod}
               paymentMethods={wizard.paymentMethods}
               selectedPaymentMethodId={wizard.selectedPaymentMethodId}
               onSelectedPaymentMethodIdChange={wizard.setSelectedPaymentMethodId}
