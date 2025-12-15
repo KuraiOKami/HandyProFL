@@ -5,6 +5,9 @@ import AdminRequestDetailView, {
   ClientProfile,
   RequestDetail,
   RelatedRequest,
+  JobAssignment,
+  AgentCheckin,
+  ProofOfWork,
 } from "@/components/admin/AdminRequestDetailView";
 import { createClient, createServiceRoleClient } from "@/utils/supabase/server";
 
@@ -100,11 +103,57 @@ export default async function AdminRequestDetailPage({ params }: PageProps) {
     otherRequests = data ?? [];
   }
 
+  // Fetch job assignment data if exists
+  let jobAssignment: JobAssignment | null = null;
+  let agentProfile: { first_name: string | null; last_name: string | null; email: string | null; phone: string | null } | null = null;
+  let checkins: AgentCheckin[] = [];
+  let proofs: ProofOfWork[] = [];
+
+  const { data: jobData } = await adminSupabase
+    .from("job_assignments")
+    .select("id, agent_id, status, job_price_cents, agent_payout_cents, platform_fee_cents, assigned_at, started_at, checked_out_at, verified_at, paid_at, completed_at, verification_notes, rejection_notes")
+    .eq("request_id", id)
+    .maybeSingle();
+
+  if (jobData) {
+    jobAssignment = jobData;
+
+    // Fetch agent profile
+    if (jobData.agent_id) {
+      const { data: agent } = await adminSupabase
+        .from("profiles")
+        .select("first_name, last_name, email, phone")
+        .eq("id", jobData.agent_id)
+        .maybeSingle();
+      agentProfile = agent;
+    }
+
+    // Fetch check-ins
+    const { data: checkinData } = await adminSupabase
+      .from("agent_checkins")
+      .select("id, type, created_at, latitude, longitude, location_verified")
+      .eq("job_id", jobData.id)
+      .order("created_at", { ascending: true });
+    checkins = checkinData ?? [];
+
+    // Fetch proof of work photos
+    const { data: proofData } = await adminSupabase
+      .from("proof_of_work")
+      .select("id, type, photo_url, notes, uploaded_at")
+      .eq("job_id", jobData.id)
+      .order("uploaded_at", { ascending: true });
+    proofs = proofData ?? [];
+  }
+
   return (
     <AdminRequestDetailView
       request={request as RequestDetail}
       client={clientProfile}
       otherRequests={otherRequests}
+      jobAssignment={jobAssignment}
+      agentProfile={agentProfile}
+      checkins={checkins}
+      proofs={proofs}
     />
   );
 }

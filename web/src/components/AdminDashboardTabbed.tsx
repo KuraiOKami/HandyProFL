@@ -7,7 +7,6 @@ import { getSupabaseClient } from '@/lib/supabaseClient';
 // Lazy load admin section components
 const AdminDashboardContent = lazy(() => import('./admin/AdminDashboardContent'));
 const AdminRequestsContent = lazy(() => import('./admin/AdminRequestsContent'));
-const AdminJobsContent = lazy(() => import('./admin/AdminJobsContent'));
 const AdminClientsContent = lazy(() => import('./admin/AdminClientsContent'));
 const AdminScheduleContent = lazy(() => import('./admin/AdminScheduleContent'));
 const AdminServicesContent = lazy(() => import('./admin/AdminServicesContent'));
@@ -15,12 +14,11 @@ const AdminAgentsContent = lazy(() => import('./admin/AdminAgentsContent'));
 const AdminBillingContent = lazy(() => import('./admin/AdminBillingContent'));
 const AdminSettingsContent = lazy(() => import('./admin/AdminSettingsContent'));
 
-type Tab = 'dashboard' | 'requests' | 'jobs' | 'clients' | 'schedule' | 'services' | 'agents' | 'billing' | 'settings';
+type Tab = 'dashboard' | 'requests' | 'clients' | 'schedule' | 'services' | 'agents' | 'billing' | 'settings';
 
 const tabs: { id: Tab; label: string; icon: string; mobileLabel: string }[] = [
   { id: 'dashboard', label: 'Dashboard', icon: '📊', mobileLabel: 'Home' },
   { id: 'requests', label: 'Requests', icon: '📋', mobileLabel: 'Requests' },
-  { id: 'jobs', label: 'Jobs', icon: '✅', mobileLabel: 'Jobs' },
   { id: 'clients', label: 'Clients', icon: '👥', mobileLabel: 'Clients' },
   { id: 'schedule', label: 'Schedule', icon: '📅', mobileLabel: 'Schedule' },
   { id: 'services', label: 'Services', icon: '🛠️', mobileLabel: 'Services' },
@@ -29,8 +27,8 @@ const tabs: { id: Tab; label: string; icon: string; mobileLabel: string }[] = [
   { id: 'settings', label: 'Settings', icon: '⚙️', mobileLabel: 'Settings' },
 ];
 
-// Bottom nav shows only key tabs on mobile (too many to show all 9)
-const mobileBottomTabs: Tab[] = ['dashboard', 'requests', 'jobs', 'schedule', 'settings'];
+// Bottom nav shows only key tabs on mobile
+const mobileBottomTabs: Tab[] = ['dashboard', 'requests', 'schedule', 'agents', 'settings'];
 
 function LoadingSpinner() {
   return (
@@ -241,7 +239,6 @@ export default function AdminDashboardTabbed({ userEmail, userName }: Props) {
           <Suspense fallback={<LoadingSpinner />}>
             {activeTab === 'dashboard' && <AdminDashboardContent />}
             {activeTab === 'requests' && <AdminRequestsContent />}
-            {activeTab === 'jobs' && <AdminJobsContent />}
             {activeTab === 'clients' && <AdminClientsContent />}
             {activeTab === 'schedule' && <AdminScheduleContent />}
             {activeTab === 'services' && <AdminServicesContent />}

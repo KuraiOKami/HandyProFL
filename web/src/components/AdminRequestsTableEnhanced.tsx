@@ -235,7 +235,8 @@ export default function AdminRequestsTableEnhanced({ initial, onRefresh, lastUpd
   const stats = useMemo(() => ({
     total: requests.length,
     pending: requests.filter((r) => r.status === 'pending').length,
-    active: requests.filter((r) => ['confirmed', 'scheduled', 'in_progress', 'pending_verification'].includes(r.status || '')).length,
+    active: requests.filter((r) => ['confirmed', 'scheduled', 'in_progress'].includes(r.status || '')).length,
+    needsReview: requests.filter((r) => r.status === 'pending_verification').length,
     complete: requests.filter((r) => r.status === 'complete').length,
   }), [requests]);
 
@@ -334,7 +335,7 @@ export default function AdminRequestsTableEnhanced({ initial, onRefresh, lastUpd
   return (
     <div className="grid gap-5">
       {/* Stats */}
-      <div className="grid grid-cols-2 gap-4 sm:grid-cols-4">
+      <div className="grid grid-cols-2 gap-4 sm:grid-cols-5">
         <div className="rounded-xl border border-slate-200 bg-white p-4">
           <p className="text-xs font-medium uppercase tracking-wide text-slate-500">Total</p>
           <p className="text-2xl font-bold text-slate-900">{stats.total}</p>
@@ -354,11 +355,18 @@ export default function AdminRequestsTableEnhanced({ initial, onRefresh, lastUpd
           <p className="text-2xl font-bold text-blue-600">{stats.active}</p>
         </button>
         <button
+          onClick={() => { setStatusFilter('pending_verification'); setCurrentPage(1); }}
+          className={`rounded-xl border p-4 text-left transition hover:shadow-md ${statusFilter === 'pending_verification' ? 'border-indigo-300 bg-indigo-50' : 'border-slate-200 bg-white'}`}
+        >
+          <p className="text-xs font-medium uppercase tracking-wide text-slate-500">Needs Review</p>
+          <p className="text-2xl font-bold text-indigo-600">{stats.needsReview}</p>
+        </button>
+        <button
           onClick={() => { setStatusFilter('complete'); setCurrentPage(1); }}
-          className={`rounded-xl border p-4 text-left transition hover:shadow-md ${statusFilter === 'complete' ? 'border-blue-300 bg-blue-50' : 'border-slate-200 bg-white'}`}
+          className={`rounded-xl border p-4 text-left transition hover:shadow-md ${statusFilter === 'complete' ? 'border-emerald-300 bg-emerald-50' : 'border-slate-200 bg-white'}`}
         >
           <p className="text-xs font-medium uppercase tracking-wide text-slate-500">Completed</p>
-          <p className="text-2xl font-bold text-blue-600">{stats.complete}</p>
+          <p className="text-2xl font-bold text-emerald-600">{stats.complete}</p>
         </button>
       </div>
 

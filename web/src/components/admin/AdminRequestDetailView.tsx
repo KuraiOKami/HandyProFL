@@ -1,8 +1,9 @@
 'use client';
 
+import Image from "next/image";
 import Link from "next/link";
 import { useMemo, useState } from "react";
-import { formatTime } from "@/lib/formatting";
+import { formatTime, formatCurrency } from "@/lib/formatting";
 
 export type RequestDetail = {
   id: string;
@@ -37,10 +38,48 @@ export type ClientProfile = {
   postal_code: string | null;
 };
 
+export type JobAssignment = {
+  id: string;
+  agent_id: string | null;
+  status: string | null;
+  job_price_cents: number | null;
+  agent_payout_cents: number | null;
+  platform_fee_cents: number | null;
+  assigned_at: string | null;
+  started_at: string | null;
+  checked_out_at: string | null;
+  verified_at: string | null;
+  paid_at: string | null;
+  completed_at: string | null;
+  verification_notes: string | null;
+  rejection_notes: string | null;
+};
+
+export type AgentCheckin = {
+  id: string;
+  type: string;
+  created_at: string;
+  latitude: number | null;
+  longitude: number | null;
+  location_verified: boolean;
+};
+
+export type ProofOfWork = {
+  id: string;
+  type: string;
+  photo_url: string;
+  notes: string | null;
+  uploaded_at: string;
+};
+
 type Props = {
   request: RequestDetail;
   client: ClientProfile | null;
   otherRequests: RelatedRequest[];
+  jobAssignment?: JobAssignment | null;
+  agentProfile?: { first_name: string | null; last_name: string | null; email: string | null; phone: string | null } | null;
+  checkins?: AgentCheckin[];
+  proofs?: ProofOfWork[];
 };
 
 const statusOptions = ["pending", "confirmed", "complete", "cancelled"];
@@ -48,7 +87,14 @@ const statusOptions = ["pending", "confirmed", "complete", "cancelled"];
 const statusConfig: Record<string, { bg: string; text: string; border: string; dot: string }> = {
   pending: { bg: "bg-amber-50", text: "text-amber-700", border: "border-amber-200", dot: "bg-amber-500" },
   confirmed: { bg: "bg-blue-50", text: "text-blue-700", border: "border-blue-200", dot: "bg-blue-500" },
+  scheduled: { bg: "bg-purple-50", text: "text-purple-700", border: "border-purple-200", dot: "bg-purple-500" },
+  in_progress: { bg: "bg-blue-50", text: "text-blue-700", border: "border-blue-200", dot: "bg-blue-500" },
+  pending_verification: { bg: "bg-indigo-50", text: "text-indigo-700", border: "border-indigo-200", dot: "bg-indigo-500" },
+  verified: { bg: "bg-emerald-50", text: "text-emerald-700", border: "border-emerald-200", dot: "bg-emerald-500" },
+  paid: { bg: "bg-emerald-50", text: "text-emerald-700", border: "border-emerald-200", dot: "bg-emerald-500" },
   complete: { bg: "bg-emerald-50", text: "text-emerald-700", border: "border-emerald-200", dot: "bg-emerald-500" },
+  completed: { bg: "bg-emerald-50", text: "text-emerald-700", border: "border-emerald-200", dot: "bg-emerald-500" },
+  assigned: { bg: "bg-slate-50", text: "text-slate-700", border: "border-slate-200", dot: "bg-slate-500" },
   cancelled: { bg: "bg-rose-50", text: "text-rose-700", border: "border-rose-200", dot: "bg-rose-500" },
 };
 
@@ -107,8 +153,9 @@ function formatRelativeTime(dateStr: string | null | undefined) {
   return `${Math.floor(diffDays / 30)} months ago`;
 }
 
-export default function AdminRequestDetailView({ request, client, otherRequests }: Props) {
+export default function AdminRequestDetailView({ request, client, otherRequests, jobAssignment, agentProfile, checkins = [], proofs = [] }: Props) {
   const [localRequest, setLocalRequest] = useState<RequestDetail>(request);
+  const [localJob, setLocalJob] = useState<JobAssignment | null>(jobAssignment ?? null);
   const [dateInput, setDateInput] = useState(localRequest.preferred_date ?? "");
   const [timeInput, setTimeInput] = useState(localRequest.preferred_time ?? "");
   const [durationInput, setDurationInput] = useState(
@@ -117,7 +164,10 @@ export default function AdminRequestDetailView({ request, client, otherRequests 
   const [saving, setSaving] = useState<string | null>(null);
   const [message, setMessage] = useState<string | null>(null);
   const [error, setError] = useState<string | null>(null);
-  const [activeTab, setActiveTab] = useState<"details" | "scheduling" | "notes">("details");
+  const [activeTab, setActiveTab] = useState<"details" | "scheduling" | "notes" | "job">(
+    jobAssignment?.status === "pending_verification" ? "job" : "details"
+  );
+  const [verificationNotes, setVerificationNotes] = useState("");
 
   const fullName = useMemo(() => {
     if (!client) return "Unknown Client";
@@ -169,6 +219,51 @@ export default function AdminRequestDetailView({ request, client, otherRequests 
   };
 
   const statusAction = (nextStatus: string) => handleUpdate({ status: nextStatus }, `Status updated`);
+
+  const handleJobAction = async (action: string, notes?: string) => {
+    if (!localJob) return;
+    setSaving(action);
+    setError(null);
+
+    try {
+      const res = await fetch(`/api/admin/jobs/${localJob.id}/verify`, {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ action, notes }),
+      });
+
+      const data = await res.json();
+      if (!res.ok) {
+        throw new Error(data.error || `Failed to ${action} job`);
+      }
+
+      // Update local job state
+      const statusMap: Record<string, string> = {
+        verify: "verified",
+        pay: "paid",
+        complete: "completed",
+        reject: "in_progress",
+      };
+      setLocalJob((prev) => prev ? { ...prev, status: statusMap[action] || prev.status } : null);
+
+      // Also update request status for certain actions
+      if (action === "complete") {
+        setLocalRequest((prev) => ({ ...prev, status: "complete" }));
+      }
+
+      setMessage(`Job ${action}${action === "verify" ? " verified" : action === "pay" ? " marked paid" : action === "complete" ? " completed" : "ed"}`);
+      setVerificationNotes("");
+      setTimeout(() => setMessage(null), 3000);
+    } catch (err) {
+      setError(err instanceof Error ? err.message : `Failed to ${action} job`);
+    } finally {
+      setSaving(null);
+    }
+  };
+
+  const agentName = agentProfile
+    ? [agentProfile.first_name, agentProfile.last_name].filter(Boolean).join(" ") || "Unknown Agent"
+    : "No agent assigned";
 
   return (
     <div className="mx-auto max-w-6xl px-6 py-8 lg:py-10">
@@ -232,22 +327,26 @@ export default function AdminRequestDetailView({ request, client, otherRequests 
           {/* Tabbed Content */}
           <div className="rounded-xl border border-slate-200 bg-white shadow-sm">
             <div className="border-b border-slate-200">
-              <nav className="flex">
+              <nav className="flex overflow-x-auto">
                 {[
                   { id: "details", label: "Details" },
                   { id: "scheduling", label: "Scheduling" },
                   { id: "notes", label: "Notes" },
+                  ...(localJob ? [{ id: "job", label: "Job & Verification", badge: localJob.status === "pending_verification" }] : []),
                 ].map((tab) => (
                   <button
                     key={tab.id}
                     onClick={() => setActiveTab(tab.id as typeof activeTab)}
-                    className={`px-6 py-3 text-sm font-medium transition ${
+                    className={`relative whitespace-nowrap px-6 py-3 text-sm font-medium transition ${
                       activeTab === tab.id
                         ? "border-b-2 border-indigo-600 text-indigo-600"
                         : "text-slate-500 hover:text-slate-700"
                     }`}
                   >
                     {tab.label}
+                    {"badge" in tab && tab.badge && (
+                      <span className="ml-1.5 inline-flex h-2 w-2 rounded-full bg-amber-500" />
+                    )}
                   </button>
                 ))}
               </nav>
@@ -347,6 +446,207 @@ export default function AdminRequestDetailView({ request, client, otherRequests 
                       {localRequest.details || "No notes or details provided for this request."}
                     </p>
                   </div>
+                </div>
+              )}
+
+              {activeTab === "job" && localJob && (
+                <div className="space-y-6">
+                  {/* Job Status & Pricing */}
+                  <div className="grid gap-4 sm:grid-cols-2">
+                    <div className="rounded-lg bg-slate-50 p-4">
+                      <div className="flex items-center justify-between">
+                        <div>
+                          <p className="text-xs font-semibold uppercase tracking-wide text-slate-500">Job Status</p>
+                          <div className="mt-1">
+                            <StatusBadge status={localJob.status} size="lg" />
+                          </div>
+                        </div>
+                        <div className="text-right">
+                          <p className="text-xs font-semibold uppercase tracking-wide text-slate-500">Agent</p>
+                          <p className="mt-1 text-sm font-medium text-slate-900">{agentName}</p>
+                        </div>
+                      </div>
+                    </div>
+                    <div className="rounded-lg bg-slate-50 p-4">
+                      <div className="grid grid-cols-3 gap-4 text-center">
+                        <div>
+                          <p className="text-xs font-semibold uppercase tracking-wide text-slate-500">Total</p>
+                          <p className="mt-1 text-lg font-bold text-slate-900">{formatCurrency(localJob.job_price_cents ?? 0)}</p>
+                        </div>
+                        <div>
+                          <p className="text-xs font-semibold uppercase tracking-wide text-slate-500">Agent Pay</p>
+                          <p className="mt-1 text-lg font-bold text-emerald-600">{formatCurrency(localJob.agent_payout_cents ?? 0)}</p>
+                        </div>
+                        <div>
+                          <p className="text-xs font-semibold uppercase tracking-wide text-slate-500">Platform</p>
+                          <p className="mt-1 text-lg font-bold text-slate-500">{formatCurrency(localJob.platform_fee_cents ?? 0)}</p>
+                        </div>
+                      </div>
+                    </div>
+                  </div>
+
+                  {/* Verification Actions */}
+                  {localJob.status === "pending_verification" && (
+                    <div className="rounded-lg border border-amber-200 bg-amber-50 p-4">
+                      <h4 className="mb-3 text-sm font-semibold text-amber-800">Verify this job</h4>
+                      <textarea
+                        value={verificationNotes}
+                        onChange={(e) => setVerificationNotes(e.target.value)}
+                        placeholder="Add verification notes (optional)..."
+                        className="mb-3 w-full rounded-lg border border-slate-200 p-3 text-sm focus:border-indigo-500 focus:outline-none focus:ring-1 focus:ring-indigo-500"
+                        rows={2}
+                      />
+                      <div className="flex gap-2">
+                        <button
+                          onClick={() => handleJobAction("verify", verificationNotes)}
+                          disabled={saving !== null}
+                          className="flex-1 rounded-lg bg-indigo-600 px-4 py-2 text-sm font-semibold text-white hover:bg-indigo-700 disabled:opacity-50"
+                        >
+                          {saving === "verify" ? "Verifying..." : "Approve & Verify"}
+                        </button>
+                        <button
+                          onClick={() => handleJobAction("reject", verificationNotes)}
+                          disabled={saving !== null}
+                          className="rounded-lg border border-rose-200 px-4 py-2 text-sm font-semibold text-rose-700 hover:bg-rose-50 disabled:opacity-50"
+                        >
+                          {saving === "reject" ? "Rejecting..." : "Reject"}
+                        </button>
+                      </div>
+                    </div>
+                  )}
+
+                  {localJob.status === "verified" && (
+                    <div className="rounded-lg border border-emerald-200 bg-emerald-50 p-4">
+                      <div className="flex items-center justify-between">
+                        <div>
+                          <h4 className="text-sm font-semibold text-emerald-800">Job Verified</h4>
+                          <p className="text-xs text-emerald-600">Ready to process payment</p>
+                        </div>
+                        <button
+                          onClick={() => handleJobAction("pay")}
+                          disabled={saving !== null}
+                          className="rounded-lg bg-emerald-600 px-4 py-2 text-sm font-semibold text-white hover:bg-emerald-700 disabled:opacity-50"
+                        >
+                          {saving === "pay" ? "Processing..." : "Mark Paid"}
+                        </button>
+                      </div>
+                    </div>
+                  )}
+
+                  {localJob.status === "paid" && (
+                    <div className="rounded-lg border border-emerald-200 bg-emerald-50 p-4">
+                      <div className="flex items-center justify-between">
+                        <div>
+                          <h4 className="text-sm font-semibold text-emerald-800">Payment Processed</h4>
+                          <p className="text-xs text-emerald-600">Agent payout scheduled</p>
+                        </div>
+                        <button
+                          onClick={() => handleJobAction("complete")}
+                          disabled={saving !== null}
+                          className="rounded-lg bg-emerald-600 px-4 py-2 text-sm font-semibold text-white hover:bg-emerald-700 disabled:opacity-50"
+                        >
+                          {saving === "complete" ? "Completing..." : "Mark Complete"}
+                        </button>
+                      </div>
+                    </div>
+                  )}
+
+                  {localJob.status === "completed" && (
+                    <div className="rounded-lg border border-emerald-200 bg-emerald-50 p-4">
+                      <h4 className="text-sm font-semibold text-emerald-800">Job Completed</h4>
+                      <p className="text-xs text-emerald-600">This job has been fully processed</p>
+                    </div>
+                  )}
+
+                  {/* Rejection Notes */}
+                  {localJob.rejection_notes && (
+                    <div className="rounded-lg border border-rose-200 bg-rose-50 p-4">
+                      <p className="text-xs font-semibold uppercase tracking-wide text-rose-700">Previous Rejection</p>
+                      <p className="mt-1 text-sm text-rose-600">{localJob.rejection_notes}</p>
+                    </div>
+                  )}
+
+                  {/* Proof of Work Photos */}
+                  <div>
+                    <h4 className="mb-3 text-sm font-semibold uppercase tracking-wide text-slate-500">Proof of Work</h4>
+                    {proofs.length === 0 ? (
+                      <div className="rounded-lg border border-dashed border-slate-200 p-8 text-center">
+                        <p className="text-sm text-slate-500">No photos uploaded yet</p>
+                      </div>
+                    ) : (
+                      <div className="grid gap-4 sm:grid-cols-2">
+                        {proofs.map((proof) => (
+                          <div key={proof.id} className="space-y-2">
+                            <p className="text-xs font-medium text-slate-600">
+                              {proof.type === "box" ? "Before (Box/Materials)" : "After (Completed Work)"}
+                            </p>
+                            <div className="relative h-48 w-full overflow-hidden rounded-lg bg-slate-100">
+                              <Image
+                                src={proof.photo_url}
+                                alt={proof.type}
+                                fill
+                                className="object-contain"
+                                unoptimized
+                              />
+                            </div>
+                            {proof.notes && (
+                              <p className="text-xs text-slate-500">{proof.notes}</p>
+                            )}
+                            <p className="text-xs text-slate-400">{formatDateTime(proof.uploaded_at)}</p>
+                          </div>
+                        ))}
+                      </div>
+                    )}
+                  </div>
+
+                  {/* Agent Check-in Timeline */}
+                  {checkins.length > 0 && (
+                    <div>
+                      <h4 className="mb-3 text-sm font-semibold uppercase tracking-wide text-slate-500">Agent Timeline</h4>
+                      <div className="rounded-lg border border-slate-200 p-4">
+                        <div className="space-y-3">
+                          {checkins.map((checkin) => (
+                            <div key={checkin.id} className="flex items-start gap-3">
+                              <div className={`mt-0.5 h-2 w-2 rounded-full ${
+                                checkin.type === "checkin" ? "bg-blue-500" : "bg-emerald-500"
+                              }`} />
+                              <div>
+                                <p className="text-sm font-medium text-slate-900">
+                                  {checkin.type === "checkin" ? "Checked In" : "Checked Out"}
+                                </p>
+                                <p className="text-xs text-slate-500">
+                                  {formatDateTime(checkin.created_at)}
+                                  {checkin.location_verified && (
+                                    <span className="ml-2 text-emerald-600">Location verified</span>
+                                  )}
+                                </p>
+                              </div>
+                            </div>
+                          ))}
+                        </div>
+                      </div>
+                    </div>
+                  )}
+
+                  {/* Agent Contact Info */}
+                  {agentProfile && (
+                    <div>
+                      <h4 className="mb-3 text-sm font-semibold uppercase tracking-wide text-slate-500">Agent Contact</h4>
+                      <div className="rounded-lg border border-slate-200 p-4">
+                        <p className="font-medium text-slate-900">{agentName}</p>
+                        {agentProfile.email && (
+                          <a href={`mailto:${agentProfile.email}`} className="block text-sm text-indigo-600 hover:text-indigo-700">
+                            {agentProfile.email}
+                          </a>
+                        )}
+                        {agentProfile.phone && (
+                          <a href={`tel:${agentProfile.phone}`} className="block text-sm text-slate-600 hover:text-slate-700">
+                            {agentProfile.phone}
+                          </a>
+                        )}
+                      </div>
+                    </div>
+                  )}
                 </div>
               )}
             </div>
