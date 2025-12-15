@@ -313,6 +313,28 @@ CREATE POLICY "Clients can view proof for their requests"
     )
   );
 
+-- Storage bucket for proof-of-work photos
+insert into storage.buckets (id, name, public)
+values ('proof-of-work', 'proof-of-work', true)
+on conflict (id) do nothing;
+
+-- Public read access to proof-of-work files
+create policy "Public read proof-of-work files"
+  on storage.objects for select
+  using (bucket_id = 'proof-of-work');
+
+-- Allow authenticated users to upload/update their proof-of-work files
+create policy "Authenticated upload proof-of-work files"
+  on storage.objects for insert
+  to authenticated
+  with check (bucket_id = 'proof-of-work');
+
+create policy "Authenticated update own proof-of-work files"
+  on storage.objects for update
+  to authenticated
+  using (bucket_id = 'proof-of-work' and owner = auth.uid())
+  with check (bucket_id = 'proof-of-work' and owner = auth.uid());
+
 -- Agent earnings per job
 CREATE TABLE IF NOT EXISTS agent_earnings (
   id UUID PRIMARY KEY DEFAULT gen_random_uuid(),
