@@ -14,16 +14,26 @@ export type PaymentMethod = {
   exp_year?: number | null;
 };
 
+export type MountType = 'none' | 'static' | 'full_motion';
+
 export type RequestItem = {
   service: ServiceId;
   tvSize: string;
   wallType: string;
   hasMount: 'yes' | 'no';
+  mountType: MountType;
   assemblyType: string;
   assemblyOther: string;
   extraItems: string[];
   notes: string;
   photoNames: string[];
+};
+
+// Mount upcharge prices in cents
+export const MOUNT_UPCHARGES: Record<MountType, number> = {
+  none: 0,
+  static: 3000, // $30
+  full_motion: 7000, // $70
 };
 
 export const services: Record<
@@ -113,6 +123,7 @@ export function useRequestWizard() {
   const [tvSize, setTvSize] = useState('55"');
   const [wallType, setWallType] = useState('Drywall');
   const [hasMount, setHasMount] = useState<'yes' | 'no'>('yes');
+  const [mountType, setMountType] = useState<MountType>('none');
   const [assemblyType, setAssemblyType] = useState('Chair');
   const [assemblyOther, setAssemblyOther] = useState('');
 
@@ -154,6 +165,7 @@ export function useRequestWizard() {
     setTvSize('55"');
     setWallType('Drywall');
     setHasMount('yes');
+    setMountType('none');
     setAssemblyType('Chair');
     setAssemblyOther('');
     setNotes('');
@@ -177,6 +189,7 @@ export function useRequestWizard() {
     setTvSize('55"');
     setWallType('Drywall');
     setHasMount('yes');
+    setMountType('none');
     setAssemblyType('Chair');
     setAssemblyOther('');
     setNotes('');
@@ -192,13 +205,14 @@ export function useRequestWizard() {
       tvSize,
       wallType,
       hasMount,
+      mountType: hasMount === 'no' ? mountType : 'none',
       assemblyType,
       assemblyOther,
       extraItems,
       notes,
       photoNames,
     }),
-    [service, tvSize, wallType, hasMount, assemblyType, assemblyOther, extraItems, notes, photoNames],
+    [service, tvSize, wallType, hasMount, mountType, assemblyType, assemblyOther, extraItems, notes, photoNames],
   );
 
   // Load service catalog durations and prices
@@ -242,7 +256,12 @@ export function useRequestWizard() {
   const getPriceForItem = useCallback(
     (item: RequestItem) => {
       const id = getServiceId(item);
-      return servicePrices[id] ?? 0;
+      const basePrice = servicePrices[id] ?? 0;
+      // Add mount upcharge if user needs a mount
+      const mountUpcharge = item.service === 'tv_mount' && item.hasMount === 'no'
+        ? MOUNT_UPCHARGES[item.mountType]
+        : 0;
+      return basePrice + mountUpcharge;
     },
     [servicePrices],
   );
@@ -317,11 +336,15 @@ export function useRequestWizard() {
 
     const details = itemsToSave
       .map((item, idx) => {
+        const mountTypeLabel = item.mountType === 'static' ? 'Static mount (+$30)'
+          : item.mountType === 'full_motion' ? 'Full motion mount (+$70)'
+          : null;
         const parts = [
           `Item ${idx + 1}: ${services[item.service].name}`,
           item.service === 'tv_mount' ? `TV size: ${item.tvSize}` : null,
           item.service === 'tv_mount' ? `Wall: ${item.wallType}` : null,
           item.service === 'tv_mount' ? `Mount provided: ${item.hasMount === 'yes' ? 'Yes' : 'No'}` : null,
+          item.service === 'tv_mount' && item.hasMount === 'no' && mountTypeLabel ? `Mount type: ${mountTypeLabel}` : null,
           item.service === 'assembly' ? `Assembly type: ${item.assemblyType}` : null,
           item.service === 'assembly' && item.assemblyType === 'Other' && item.assemblyOther
             ? `Other: ${item.assemblyOther}`
@@ -443,6 +466,8 @@ export function useRequestWizard() {
     setWallType,
     hasMount,
     setHasMount,
+    mountType,
+    setMountType,
     assemblyType,
     setAssemblyType,
     assemblyOther,

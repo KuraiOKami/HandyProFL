@@ -24,7 +24,11 @@ export default function ItemSummary({ item, index, meta, bordered = true }: Item
       </div>
       <p className="text-xs text-slate-600">
         {item.service === 'tv_mount'
-          ? `TV ${item.tvSize} | ${item.wallType} | Mount: ${item.hasMount === 'yes' ? 'Yes' : 'No'}`
+          ? `TV ${item.tvSize} | ${item.wallType} | Mount: ${item.hasMount === 'yes' ? 'Yes' : 'No'}${
+              item.hasMount === 'no' && item.mountType !== 'none'
+                ? ` (${item.mountType === 'static' ? 'Static +$30' : 'Full Motion +$70'})`
+                : ''
+            }`
           : item.service === 'assembly'
             ? `Assembly: ${item.assemblyType}${
                 item.assemblyType === 'Other' && item.assemblyOther ? ` (${item.assemblyOther})` : ''

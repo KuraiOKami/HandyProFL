@@ -1,6 +1,6 @@
 import PaymentMethodSelector from './PaymentMethodSelector';
 import ItemSummary from './ItemSummary';
-import type { RequestItem } from '@/hooks/useRequestWizard';
+import type { RequestItem, PaymentMethod } from '@/hooks/useRequestWizard';
 
 type ReviewStepProps = {
   items: RequestItem[];
@@ -9,6 +9,16 @@ type ReviewStepProps = {
   requiredMinutes: number;
   date: string;
   slot: { time: string; startIso: string } | null;
+  // Payment props
+  payMethod: 'pay_later' | 'card_on_file';
+  onPayMethodChange: (method: 'pay_later' | 'card_on_file') => void;
+  paymentMethods: PaymentMethod[];
+  selectedPaymentMethodId: string | null;
+  onSelectedPaymentMethodIdChange: (id: string | null) => void;
+  walletLoading: boolean;
+  walletError: string | null;
+  onLoadPaymentMethods: () => void;
+  isLoggedIn: boolean;
 };
 
 export default function ReviewStep({
@@ -18,6 +28,15 @@ export default function ReviewStep({
   requiredMinutes,
   date,
   slot,
+  payMethod,
+  onPayMethodChange,
+  paymentMethods,
+  selectedPaymentMethodId,
+  onSelectedPaymentMethodIdChange,
+  walletLoading,
+  walletError,
+  onLoadPaymentMethods,
+  isLoggedIn,
 }: ReviewStepProps) {
   return (
     <div className="grid gap-3 rounded-xl border border-slate-200 p-4">
@@ -64,7 +83,17 @@ export default function ReviewStep({
           </span>
         </div>
       </div>
-      <PaymentMethodSelector />
+      <PaymentMethodSelector
+        payMethod={payMethod}
+        onPayMethodChange={onPayMethodChange}
+        paymentMethods={paymentMethods}
+        selectedPaymentMethodId={selectedPaymentMethodId}
+        onSelectedPaymentMethodIdChange={onSelectedPaymentMethodIdChange}
+        walletLoading={walletLoading}
+        walletError={walletError}
+        onLoadPaymentMethods={onLoadPaymentMethods}
+        isLoggedIn={isLoggedIn}
+      />
     </div>
   );
 }

@@ -121,6 +121,8 @@ const RequestWizard = forwardRef<RequestWizardHandle>((_props, ref) => {
               onWallTypeChange={wizard.setWallType}
               hasMount={wizard.hasMount}
               onHasMountChange={wizard.setHasMount}
+              mountType={wizard.mountType}
+              onMountTypeChange={wizard.setMountType}
               assemblyType={wizard.assemblyType}
               onAssemblyTypeChange={wizard.setAssemblyType}
               assemblyOther={wizard.assemblyOther}
@@ -161,6 +163,15 @@ const RequestWizard = forwardRef<RequestWizardHandle>((_props, ref) => {
               requiredMinutes={wizard.requiredMinutes}
               date={wizard.date}
               slot={wizard.slot}
+              payMethod={wizard.payMethod}
+              onPayMethodChange={wizard.setPayMethod}
+              paymentMethods={wizard.paymentMethods}
+              selectedPaymentMethodId={wizard.selectedPaymentMethodId}
+              onSelectedPaymentMethodIdChange={wizard.setSelectedPaymentMethodId}
+              walletLoading={wizard.walletLoading}
+              walletError={wizard.walletError}
+              onLoadPaymentMethods={wizard.loadPaymentMethods}
+              isLoggedIn={!!wizard.session}
             />
           )}
 

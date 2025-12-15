@@ -1,4 +1,4 @@
-import { services, type ServiceId } from '@/hooks/useRequestWizard';
+import { services, type ServiceId, type MountType, MOUNT_UPCHARGES } from '@/hooks/useRequestWizard';
 
 type ServiceSelectorProps = {
   service: ServiceId;
@@ -9,11 +9,15 @@ type ServiceSelectorProps = {
   onWallTypeChange: (type: string) => void;
   hasMount: 'yes' | 'no';
   onHasMountChange: (value: 'yes' | 'no') => void;
+  mountType: MountType;
+  onMountTypeChange: (type: MountType) => void;
   assemblyType: string;
   onAssemblyTypeChange: (type: string) => void;
   assemblyOther: string;
   onAssemblyOtherChange: (value: string) => void;
 };
+
+const formatUpcharge = (cents: number) => cents > 0 ? `+$${cents / 100}` : '';
 
 export default function ServiceSelector({
   service,
@@ -24,6 +28,8 @@ export default function ServiceSelector({
   onWallTypeChange,
   hasMount,
   onHasMountChange,
+  mountType,
+  onMountTypeChange,
   assemblyType,
   onAssemblyTypeChange,
   assemblyOther,
@@ -72,16 +78,40 @@ export default function ServiceSelector({
             </div>
           </div>
           <div className="grid gap-2">
-            <FieldLabel>Mount provided?</FieldLabel>
+            <FieldLabel>Do you have a mount?</FieldLabel>
             <div className="flex gap-1.5 sm:gap-2">
               <Chip selected={hasMount === 'yes'} onClick={() => onHasMountChange('yes')}>
-                Yes
+                Yes, I have one
               </Chip>
               <Chip selected={hasMount === 'no'} onClick={() => onHasMountChange('no')}>
-                No
+                No, I need one
               </Chip>
             </div>
           </div>
+
+          {/* Mount type selection when user doesn't have a mount */}
+          {hasMount === 'no' && (
+            <div className="grid gap-2 rounded-lg border border-amber-200 bg-amber-50 p-3">
+              <FieldLabel>Select mount type</FieldLabel>
+              <p className="text-xs text-amber-800">We&apos;ll bring and install a mount for you.</p>
+              <div className="grid gap-2 sm:grid-cols-2">
+                <MountOption
+                  selected={mountType === 'static'}
+                  onClick={() => onMountTypeChange('static')}
+                  title="Static/Fixed Mount"
+                  description="Flush to wall, no movement"
+                  upcharge={MOUNT_UPCHARGES.static}
+                />
+                <MountOption
+                  selected={mountType === 'full_motion'}
+                  onClick={() => onMountTypeChange('full_motion')}
+                  title="Full Motion Mount"
+                  description="Swivel, tilt, and extend"
+                  upcharge={MOUNT_UPCHARGES.full_motion}
+                />
+              </div>
+            </div>
+          )}
         </div>
       )}
 
@@ -112,6 +142,37 @@ export default function ServiceSelector({
         </div>
       )}
     </div>
+  );
+}
+
+function MountOption({
+  selected,
+  onClick,
+  title,
+  description,
+  upcharge,
+}: {
+  selected: boolean;
+  onClick: () => void;
+  title: string;
+  description: string;
+  upcharge: number;
+}) {
+  return (
+    <button
+      onClick={onClick}
+      className={`flex flex-col items-start gap-1 rounded-lg border p-3 text-left transition ${
+        selected
+          ? 'border-indigo-600 bg-white shadow-sm'
+          : 'border-slate-200 bg-white hover:border-indigo-300'
+      }`}
+    >
+      <div className="flex w-full items-center justify-between">
+        <span className="text-sm font-semibold text-slate-900">{title}</span>
+        <span className="text-xs font-semibold text-indigo-700">{formatUpcharge(upcharge)}</span>
+      </div>
+      <span className="text-xs text-slate-600">{description}</span>
+    </button>
   );
 }
 
