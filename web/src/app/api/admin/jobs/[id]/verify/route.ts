@@ -54,8 +54,9 @@ export async function POST(
 
   // Handle different actions
   switch (action) {
+    case "approve":
     case "verify": {
-      // Can only verify jobs that are pending_verification
+      // Can only approve jobs that are pending_verification
       if (assignment.status !== "pending_verification") {
         return NextResponse.json(
           { error: "Job must be pending verification" },
@@ -63,43 +64,21 @@ export async function POST(
         );
       }
 
-      const { error: updateError } = await adminSupabase
-        .from("job_assignments")
-        .update({
-          status: "verified",
-          verified_at: new Date().toISOString(),
-          verified_by: session.user.id,
-          verification_notes: notes || null,
-        })
-        .eq("id", jobId);
-
-      if (updateError) {
-        return NextResponse.json({ error: updateError.message }, { status: 500 });
-      }
-
-      return NextResponse.json({ ok: true, status: "verified" });
-    }
-
-    case "pay": {
-      // Can only pay verified jobs
-      if (assignment.status !== "verified") {
-        return NextResponse.json(
-          { error: "Job must be verified before payment" },
-          { status: 400 }
-        );
-      }
-
       const now = new Date();
-      const paidAt = now.toISOString();
-      // Earnings available immediately after admin marks as paid
+      const completedAt = now.toISOString();
+      // Earnings available in 2 hours
       const availableAt = new Date(now.getTime() + 2 * 60 * 60 * 1000).toISOString();
 
-      // Update job status
+      // Update job to completed in one step
       const { error: updateError } = await adminSupabase
         .from("job_assignments")
         .update({
-          status: "paid",
-          paid_at: paidAt,
+          status: "completed",
+          verified_at: completedAt,
+          verified_by: session.user.id,
+          verification_notes: notes || null,
+          paid_at: completedAt,
+          completed_at: completedAt,
         })
         .eq("id", jobId);
 
@@ -120,7 +99,14 @@ export async function POST(
 
       if (earningsError) {
         console.error("Failed to create earnings record:", earningsError);
-        // Don't fail - the job is still marked as paid
+      }
+
+      // Update service request to complete
+      if (assignment.request_id) {
+        await adminSupabase
+          .from("service_requests")
+          .update({ status: "complete" })
+          .eq("id", assignment.request_id);
       }
 
       // Update agent profile stats
@@ -135,43 +121,26 @@ export async function POST(
 
       return NextResponse.json({
         ok: true,
-        status: "paid",
+        status: "completed",
+        completed_at: completedAt,
         earnings_available_at: availableAt,
       });
     }
 
+    case "pay": {
+      // Legacy - redirect to approve flow
+      return NextResponse.json(
+        { error: "Use 'approve' action instead" },
+        { status: 400 }
+      );
+    }
+
     case "complete": {
-      // Can only complete paid jobs
-      if (assignment.status !== "paid") {
-        return NextResponse.json(
-          { error: "Job must be paid before completing" },
-          { status: 400 }
-        );
-      }
-
-      const completedAt = new Date().toISOString();
-
-      const { error: updateError } = await adminSupabase
-        .from("job_assignments")
-        .update({
-          status: "completed",
-          completed_at: completedAt,
-        })
-        .eq("id", jobId);
-
-      if (updateError) {
-        return NextResponse.json({ error: updateError.message }, { status: 500 });
-      }
-
-      // Also update service request
-      if (assignment.request_id) {
-        await adminSupabase
-          .from("service_requests")
-          .update({ status: "complete" })
-          .eq("id", assignment.request_id);
-      }
-
-      return NextResponse.json({ ok: true, status: "completed", completed_at: completedAt });
+      // Legacy - redirect to approve flow
+      return NextResponse.json(
+        { error: "Use 'approve' action instead" },
+        { status: 400 }
+      );
     }
 
     case "reject": {

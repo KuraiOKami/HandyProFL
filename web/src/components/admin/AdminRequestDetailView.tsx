@@ -488,21 +488,24 @@ export default function AdminRequestDetailView({ request, client, otherRequests,
                   {/* Verification Actions */}
                   {localJob.status === "pending_verification" && (
                     <div className="rounded-lg border border-amber-200 bg-amber-50 p-4">
-                      <h4 className="mb-3 text-sm font-semibold text-amber-800">Verify this job</h4>
+                      <h4 className="mb-3 text-sm font-semibold text-amber-800">Review & Approve</h4>
+                      <p className="mb-3 text-xs text-amber-700">
+                        Review the photos above. Approving will mark the job complete and schedule agent payment.
+                      </p>
                       <textarea
                         value={verificationNotes}
                         onChange={(e) => setVerificationNotes(e.target.value)}
-                        placeholder="Add verification notes (optional)..."
+                        placeholder="Add notes (optional)..."
                         className="mb-3 w-full rounded-lg border border-slate-200 p-3 text-sm focus:border-indigo-500 focus:outline-none focus:ring-1 focus:ring-indigo-500"
                         rows={2}
                       />
                       <div className="flex gap-2">
                         <button
-                          onClick={() => handleJobAction("verify", verificationNotes)}
+                          onClick={() => handleJobAction("approve", verificationNotes)}
                           disabled={saving !== null}
-                          className="flex-1 rounded-lg bg-indigo-600 px-4 py-2 text-sm font-semibold text-white hover:bg-indigo-700 disabled:opacity-50"
+                          className="flex-1 rounded-lg bg-emerald-600 px-4 py-2 text-sm font-semibold text-white hover:bg-emerald-700 disabled:opacity-50"
                         >
-                          {saving === "verify" ? "Verifying..." : "Approve & Verify"}
+                          {saving === "approve" ? "Approving..." : "Approve & Complete"}
                         </button>
                         <button
                           onClick={() => handleJobAction("reject", verificationNotes)}
@@ -515,46 +518,10 @@ export default function AdminRequestDetailView({ request, client, otherRequests,
                     </div>
                   )}
 
-                  {localJob.status === "verified" && (
-                    <div className="rounded-lg border border-emerald-200 bg-emerald-50 p-4">
-                      <div className="flex items-center justify-between">
-                        <div>
-                          <h4 className="text-sm font-semibold text-emerald-800">Job Verified</h4>
-                          <p className="text-xs text-emerald-600">Ready to process payment</p>
-                        </div>
-                        <button
-                          onClick={() => handleJobAction("pay")}
-                          disabled={saving !== null}
-                          className="rounded-lg bg-emerald-600 px-4 py-2 text-sm font-semibold text-white hover:bg-emerald-700 disabled:opacity-50"
-                        >
-                          {saving === "pay" ? "Processing..." : "Mark Paid"}
-                        </button>
-                      </div>
-                    </div>
-                  )}
-
-                  {localJob.status === "paid" && (
-                    <div className="rounded-lg border border-emerald-200 bg-emerald-50 p-4">
-                      <div className="flex items-center justify-between">
-                        <div>
-                          <h4 className="text-sm font-semibold text-emerald-800">Payment Processed</h4>
-                          <p className="text-xs text-emerald-600">Agent payout scheduled</p>
-                        </div>
-                        <button
-                          onClick={() => handleJobAction("complete")}
-                          disabled={saving !== null}
-                          className="rounded-lg bg-emerald-600 px-4 py-2 text-sm font-semibold text-white hover:bg-emerald-700 disabled:opacity-50"
-                        >
-                          {saving === "complete" ? "Completing..." : "Mark Complete"}
-                        </button>
-                      </div>
-                    </div>
-                  )}
-
                   {localJob.status === "completed" && (
                     <div className="rounded-lg border border-emerald-200 bg-emerald-50 p-4">
                       <h4 className="text-sm font-semibold text-emerald-800">Job Completed</h4>
-                      <p className="text-xs text-emerald-600">This job has been fully processed</p>
+                      <p className="text-xs text-emerald-600">Agent payment scheduled (available in ~2 hours)</p>
                     </div>
                   )}
 
