@@ -146,10 +146,14 @@ export async function POST(
     .single();
 
   if (assignmentFull?.request_id) {
-    await adminSupabase
+    const { error: requestUpdateError } = await adminSupabase
       .from("service_requests")
       .update({ status: "pending_verification" })
       .eq("id", assignmentFull.request_id);
+
+    if (requestUpdateError) {
+      console.error("Failed to update service_request status:", requestUpdateError.message);
+    }
   }
 
   // NOTE: Earnings record is NOT created yet - it will be created when admin verifies and marks as paid

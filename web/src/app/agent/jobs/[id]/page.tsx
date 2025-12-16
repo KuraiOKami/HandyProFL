@@ -6,6 +6,13 @@ import { getSupabaseClient } from '@/lib/supabaseClient';
 import { formatTime } from '@/lib/formatting';
 import Image from 'next/image';
 
+// Extract error message from API response (handles both string and object errors)
+function getErrorMessage(data: { error?: string | { message?: string } }, fallback: string): string {
+  if (!data.error) return fallback;
+  if (typeof data.error === 'string') return data.error;
+  return data.error.message || fallback;
+}
+
 type JobDetail = {
   id: string;
   request_id: string;
@@ -58,7 +65,7 @@ export default function JobDetailPage() {
       const data = await res.json();
 
       if (!res.ok) {
-        throw new Error(data.error || 'Failed to load job');
+        throw new Error(getErrorMessage(data, 'Failed to load job'));
       }
 
       setJob(data.job);
@@ -109,7 +116,7 @@ export default function JobDetailPage() {
         if (data.distance_meters) {
           setGpsError(`Too far from job location (${Math.round(data.distance_meters)}m away). Must be within 100m.`);
         } else {
-          throw new Error(data.error || 'Failed to check in');
+          throw new Error(getErrorMessage(data, 'Failed to check in'));
         }
         return;
       }
@@ -148,9 +155,11 @@ export default function JobDetailPage() {
       const data = await res.json();
 
       if (!res.ok) {
-        throw new Error(data.error || 'Failed to check out');
+        throw new Error(getErrorMessage(data, 'Failed to check out'));
       }
 
+      // Show success message after checkout
+      setError(null);
       await loadJob();
     } catch (err) {
       if (err instanceof GeolocationPositionError) {
@@ -205,7 +214,7 @@ export default function JobDetailPage() {
       const data = await res.json();
 
       if (!res.ok) {
-        throw new Error(data.error || 'Failed to save proof');
+        throw new Error(getErrorMessage(data, 'Failed to save proof'));
       }
 
       await loadJob();
@@ -281,12 +290,20 @@ export default function JobDetailPage() {
             className={`rounded-full px-3 py-1 text-xs font-medium ${
               job.status === 'completed'
                 ? 'bg-emerald-100 text-emerald-700'
+                : job.status === 'pending_verification'
+                ? 'bg-indigo-100 text-indigo-700'
                 : job.status === 'in_progress'
                 ? 'bg-blue-100 text-blue-700'
                 : 'bg-amber-100 text-amber-700'
             }`}
           >
-            {job.status === 'in_progress' ? 'In Progress' : job.status === 'completed' ? 'Completed' : 'Assigned'}
+            {job.status === 'in_progress'
+              ? 'In Progress'
+              : job.status === 'pending_verification'
+              ? 'Pending Review'
+              : job.status === 'completed'
+              ? 'Completed'
+              : 'Assigned'}
           </span>
         </div>
       </header>
@@ -526,6 +543,17 @@ export default function JobDetailPage() {
                 </div>
               ))}
             </div>
+          </div>
+        )}
+
+        {/* Pending Verification Message */}
+        {job.status === 'pending_verification' && (
+          <div className="mt-6 rounded-xl border border-indigo-200 bg-indigo-50 p-5 text-center">
+            <div className="mb-2 text-4xl">✅</div>
+            <h3 className="text-lg font-semibold text-indigo-800">Job Submitted for Review</h3>
+            <p className="mt-1 text-sm text-indigo-600">
+              Your work is being reviewed. You&apos;ll be paid {formatCurrency(job.agent_payout_cents)} once verified.
+            </p>
           </div>
         )}
 
