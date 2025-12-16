@@ -38,7 +38,7 @@ export async function POST(req: NextRequest) {
 
   const auth = await getAgentSession();
   if ("error" in auth) return auth.error;
-  const { supabase, adminSupabase, session, email } = auth;
+  const { adminSupabase, session, email } = auth;
 
   const body = await req.json().catch(() => null);
   const mode: Mode = body?.mode === "management" ? "management" : "onboarding";
