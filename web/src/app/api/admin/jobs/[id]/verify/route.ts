@@ -69,6 +69,10 @@ export async function POST(
       // Earnings available in 2 hours
       const availableAt = new Date(now.getTime() + 2 * 60 * 60 * 1000).toISOString();
 
+      const payoutCents =
+        assignment.agent_payout_cents ??
+        (assignment.job_price_cents ? Math.round(assignment.job_price_cents * 0.7) : 0);
+
       // Update job to completed in one step
       const { error: updateError } = await adminSupabase
         .from("job_assignments")
@@ -77,6 +81,7 @@ export async function POST(
           verified_at: completedAt,
           verified_by: session.user.id,
           verification_notes: notes || null,
+          agent_payout_cents: payoutCents,
           paid_at: completedAt,
           completed_at: completedAt,
         })
@@ -92,7 +97,7 @@ export async function POST(
         .insert({
           agent_id: assignment.agent_id,
           assignment_id: jobId,
-          amount_cents: assignment.agent_payout_cents,
+          amount_cents: payoutCents,
           status: "pending",
           available_at: availableAt,
         });
