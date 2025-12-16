@@ -37,7 +37,6 @@ export default function AgentSettingsContent() {
   const [saving, setSaving] = useState(false);
   const [error, setError] = useState<string | null>(null);
   const [success, setSuccess] = useState<string | null>(null);
-  const [connectingStripe, setConnectingStripe] = useState(false);
   const { theme, setTheme } = useThemePreference();
 
   // Form state
@@ -110,31 +109,6 @@ export default function AgentSettingsContent() {
       setError(err instanceof Error ? err.message : 'Failed to save profile');
     } finally {
       setSaving(false);
-    }
-  };
-
-  const handleConnectStripe = async () => {
-    setConnectingStripe(true);
-    setError(null);
-
-    try {
-      const res = await fetch('/api/agent/bank-account', {
-        method: 'POST',
-      });
-
-      const data = await res.json();
-
-      if (!res.ok) {
-        throw new Error(data.error || 'Failed to start Stripe setup');
-      }
-
-      // Redirect to Stripe onboarding
-      if (data.url) {
-        window.location.href = data.url;
-      }
-    } catch (err) {
-      setError(err instanceof Error ? err.message : 'Failed to connect Stripe');
-      setConnectingStripe(false);
     }
   };
 
@@ -347,64 +321,22 @@ export default function AgentSettingsContent() {
       {/* Payment Setup */}
       <div className="rounded-xl border border-slate-200 bg-white p-5 shadow-sm">
         <h3 className="text-lg font-semibold text-slate-900">Payment Setup</h3>
-        <p className="text-sm text-slate-500">Connect your bank account to receive payouts</p>
+        <p className="text-sm text-slate-500">
+          We pay out to the card/bank you have on file. Update your payout method in Wallet.
+        </p>
 
-        <div className="mt-4">
-          {profile?.stripe_payouts_enabled ? (
-            <div className="rounded-lg bg-emerald-50 px-4 py-4">
-              <div className="flex items-center gap-3">
-                <div className="flex h-10 w-10 items-center justify-center rounded-full bg-emerald-100 text-xl">
-                  ✓
-                </div>
-                <div>
-                  <p className="font-medium text-emerald-800">Payments Enabled</p>
-                  <p className="text-sm text-emerald-600">Your bank account is connected and ready to receive payouts</p>
-                </div>
-              </div>
+        <div className="mt-4 rounded-lg bg-emerald-50 px-4 py-4">
+          <div className="flex items-center gap-3">
+            <div className="flex h-10 w-10 items-center justify-center rounded-full bg-emerald-100 text-xl">
+              ✓
             </div>
-          ) : profile?.stripe_account_id ? (
-            <div className="rounded-lg bg-amber-50 px-4 py-4">
-              <div className="flex items-center justify-between">
-                <div className="flex items-center gap-3">
-                  <div className="flex h-10 w-10 items-center justify-center rounded-full bg-amber-100 text-xl">
-                    ⚠️
-                  </div>
-                  <div>
-                    <p className="font-medium text-amber-800">Setup Incomplete</p>
-                    <p className="text-sm text-amber-600">Complete your Stripe account setup to receive payouts</p>
-                  </div>
-                </div>
-                <button
-                  onClick={handleConnectStripe}
-                  disabled={connectingStripe}
-                  className="rounded-lg bg-amber-600 px-4 py-2 text-sm font-semibold text-white transition hover:bg-amber-700 disabled:bg-amber-400"
-                >
-                  {connectingStripe ? 'Loading...' : 'Complete Setup'}
-                </button>
-              </div>
+            <div>
+              <p className="font-medium text-emerald-800">Payouts enabled</p>
+              <p className="text-sm text-emerald-600">
+                Your saved payment method will be used for cash out. No Stripe onboarding required.
+              </p>
             </div>
-          ) : (
-            <div className="rounded-lg border border-slate-200 bg-slate-50 px-4 py-4">
-              <div className="flex items-center justify-between">
-                <div className="flex items-center gap-3">
-                  <div className="flex h-10 w-10 items-center justify-center rounded-full bg-slate-200 text-xl">
-                    🏦
-                  </div>
-                  <div>
-                    <p className="font-medium text-slate-800">Connect Bank Account</p>
-                    <p className="text-sm text-slate-600">Set up Stripe to receive your earnings</p>
-                  </div>
-                </div>
-                <button
-                  onClick={handleConnectStripe}
-                  disabled={connectingStripe}
-                  className="rounded-lg bg-emerald-600 px-4 py-2 text-sm font-semibold text-white transition hover:bg-emerald-700 disabled:bg-emerald-400"
-                >
-                  {connectingStripe ? 'Loading...' : 'Connect Stripe'}
-                </button>
-              </div>
-            </div>
-          )}
+          </div>
         </div>
       </div>
     </div>
