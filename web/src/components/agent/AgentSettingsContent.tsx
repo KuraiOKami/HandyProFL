@@ -2,7 +2,7 @@
 
 import { useEffect, useRef, useState } from 'react';
 import { useThemePreference } from '@/hooks/useThemePreference';
-import { loadConnectAndInitialize, EmbeddedComponent } from '@stripe/connect-js';
+import { loadConnectAndInitialize } from '@stripe/connect-js';
 import WalletSettings from '@/components/WalletSettings';
 
 type AgentProfile = {
@@ -44,7 +44,7 @@ export default function AgentSettingsContent() {
   const [payoutLoading, setPayoutLoading] = useState(false);
   const [activeComponent, setActiveComponent] = useState<'onboarding' | 'management' | null>(null);
   const { theme, setTheme } = useThemePreference();
-  const mountedComponentRef = useRef<EmbeddedComponent | null>(null);
+  const mountedComponentRef = useRef<(HTMLElement & { unmount?: () => void }) | null>(null);
   const embedContainerRef = useRef<HTMLDivElement | null>(null);
 
   // Form state
@@ -63,7 +63,9 @@ export default function AgentSettingsContent() {
     loadPayoutStatus();
     return () => {
       // Cleanup embedded component when unmounting
-      mountedComponentRef.current?.unmount();
+      if (mountedComponentRef.current?.unmount) {
+        mountedComponentRef.current.unmount();
+      }
     };
   }, []);
 
@@ -181,21 +183,29 @@ export default function AgentSettingsContent() {
       }
 
       // Tear down any existing component
-      mountedComponentRef.current?.unmount();
+      if (mountedComponentRef.current?.unmount) {
+        mountedComponentRef.current.unmount();
+      } else if (mountedComponentRef.current && embedContainerRef.current) {
+        embedContainerRef.current.removeChild(mountedComponentRef.current);
+      }
+      mountedComponentRef.current = null;
 
-      const connectInstance = await loadConnectAndInitialize({
+      const clientSecret = data.client_secret as string;
+      const connectInstance = loadConnectAndInitialize({
         publishableKey: process.env.NEXT_PUBLIC_STRIPE_PUBLISHABLE_KEY,
-        clientSecret: data.client_secret as string,
+        fetchClientSecret: async () => clientSecret,
         appearance: {
           variables: { colorPrimary: '#0f766e' },
         },
       });
 
       const component = connectInstance.create(
-        mode === 'management' ? 'account_management' : 'account_onboarding'
+        mode === 'management' ? 'account-management' : 'account-onboarding'
       );
 
-      component.mount(embedContainerRef.current!);
+      if (embedContainerRef.current) {
+        embedContainerRef.current.appendChild(component);
+      }
       mountedComponentRef.current = component;
       setActiveComponent(mode);
     } catch (err) {
