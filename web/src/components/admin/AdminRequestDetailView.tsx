@@ -723,6 +723,7 @@ export default function AdminRequestDetailView({ request, client, otherRequests,
           <div className="rounded-xl border border-slate-200 bg-white p-5 shadow-sm">
             <h3 className="mb-4 text-sm font-semibold uppercase tracking-wide text-slate-500">Activity</h3>
             <div className="space-y-4">
+              {/* Request created */}
               <div className="flex gap-3">
                 <div className="flex flex-col items-center">
                   <div className="h-2 w-2 rounded-full bg-emerald-500" />
@@ -733,29 +734,119 @@ export default function AdminRequestDetailView({ request, client, otherRequests,
                   <p className="text-xs text-slate-500">{formatDateTime(localRequest.created_at)}</p>
                 </div>
               </div>
-              {localRequest.status === "confirmed" && (
+
+              {/* Job assigned */}
+              {jobAssignment?.assigned_at && (
+                <div className="flex gap-3">
+                  <div className="flex flex-col items-center">
+                    <div className="h-2 w-2 rounded-full bg-purple-500" />
+                    <div className="w-px flex-1 bg-slate-200" />
+                  </div>
+                  <div className="pb-4">
+                    <p className="text-sm font-medium text-slate-900">Agent assigned</p>
+                    <p className="text-xs text-slate-500">{formatDateTime(jobAssignment.assigned_at)}</p>
+                  </div>
+                </div>
+              )}
+
+              {/* Agent checked in */}
+              {checkins?.find(c => c.type === "checkin") && (
                 <div className="flex gap-3">
                   <div className="flex flex-col items-center">
                     <div className="h-2 w-2 rounded-full bg-blue-500" />
                     <div className="w-px flex-1 bg-slate-200" />
                   </div>
                   <div className="pb-4">
-                    <p className="text-sm font-medium text-slate-900">Appointment confirmed</p>
-                    <p className="text-xs text-slate-500">Status updated</p>
+                    <p className="text-sm font-medium text-slate-900">Agent checked in</p>
+                    <p className="text-xs text-slate-500">{formatDateTime(checkins.find(c => c.type === "checkin")?.created_at)}</p>
                   </div>
                 </div>
               )}
-              {localRequest.status === "complete" && (
+
+              {/* Box photo uploaded */}
+              {proofs?.find(p => p.type === "box") && (
+                <div className="flex gap-3">
+                  <div className="flex flex-col items-center">
+                    <div className="h-2 w-2 rounded-full bg-amber-500" />
+                    <div className="w-px flex-1 bg-slate-200" />
+                  </div>
+                  <div className="pb-4">
+                    <p className="text-sm font-medium text-slate-900">Before photo uploaded</p>
+                    <p className="text-xs text-slate-500">{formatDateTime(proofs.find(p => p.type === "box")?.uploaded_at)}</p>
+                  </div>
+                </div>
+              )}
+
+              {/* Finished photo uploaded */}
+              {proofs?.find(p => p.type === "finished") && (
+                <div className="flex gap-3">
+                  <div className="flex flex-col items-center">
+                    <div className="h-2 w-2 rounded-full bg-amber-500" />
+                    <div className="w-px flex-1 bg-slate-200" />
+                  </div>
+                  <div className="pb-4">
+                    <p className="text-sm font-medium text-slate-900">After photo uploaded</p>
+                    <p className="text-xs text-slate-500">{formatDateTime(proofs.find(p => p.type === "finished")?.uploaded_at)}</p>
+                  </div>
+                </div>
+              )}
+
+              {/* Agent checked out */}
+              {checkins?.find(c => c.type === "checkout") && (
+                <div className="flex gap-3">
+                  <div className="flex flex-col items-center">
+                    <div className="h-2 w-2 rounded-full bg-indigo-500" />
+                    <div className="w-px flex-1 bg-slate-200" />
+                  </div>
+                  <div className="pb-4">
+                    <p className="text-sm font-medium text-slate-900">Agent checked out</p>
+                    <p className="text-xs text-slate-500">{formatDateTime(checkins.find(c => c.type === "checkout")?.created_at)}</p>
+                  </div>
+                </div>
+              )}
+
+              {/* Job verified */}
+              {jobAssignment?.verified_at && (
+                <div className="flex gap-3">
+                  <div className="flex flex-col items-center">
+                    <div className="h-2 w-2 rounded-full bg-emerald-500" />
+                    <div className="w-px flex-1 bg-slate-200" />
+                  </div>
+                  <div className="pb-4">
+                    <p className="text-sm font-medium text-slate-900">Work verified</p>
+                    <p className="text-xs text-slate-500">{formatDateTime(jobAssignment.verified_at)}</p>
+                  </div>
+                </div>
+              )}
+
+              {/* Agent paid */}
+              {jobAssignment?.paid_at && (
+                <div className="flex gap-3">
+                  <div className="flex flex-col items-center">
+                    <div className="h-2 w-2 rounded-full bg-emerald-500" />
+                    <div className="w-px flex-1 bg-slate-200" />
+                  </div>
+                  <div className="pb-4">
+                    <p className="text-sm font-medium text-slate-900">Agent paid</p>
+                    <p className="text-xs text-slate-500">{formatDateTime(jobAssignment.paid_at)}</p>
+                  </div>
+                </div>
+              )}
+
+              {/* Job completed */}
+              {jobAssignment?.completed_at && (
                 <div className="flex gap-3">
                   <div className="flex flex-col items-center">
                     <div className="h-2 w-2 rounded-full bg-emerald-500" />
                   </div>
                   <div>
-                    <p className="text-sm font-medium text-slate-900">Service completed</p>
-                    <p className="text-xs text-slate-500">Work finished</p>
+                    <p className="text-sm font-medium text-slate-900">Job completed</p>
+                    <p className="text-xs text-slate-500">{formatDateTime(jobAssignment.completed_at)}</p>
                   </div>
                 </div>
               )}
+
+              {/* Cancelled status (show if no job or job cancelled) */}
               {localRequest.status === "cancelled" && (
                 <div className="flex gap-3">
                   <div className="flex flex-col items-center">
