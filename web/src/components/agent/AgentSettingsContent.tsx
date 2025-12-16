@@ -1,7 +1,8 @@
 'use client';
 
-import { useEffect, useState } from 'react';
+import { useEffect, useRef, useState } from 'react';
 import { useThemePreference } from '@/hooks/useThemePreference';
+import { loadConnectAndInitialize, EmbeddedComponent } from '@stripe/connect-js';
 import WalletSettings from '@/components/WalletSettings';
 
 type AgentProfile = {
@@ -38,7 +39,13 @@ export default function AgentSettingsContent() {
   const [saving, setSaving] = useState(false);
   const [error, setError] = useState<string | null>(null);
   const [success, setSuccess] = useState<string | null>(null);
+  const [payoutStatus, setPayoutStatus] = useState<string | null>(null);
+  const [payoutError, setPayoutError] = useState<string | null>(null);
+  const [payoutLoading, setPayoutLoading] = useState(false);
+  const [activeComponent, setActiveComponent] = useState<'onboarding' | 'management' | null>(null);
   const { theme, setTheme } = useThemePreference();
+  const mountedComponentRef = useRef<EmbeddedComponent | null>(null);
+  const embedContainerRef = useRef<HTMLDivElement | null>(null);
 
   // Form state
   const [firstName, setFirstName] = useState('');
@@ -50,6 +57,14 @@ export default function AgentSettingsContent() {
 
   useEffect(() => {
     loadProfile();
+  }, []);
+
+  useEffect(() => {
+    loadPayoutStatus();
+    return () => {
+      // Cleanup embedded component when unmounting
+      mountedComponentRef.current?.unmount();
+    };
   }, []);
 
   const loadProfile = async () => {
@@ -117,6 +132,77 @@ export default function AgentSettingsContent() {
     setSkills((prev) =>
       prev.includes(skillId) ? prev.filter((s) => s !== skillId) : [...prev, skillId]
     );
+  };
+
+  const loadPayoutStatus = async () => {
+    setPayoutLoading(true);
+    setPayoutError(null);
+    try {
+      const res = await fetch('/api/agent/bank-account');
+      const data = await res.json();
+      if (!res.ok) {
+        throw new Error(data.error || 'Failed to load payout status');
+      }
+      const statusLabel = data.payouts_enabled
+        ? 'Payouts enabled'
+        : data.status === 'pending'
+          ? 'Pending verification'
+          : 'Not connected';
+      setPayoutStatus(statusLabel);
+    } catch (err) {
+      setPayoutError(err instanceof Error ? err.message : 'Failed to load payout status');
+    } finally {
+      setPayoutLoading(false);
+    }
+  };
+
+  const startEmbeddedConnect = async (mode: 'onboarding' | 'management') => {
+    setPayoutError(null);
+    setPayoutLoading(true);
+
+    try {
+      if (!embedContainerRef.current) {
+        throw new Error('Payout setup container not ready');
+      }
+
+      const res = await fetch('/api/agent/connect/session', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ mode }),
+      });
+
+      const data = await res.json();
+      if (!res.ok || !data.client_secret) {
+        throw new Error(data.error || 'Unable to start payout setup');
+      }
+
+      if (!process.env.NEXT_PUBLIC_STRIPE_PUBLISHABLE_KEY) {
+        throw new Error('Missing NEXT_PUBLIC_STRIPE_PUBLISHABLE_KEY');
+      }
+
+      // Tear down any existing component
+      mountedComponentRef.current?.unmount();
+
+      const connectInstance = await loadConnectAndInitialize({
+        publishableKey: process.env.NEXT_PUBLIC_STRIPE_PUBLISHABLE_KEY,
+        clientSecret: data.client_secret as string,
+        appearance: {
+          variables: { colorPrimary: '#0f766e' },
+        },
+      });
+
+      const component = connectInstance.create(
+        mode === 'management' ? 'account_management' : 'account_onboarding'
+      );
+
+      component.mount(embedContainerRef.current!);
+      mountedComponentRef.current = component;
+      setActiveComponent(mode);
+    } catch (err) {
+      setPayoutError(err instanceof Error ? err.message : 'Unable to load payout setup');
+    } finally {
+      setPayoutLoading(false);
+    }
   };
 
   const getStatusBadge = () => {
@@ -323,10 +409,61 @@ export default function AgentSettingsContent() {
       <div className="rounded-xl border border-slate-200 bg-white p-5 shadow-sm">
         <h3 className="text-lg font-semibold text-slate-900">Payment Setup</h3>
         <p className="text-sm text-slate-500">
-          Add or update the card/bank we use for payouts and instant cash out.
+          Add or update the bank/card we use for payouts and instant cash out. Managed securely with Stripe embedded components.
         </p>
-        <div className="mt-4">
-          <WalletSettings />
+        <div className="mt-4 grid gap-4">
+          <div className="flex flex-wrap items-center justify-between gap-3">
+            <div>
+              <p className="text-sm font-medium text-slate-800">
+                {payoutLoading ? 'Checking payout status...' : payoutStatus || 'Payout status unknown'}
+              </p>
+              {payoutError && <p className="text-sm text-rose-600">{payoutError}</p>}
+            </div>
+            <div className="flex flex-wrap gap-2">
+              <button
+                onClick={() => startEmbeddedConnect('onboarding')}
+                disabled={payoutLoading}
+                className="rounded-lg bg-emerald-600 px-3 py-2 text-sm font-semibold text-white hover:bg-emerald-700 disabled:bg-slate-300"
+              >
+                {activeComponent === 'onboarding' && payoutLoading ? 'Loading...' : 'Start onboarding'}
+              </button>
+              <button
+                onClick={() => startEmbeddedConnect('management')}
+                disabled={payoutLoading}
+                className="rounded-lg border border-slate-200 px-3 py-2 text-sm font-semibold text-slate-800 hover:border-emerald-500 disabled:bg-slate-200"
+              >
+                {activeComponent === 'management' && payoutLoading ? 'Loading...' : 'Manage payouts'}
+              </button>
+              <button
+                onClick={loadPayoutStatus}
+                disabled={payoutLoading}
+                className="rounded-lg border border-slate-200 px-3 py-2 text-sm font-semibold text-slate-700 hover:border-slate-300 disabled:bg-slate-200"
+              >
+                Refresh status
+              </button>
+            </div>
+          </div>
+
+          <div
+            ref={embedContainerRef}
+            className="min-h-[400px] rounded-lg border border-dashed border-slate-300 bg-slate-50 p-4"
+          >
+            {!activeComponent && (
+              <p className="text-sm text-slate-500">
+                Launch onboarding or management to load the embedded payout setup here.
+              </p>
+            )}
+          </div>
+
+          <div className="rounded-lg border border-slate-200 p-4">
+            <h4 className="text-sm font-semibold text-slate-900">Job payment methods</h4>
+            <p className="text-sm text-slate-600">
+              Cards you store for job charges and instant confirmations live in your wallet.
+            </p>
+            <div className="mt-3">
+              <WalletSettings />
+            </div>
+          </div>
         </div>
       </div>
     </div>
