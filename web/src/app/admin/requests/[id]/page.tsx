@@ -132,7 +132,7 @@ export default async function AdminRequestDetailPage({ params }: PageProps) {
     const { data: checkinData } = await adminSupabase
       .from("agent_checkins")
       .select("id, type, created_at, latitude, longitude, location_verified")
-      .eq("job_id", jobData.id)
+      .eq("assignment_id", jobData.id)
       .order("created_at", { ascending: true });
     checkins = checkinData ?? [];
 
@@ -140,7 +140,7 @@ export default async function AdminRequestDetailPage({ params }: PageProps) {
     const { data: proofData } = await adminSupabase
       .from("proof_of_work")
       .select("id, type, photo_url, notes, uploaded_at")
-      .eq("job_id", jobData.id)
+      .eq("assignment_id", jobData.id)
       .order("uploaded_at", { ascending: true });
     proofs = proofData ?? [];
   }
