@@ -85,7 +85,6 @@ export async function GET() {
 
   (earnings || []).forEach((e) => {
     const amount = e.amount_cents;
-    const availableAt = e.available_at ? new Date(e.available_at) : null;
     const createdAt = new Date(e.created_at);
 
     totalEarnings += amount;
