@@ -490,6 +490,25 @@ create policy "Agents can update assigned service requests"
   using (assigned_agent_id = auth.uid())
   with check (assigned_agent_id = auth.uid());
 
+-- Allow agents to update requests linked to their assignments
+create policy "Agents can update requests via assignment"
+  on service_requests for update
+  to authenticated
+  using (
+    EXISTS (
+      SELECT 1 FROM job_assignments ja
+      WHERE ja.request_id = service_requests.id
+      AND ja.agent_id = auth.uid()
+    )
+  )
+  with check (
+    EXISTS (
+      SELECT 1 FROM job_assignments ja
+      WHERE ja.request_id = service_requests.id
+      AND ja.agent_id = auth.uid()
+    )
+  );
+
 -- Grant permissions
 GRANT ALL ON agent_profiles TO authenticated;
 GRANT ALL ON job_assignments TO authenticated;
