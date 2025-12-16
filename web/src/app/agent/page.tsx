@@ -100,7 +100,7 @@ export default async function AgentRootPage() {
       userName={userName}
       userEmail={userEmail}
       agentStatus={agentProfile?.status || "pending_approval"}
-      stripeConnected={agentProfile?.stripe_payouts_enabled || false}
+      stripeConnected={true}
     />
   );
 }

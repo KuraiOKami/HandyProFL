@@ -44,7 +44,7 @@ export async function POST(
   // Get the job assignment
   const { data: assignment, error } = await adminSupabase
     .from("job_assignments")
-    .select("id, status, agent_id, agent_payout_cents, request_id")
+    .select("id, status, agent_id, agent_payout_cents, job_price_cents, request_id")
     .eq("id", jobId)
     .single();
 
