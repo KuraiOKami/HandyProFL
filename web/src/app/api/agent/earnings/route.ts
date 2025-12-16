@@ -91,7 +91,7 @@ export async function GET() {
     totalEarnings += amount;
     completedJobs++;
 
-    const isAvailable = e.status === "available" && (!availableAt || availableAt <= now);
+    const isAvailable = e.status === "available";
 
     if (e.status === "paid_out") {
       // Already paid out, don't count in balances
@@ -113,14 +113,11 @@ export async function GET() {
   const earningsFormatted = (earnings || []).map((e) => {
     const jaRaw = Array.isArray(e.job_assignments) ? e.job_assignments[0] : e.job_assignments;
     const ja = jaRaw as { completed_at?: string; service_requests?: { service_type?: string } | null } | null;
-    const availableAt = e.available_at ? new Date(e.available_at) : null;
-    const displayStatus =
-      e.status === "available" && availableAt && availableAt > now ? "pending" : e.status;
     return {
       id: e.id,
       assignment_id: e.assignment_id,
       amount_cents: e.amount_cents,
-      status: displayStatus,
+      status: e.status,
       available_at: e.available_at,
       service_type: ja?.service_requests?.service_type || "unknown",
       completed_at: ja?.completed_at || e.created_at,

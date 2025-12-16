@@ -66,8 +66,8 @@ export async function POST(
 
       const now = new Date();
       const completedAt = now.toISOString();
-      // Earnings available in 2 hours
-      const availableAt = new Date(now.getTime() + 2 * 60 * 60 * 1000).toISOString();
+      // Make earnings available immediately after verification
+      const availableAt = completedAt;
 
       const payoutCents =
         assignment.agent_payout_cents ??

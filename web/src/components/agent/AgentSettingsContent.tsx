@@ -2,6 +2,7 @@
 
 import { useEffect, useState } from 'react';
 import { useThemePreference } from '@/hooks/useThemePreference';
+import WalletSettings from '@/components/WalletSettings';
 
 type AgentProfile = {
   id: string;
@@ -322,21 +323,10 @@ export default function AgentSettingsContent() {
       <div className="rounded-xl border border-slate-200 bg-white p-5 shadow-sm">
         <h3 className="text-lg font-semibold text-slate-900">Payment Setup</h3>
         <p className="text-sm text-slate-500">
-          We pay out to the card/bank you have on file. Update your payout method in Wallet.
+          Add or update the card/bank we use for payouts and instant cash out.
         </p>
-
-        <div className="mt-4 rounded-lg bg-emerald-50 px-4 py-4">
-          <div className="flex items-center gap-3">
-            <div className="flex h-10 w-10 items-center justify-center rounded-full bg-emerald-100 text-xl">
-              ✓
-            </div>
-            <div>
-              <p className="font-medium text-emerald-800">Payouts enabled</p>
-              <p className="text-sm text-emerald-600">
-                Your saved payment method will be used for cash out. No Stripe onboarding required.
-              </p>
-            </div>
-          </div>
+        <div className="mt-4">
+          <WalletSettings />
         </div>
       </div>
     </div>

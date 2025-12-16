@@ -49,7 +49,6 @@ export async function POST(req: NextRequest) {
   if (updates.status && assignment) {
     const now = new Date();
     const nowIso = now.toISOString();
-    const availableLaterIso = new Date(now.getTime() + 2 * 60 * 60 * 1000).toISOString();
     const newStatus: string = updates.status;
 
     const assignmentUpdate: Record<string, unknown> = {};
@@ -70,7 +69,7 @@ export async function POST(req: NextRequest) {
         assignmentUpdate.verified_at = nowIso;
         shouldCreateEarning = true;
         earningStatus = "available";
-        earningAvailableAt = availableLaterIso;
+        earningAvailableAt = nowIso;
         break;
       case "paid":
       case "completed":
