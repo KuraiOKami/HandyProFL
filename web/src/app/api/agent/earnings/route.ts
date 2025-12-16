@@ -85,15 +85,17 @@ export async function GET() {
 
   (earnings || []).forEach((e) => {
     const amount = e.amount_cents;
-    const availableAt = new Date(e.available_at);
+    const availableAt = e.available_at ? new Date(e.available_at) : null;
     const createdAt = new Date(e.created_at);
 
     totalEarnings += amount;
     completedJobs++;
 
+    const isAvailable = e.status === "available" && (!availableAt || availableAt <= now);
+
     if (e.status === "paid_out") {
       // Already paid out, don't count in balances
-    } else if (e.status === "available" || availableAt <= now) {
+    } else if (isAvailable) {
       availableBalance += amount;
     } else {
       pendingBalance += amount;
@@ -111,11 +113,14 @@ export async function GET() {
   const earningsFormatted = (earnings || []).map((e) => {
     const jaRaw = Array.isArray(e.job_assignments) ? e.job_assignments[0] : e.job_assignments;
     const ja = jaRaw as { completed_at?: string; service_requests?: { service_type?: string } | null } | null;
+    const availableAt = e.available_at ? new Date(e.available_at) : null;
+    const displayStatus =
+      e.status === "available" && availableAt && availableAt > now ? "pending" : e.status;
     return {
       id: e.id,
       assignment_id: e.assignment_id,
       amount_cents: e.amount_cents,
-      status: new Date(e.available_at) <= now && e.status === "pending" ? "available" : e.status,
+      status: displayStatus,
       available_at: e.available_at,
       service_type: ja?.service_requests?.service_type || "unknown",
       completed_at: ja?.completed_at || e.created_at,

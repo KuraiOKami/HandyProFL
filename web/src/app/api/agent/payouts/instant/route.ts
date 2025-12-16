@@ -64,13 +64,13 @@ export async function POST() {
     return NextResponse.json({ error: "Stripe payouts not enabled" }, { status: 400 });
   }
 
-  // Get available earnings (status='pending' and available_at <= now, or status='available')
+  // Get available earnings (only status='available'; time check applied below)
   const { data: earnings, error: earningsError } = await adminSupabase
     .from("agent_earnings")
     .select("id, amount_cents, available_at, status")
     .eq("agent_id", agentId)
-    .is("payout_id", null)
-    .or(`status.eq.available,and(status.eq.pending,available_at.lte.${now.toISOString()})`);
+    .eq("status", "available")
+    .is("payout_id", null);
 
   if (earningsError) {
     return NextResponse.json({ error: earningsError.message }, { status: 500 });
@@ -78,9 +78,8 @@ export async function POST() {
 
   // Filter earnings that are actually available
   const availableEarnings = (earnings || []).filter((e) => {
-    if (e.status === "available") return true;
-    if (e.status === "pending" && new Date(e.available_at) <= now) return true;
-    return false;
+    const availableAt = e.available_at ? new Date(e.available_at) : null;
+    return !availableAt || availableAt <= now;
   });
 
   if (availableEarnings.length === 0) {

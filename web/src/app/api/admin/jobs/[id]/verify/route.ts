@@ -91,19 +91,39 @@ export async function POST(
         return NextResponse.json({ error: updateError.message }, { status: 500 });
       }
 
-      // Create earnings record for the agent
-      const { error: earningsError } = await adminSupabase
+      // Create or update earnings record for the agent
+      const { data: existingEarning } = await adminSupabase
         .from("agent_earnings")
-        .insert({
-          agent_id: assignment.agent_id,
-          assignment_id: jobId,
-          amount_cents: payoutCents,
-          status: "pending",
-          available_at: availableAt,
-        });
+        .select("id, status")
+        .eq("assignment_id", jobId)
+        .single();
 
-      if (earningsError) {
-        console.error("Failed to create earnings record:", earningsError);
+      if (existingEarning?.status !== "paid_out") {
+        const mutation = existingEarning
+          ? adminSupabase
+              .from("agent_earnings")
+              .update({
+                amount_cents: payoutCents,
+                status: "available",
+                available_at: availableAt,
+                paid_out_at: null,
+                payout_id: null,
+              })
+              .eq("id", existingEarning.id)
+          : adminSupabase.from("agent_earnings").insert({
+              agent_id: assignment.agent_id,
+              assignment_id: jobId,
+              amount_cents: payoutCents,
+              status: "available",
+              available_at: availableAt,
+              paid_out_at: null,
+              payout_id: null,
+            });
+
+        const { error: earningsError } = await mutation;
+        if (earningsError) {
+          console.error("Failed to upsert earnings record:", earningsError);
+        }
       }
 
       // Update service request to complete
@@ -118,7 +138,7 @@ export async function POST(
       try {
         await adminSupabase.rpc("increment_agent_stats", {
           p_agent_id: assignment.agent_id,
-          p_amount_cents: assignment.agent_payout_cents,
+          p_amount_cents: payoutCents,
         });
       } catch (err) {
         console.warn("increment_agent_stats RPC missing or failed", err);

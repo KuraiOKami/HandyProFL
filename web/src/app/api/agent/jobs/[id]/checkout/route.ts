@@ -138,6 +138,33 @@ export async function POST(
     return errorResponse("internal.error", updateError.message, 500);
   }
 
+  // Create a pending earning so it appears in Earnings immediately.
+  // It will be made available after admin verification.
+  const payoutCents = assignment.agent_payout_cents ?? 0;
+  if (payoutCents > 0) {
+    const { data: existingEarning } = await adminSupabase
+      .from("agent_earnings")
+      .select("id, status")
+      .eq("assignment_id", jobId)
+      .single();
+
+    if (!existingEarning) {
+      const { error: earningError } = await adminSupabase.from("agent_earnings").insert({
+        agent_id: session.user.id,
+        assignment_id: jobId,
+        amount_cents: payoutCents,
+        status: "pending",
+        available_at: null,
+        paid_out_at: null,
+        payout_id: null,
+      });
+
+      if (earningError) {
+        console.error("Failed to create pending earning:", earningError.message);
+      }
+    }
+  }
+
   // Update service request status to indicate work is done but pending verification
   const { data: assignmentFull } = await adminSupabase
     .from("job_assignments")

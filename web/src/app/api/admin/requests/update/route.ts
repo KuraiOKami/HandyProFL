@@ -47,12 +47,15 @@ export async function POST(req: NextRequest) {
 
   // Mirror status updates to the job assignment and earnings when applicable
   if (updates.status && assignment) {
-    const now = new Date().toISOString();
+    const now = new Date();
+    const nowIso = now.toISOString();
+    const availableLaterIso = new Date(now.getTime() + 2 * 60 * 60 * 1000).toISOString();
     const newStatus: string = updates.status;
 
     const assignmentUpdate: Record<string, unknown> = {};
     let shouldCreateEarning = false;
     let earningStatus: "available" | "paid_out" = "available";
+    let earningAvailableAt: string | null = null;
 
     switch (newStatus) {
       case "in_progress":
@@ -60,24 +63,26 @@ export async function POST(req: NextRequest) {
         break;
       case "pending_verification":
         assignmentUpdate.status = "pending_verification";
-        assignmentUpdate.checked_out_at = assignment.checked_out_at ?? now;
+        assignmentUpdate.checked_out_at = assignment.checked_out_at ?? nowIso;
         break;
       case "verified":
         assignmentUpdate.status = "verified";
-        assignmentUpdate.verified_at = now;
+        assignmentUpdate.verified_at = nowIso;
         shouldCreateEarning = true;
         earningStatus = "available";
+        earningAvailableAt = availableLaterIso;
         break;
       case "paid":
       case "completed":
       case "complete":
       case "done":
         assignmentUpdate.status = newStatus === "paid" ? "paid" : "completed";
-        assignmentUpdate.paid_at = now;
-        assignmentUpdate.completed_at = assignment.completed_at ?? now;
-        assignmentUpdate.verified_at = assignment.verified_at ?? now;
+        assignmentUpdate.paid_at = nowIso;
+        assignmentUpdate.completed_at = assignment.completed_at ?? nowIso;
+        assignmentUpdate.verified_at = assignment.verified_at ?? nowIso;
         shouldCreateEarning = true;
         earningStatus = "paid_out";
+        earningAvailableAt = nowIso;
         break;
       default:
         assignmentUpdate.status = newStatus;
@@ -92,19 +97,38 @@ export async function POST(req: NextRequest) {
     if (shouldCreateEarning) {
       const amountCents = assignment.agent_payout_cents ?? 0;
       if (amountCents > 0) {
-        await supabase
+        const { data: existingEarning } = await supabase
           .from("agent_earnings")
-          .upsert(
-            {
-              assignment_id: assignment.id,
-              agent_id: assignment.agent_id,
+          .select("id, status")
+          .eq("assignment_id", assignment.id)
+          .single();
+
+        if (existingEarning?.status === "paid_out") {
+          // Keep paid_out status but ensure amount matches.
+          await supabase
+            .from("agent_earnings")
+            .update({ amount_cents: amountCents })
+            .eq("id", existingEarning.id);
+        } else if (existingEarning) {
+          await supabase
+            .from("agent_earnings")
+            .update({
               amount_cents: amountCents,
               status: earningStatus,
-              available_at: now,
-              paid_out_at: earningStatus === "paid_out" ? now : null,
-            },
-            { onConflict: "assignment_id" }
-          );
+              available_at: earningAvailableAt ?? nowIso,
+              paid_out_at: earningStatus === "paid_out" ? nowIso : null,
+            })
+            .eq("id", existingEarning.id);
+        } else {
+          await supabase.from("agent_earnings").insert({
+            assignment_id: assignment.id,
+            agent_id: assignment.agent_id,
+            amount_cents: amountCents,
+            status: earningStatus,
+            available_at: earningAvailableAt ?? nowIso,
+            paid_out_at: earningStatus === "paid_out" ? nowIso : null,
+          });
+        }
       }
     }
   }
