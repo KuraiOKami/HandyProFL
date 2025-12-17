@@ -251,23 +251,35 @@ export function useRequestWizard() {
     [serviceDurations],
   );
 
-  const getPriceForItem = useCallback(
+  const getPriceBreakdown = useCallback(
     (item: RequestItem) => {
       const id = getServiceId(item);
-      const basePrice = servicePrices[id] ?? 0;
-      // Add mount upcharge if user needs a mount
-      const mountUpcharge = item.service === 'tv_mount' && item.hasMount === 'no'
+      const laborPrice = servicePrices[id] ?? 0;
+      // Mount cost is pass-through (100% reimbursed to agent, not commissioned)
+      const materialsCost = item.service === 'tv_mount' && item.hasMount === 'no'
         ? MOUNT_UPCHARGES[item.mountType]
         : 0;
-      return basePrice + mountUpcharge;
+      return { laborPrice, materialsCost, total: laborPrice + materialsCost };
     },
     [servicePrices],
   );
 
-  const totalPriceCents = useMemo(() => {
+  const getPriceForItem = useCallback(
+    (item: RequestItem) => getPriceBreakdown(item).total,
+    [getPriceBreakdown],
+  );
+
+  const priceBreakdown = useMemo(() => {
     const allItems = [...items, buildCurrentItem()];
-    return allItems.map(getPriceForItem).reduce((sum, n) => sum + n, 0);
-  }, [items, buildCurrentItem, getPriceForItem]);
+    const breakdowns = allItems.map(getPriceBreakdown);
+    return {
+      laborCents: breakdowns.reduce((sum, b) => sum + b.laborPrice, 0),
+      materialsCents: breakdowns.reduce((sum, b) => sum + b.materialsCost, 0),
+      totalCents: breakdowns.reduce((sum, b) => sum + b.total, 0),
+    };
+  }, [items, buildCurrentItem, getPriceBreakdown]);
+
+  const totalPriceCents = priceBreakdown.totalCents;
 
   const totalMinutes = useMemo(() => {
     const allItems = [...items, buildCurrentItem()];
@@ -379,7 +391,9 @@ export function useRequestWizard() {
           slots: slotStartIso,
           required_minutes: requiredMinutes,
           details: detailsWithDuration || null,
-          total_price_cents: totalPriceCents, // Include full price with add-ons
+          total_price_cents: totalPriceCents, // Full price charged to customer
+          labor_price_cents: priceBreakdown.laborCents, // Labor portion (70% to agent)
+          materials_cost_cents: priceBreakdown.materialsCents, // Materials (100% to agent)
         }),
       });
 
@@ -433,6 +447,8 @@ export function useRequestWizard() {
     paymentMethods,
     selectedPaymentMethodId,
     totalPriceCents,
+    priceBreakdown.laborCents,
+    priceBreakdown.materialsCents,
     items,
     buildCurrentItem,
     requiredMinutes,

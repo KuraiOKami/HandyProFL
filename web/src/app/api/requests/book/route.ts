@@ -17,6 +17,8 @@ export async function POST(req: NextRequest) {
     service_type,
     details,
     total_price_cents, // Full price including add-ons, mount, etc.
+    labor_price_cents, // Labor portion (agent gets 70% commission)
+    materials_cost_cents, // Materials/mount cost (agent gets 100% reimbursement)
   } = body as {
     user_id?: string;
     required_minutes?: number;
@@ -25,11 +27,26 @@ export async function POST(req: NextRequest) {
     service_type?: string;
     details?: string;
     total_price_cents?: number;
+    labor_price_cents?: number;
+    materials_cost_cents?: number;
   };
 
   if (!user_id || !required_minutes || !date || !slots?.length) {
     return NextResponse.json({ error: "Missing booking parameters" }, { status: 400 });
   }
+
+  const normalizedTotalPriceCents =
+    typeof total_price_cents === "number" && Number.isFinite(total_price_cents)
+      ? Math.max(0, Math.round(total_price_cents))
+      : null;
+  const normalizedLaborPriceCents =
+    typeof labor_price_cents === "number" && Number.isFinite(labor_price_cents)
+      ? Math.max(0, Math.round(labor_price_cents))
+      : null;
+  const normalizedMaterialsCostCents =
+    typeof materials_cost_cents === "number" && Number.isFinite(materials_cost_cents)
+      ? Math.max(0, Math.round(materials_cost_cents))
+      : null;
 
   const client = supabase;
 
@@ -62,7 +79,9 @@ export async function POST(req: NextRequest) {
       details,
       status: "pending",
       estimated_minutes: required_minutes,
-      total_price_cents: total_price_cents || null, // Store full price with add-ons
+      total_price_cents: normalizedTotalPriceCents, // Store full price with add-ons
+      labor_price_cents: normalizedLaborPriceCents, // Labor portion (70% to agent)
+      materials_cost_cents: normalizedMaterialsCostCents, // Materials (100% reimbursed to agent)
     })
     .select("id")
     .single();

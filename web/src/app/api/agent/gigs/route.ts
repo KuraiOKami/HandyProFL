@@ -3,9 +3,30 @@ import { createClient, createServiceRoleClient } from "@/utils/supabase/server";
 import { sanitizeDetailsForAgent } from "@/lib/formatting";
 import { errorResponse } from "@/lib/api-errors";
 
-// Agent payout percentage (70%) and fallback rate when catalog pricing is missing
-const AGENT_PAYOUT_PERCENTAGE = 0.7;
+// Agent payout policy:
+// - 70% of labor
+// - 100% of materials (reimbursed/pass-through)
+// - 50% of any additional surcharge (e.g., urgency/priority fee)
+const LABOR_PAYOUT_PERCENTAGE = 0.7;
+const SURCHARGE_PAYOUT_PERCENTAGE = 0.5;
 const DEFAULT_RATE_PER_MINUTE_CENTS = 150; // $90/hr fallback
+
+function normalizeCents(value: unknown): number | null {
+  if (typeof value !== "number" || !Number.isFinite(value)) return null;
+  return Math.max(0, Math.round(value));
+}
+
+function computeAgentPayoutCents(args: {
+  totalCents: number;
+  laborCents: number;
+  materialsCents: number;
+}) {
+  const surchargeCents = Math.max(0, args.totalCents - args.laborCents - args.materialsCents);
+  const laborPayoutCents = Math.round(args.laborCents * LABOR_PAYOUT_PERCENTAGE);
+  const surchargePayoutCents = Math.round(surchargeCents * SURCHARGE_PAYOUT_PERCENTAGE);
+  const payoutCents = laborPayoutCents + args.materialsCents + surchargePayoutCents;
+  return Math.min(args.totalCents, Math.max(1, payoutCents));
+}
 
 async function getApprovedAgentSession() {
   const supabase = await createClient();
@@ -66,6 +87,8 @@ export async function GET() {
       job_latitude,
       job_longitude,
       total_price_cents,
+      labor_price_cents,
+      materials_cost_cents,
       profiles:user_id (
         city,
         state
@@ -99,13 +122,23 @@ export async function GET() {
     const catalogEntry = catalogMap.get(req.service_type);
     const estimatedMinutes = req.estimated_minutes || catalogEntry?.base_minutes || 60;
 
-    // Use stored total_price_cents if available (includes add-ons, mount cost, etc.)
-    // Otherwise fall back to catalog price or time-based estimate
-    const storedPrice = (req as { total_price_cents?: number }).total_price_cents;
-    const priceCents = storedPrice ??
+    const storedTotalCents = normalizeCents((req as { total_price_cents?: number | null }).total_price_cents);
+    const storedLaborCents = normalizeCents((req as { labor_price_cents?: number | null }).labor_price_cents);
+    const storedMaterialsCents =
+      normalizeCents((req as { materials_cost_cents?: number | null }).materials_cost_cents) ?? 0;
+
+    // Determine commissioned labor vs surcharge so agents can be reimbursed for materials
+    // and fairly share in any urgency/priority fees.
+    const baseLaborCents =
+      storedLaborCents ??
       catalogEntry?.price_cents ??
       Math.round(estimatedMinutes * DEFAULT_RATE_PER_MINUTE_CENTS);
-    const agentPayoutCents = Math.max(1, Math.round(priceCents * AGENT_PAYOUT_PERCENTAGE));
+    const totalCents = storedTotalCents ?? baseLaborCents + storedMaterialsCents;
+    const agentPayoutCents = computeAgentPayoutCents({
+      totalCents,
+      laborCents: baseLaborCents,
+      materialsCents: storedMaterialsCents,
+    });
 
     return {
       id: req.id,

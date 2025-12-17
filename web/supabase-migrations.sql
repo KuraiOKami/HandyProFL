@@ -421,6 +421,15 @@ ALTER TABLE service_requests
   ADD COLUMN IF NOT EXISTS job_latitude DECIMAL(10,8),
   ADD COLUMN IF NOT EXISTS job_longitude DECIMAL(11,8);
 
+-- Store pricing breakdown on the request for accurate agent payouts and material reimbursement
+-- total_price_cents: full amount charged to the customer
+-- labor_price_cents: commissioned labor portion (agent gets 70%)
+-- materials_cost_cents: pass-through materials (agent gets 100% reimbursement)
+ALTER TABLE service_requests
+  ADD COLUMN IF NOT EXISTS total_price_cents INTEGER,
+  ADD COLUMN IF NOT EXISTS labor_price_cents INTEGER,
+  ADD COLUMN IF NOT EXISTS materials_cost_cents INTEGER;
+
 -- Add extended tracking for job lifecycle
 ALTER TABLE job_assignments
   ADD COLUMN IF NOT EXISTS checked_out_at TIMESTAMPTZ,
