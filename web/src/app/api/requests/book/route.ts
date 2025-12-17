@@ -16,6 +16,7 @@ export async function POST(req: NextRequest) {
     slots, // array of slot_start ISO strings
     service_type,
     details,
+    total_price_cents, // Full price including add-ons, mount, etc.
   } = body as {
     user_id?: string;
     required_minutes?: number;
@@ -23,6 +24,7 @@ export async function POST(req: NextRequest) {
     slots?: string[];
     service_type?: string;
     details?: string;
+    total_price_cents?: number;
   };
 
   if (!user_id || !required_minutes || !date || !slots?.length) {
@@ -60,6 +62,7 @@ export async function POST(req: NextRequest) {
       details,
       status: "pending",
       estimated_minutes: required_minutes,
+      total_price_cents: total_price_cents || null, // Store full price with add-ons
     })
     .select("id")
     .single();

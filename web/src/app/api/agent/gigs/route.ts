@@ -65,7 +65,7 @@ export async function GET() {
       user_id,
       job_latitude,
       job_longitude,
-      estimated_minutes,
+      total_price_cents,
       profiles:user_id (
         city,
         state
@@ -98,7 +98,11 @@ export async function GET() {
     } | null;
     const catalogEntry = catalogMap.get(req.service_type);
     const estimatedMinutes = req.estimated_minutes || catalogEntry?.base_minutes || 60;
-    const priceCents =
+
+    // Use stored total_price_cents if available (includes add-ons, mount cost, etc.)
+    // Otherwise fall back to catalog price or time-based estimate
+    const storedPrice = (req as { total_price_cents?: number }).total_price_cents;
+    const priceCents = storedPrice ??
       catalogEntry?.price_cents ??
       Math.round(estimatedMinutes * DEFAULT_RATE_PER_MINUTE_CENTS);
     const agentPayoutCents = Math.max(1, Math.round(priceCents * AGENT_PAYOUT_PERCENTAGE));

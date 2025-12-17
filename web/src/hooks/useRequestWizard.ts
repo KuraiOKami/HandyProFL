@@ -379,6 +379,7 @@ export function useRequestWizard() {
           slots: slotStartIso,
           required_minutes: requiredMinutes,
           details: detailsWithDuration || null,
+          total_price_cents: totalPriceCents, // Include full price with add-ons
         }),
       });
 

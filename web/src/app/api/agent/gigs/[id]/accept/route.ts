@@ -65,7 +65,7 @@ export async function POST(
   // Get the service request
   const { data: request, error: reqError } = await adminSupabase
     .from("service_requests")
-    .select("id, service_type, status, assigned_agent_id, estimated_minutes")
+    .select("id, service_type, status, assigned_agent_id, estimated_minutes, total_price_cents")
     .eq("id", requestId)
     .single();
 
@@ -81,7 +81,7 @@ export async function POST(
     return errorResponse("request.conflict", "Request already assigned", 409);
   }
 
-  // Get pricing from catalog
+  // Get pricing from catalog (fallback if total_price_cents not stored)
   const { data: catalogEntry } = await adminSupabase
     .from("service_catalog")
     .select("price_cents, base_minutes")
@@ -89,7 +89,10 @@ export async function POST(
     .single();
 
   const estimatedMinutes = request.estimated_minutes || catalogEntry?.base_minutes || 60;
+    // Use stored total_price_cents if available (includes add-ons, mount cost, etc.)
+    // Otherwise fall back to catalog price or time-based estimate
     const priceCents =
+      request.total_price_cents ??
       catalogEntry?.price_cents ??
       Math.round(estimatedMinutes * DEFAULT_RATE_PER_MINUTE_CENTS);
     const agentPayoutCents = Math.max(1, Math.round(priceCents * AGENT_PAYOUT_PERCENTAGE));
