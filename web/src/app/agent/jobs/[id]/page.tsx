@@ -46,6 +46,30 @@ type ProofPhoto = {
   uploaded_at: string;
 };
 
+type CheckoutSurvey = {
+  satisfaction: 1 | 2 | 3 | 4 | 5;
+  actualDuration: string;
+  completedTasks: string[];
+  additionalNotes: string;
+};
+
+const DURATION_OPTIONS = [
+  { value: 'under_30', label: 'Under 30 min' },
+  { value: '30_to_60', label: '30-60 min' },
+  { value: '1_to_2_hours', label: '1-2 hours' },
+  { value: '2_to_3_hours', label: '2-3 hours' },
+  { value: '3_to_4_hours', label: '3-4 hours' },
+  { value: 'over_4_hours', label: 'Over 4 hours' },
+];
+
+const COMPLETION_OPTIONS = [
+  { id: 'as_described', label: 'Completed as described' },
+  { id: 'extra_work', label: 'Did extra work beyond request' },
+  { id: 'partial', label: 'Partially completed (explain in notes)' },
+  { id: 'materials_issue', label: 'Materials issue (missing/wrong parts)' },
+  { id: 'customer_changed', label: 'Customer changed requirements' },
+];
+
 export default function JobDetailPage() {
   const params = useParams();
   const router = useRouter();
@@ -58,6 +82,15 @@ export default function JobDetailPage() {
   const [actionLoading, setActionLoading] = useState<string | null>(null);
   const [uploadingPhoto, setUploadingPhoto] = useState<'box' | 'finished' | null>(null);
   const [gpsError, setGpsError] = useState<string | null>(null);
+
+  // Checkout survey state
+  const [showSurvey, setShowSurvey] = useState(false);
+  const [survey, setSurvey] = useState<CheckoutSurvey>({
+    satisfaction: 5,
+    actualDuration: '',
+    completedTasks: ['as_described'],
+    additionalNotes: '',
+  });
 
   const loadJob = useCallback(async () => {
     try {
@@ -133,14 +166,23 @@ export default function JobDetailPage() {
     }
   };
 
-  const handleCheckOut = async () => {
+  const handleCheckOutClick = () => {
     if (!job?.has_box_photo || !job?.has_finished_photo) {
       setError('Please upload both box and finished photos before checking out');
+      return;
+    }
+    setShowSurvey(true);
+  };
+
+  const handleSurveySubmit = async () => {
+    if (!survey.actualDuration) {
+      setError('Please select how long the job took');
       return;
     }
 
     setActionLoading('checkout');
     setGpsError(null);
+    setShowSurvey(false);
 
     try {
       const position = await getCurrentPosition();
@@ -149,7 +191,16 @@ export default function JobDetailPage() {
       const res = await fetch(`/api/agent/jobs/${jobId}/checkout`, {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ latitude, longitude }),
+        body: JSON.stringify({
+          latitude,
+          longitude,
+          survey: {
+            satisfaction: survey.satisfaction,
+            actual_duration: survey.actualDuration,
+            completed_tasks: survey.completedTasks,
+            additional_notes: survey.additionalNotes,
+          },
+        }),
       });
 
       const data = await res.json();
@@ -170,6 +221,15 @@ export default function JobDetailPage() {
     } finally {
       setActionLoading(null);
     }
+  };
+
+  const toggleCompletionTask = (taskId: string) => {
+    setSurvey((prev) => ({
+      ...prev,
+      completedTasks: prev.completedTasks.includes(taskId)
+        ? prev.completedTasks.filter((t) => t !== taskId)
+        : [...prev.completedTasks, taskId],
+    }));
   };
 
   const handlePhotoUpload = async (type: 'box' | 'finished', file: File) => {
@@ -509,7 +569,7 @@ export default function JobDetailPage() {
               </div>
               {canCheckOut && (
                 <button
-                  onClick={handleCheckOut}
+                  onClick={handleCheckOutClick}
                   disabled={actionLoading === 'checkout'}
                   className="rounded-lg bg-emerald-600 px-4 py-2 text-sm font-semibold text-white hover:bg-emerald-700 disabled:bg-emerald-400"
                 >
@@ -568,6 +628,130 @@ export default function JobDetailPage() {
           </div>
         )}
       </div>
+
+      {/* Checkout Survey Modal */}
+      {showSurvey && (
+        <div className="fixed inset-0 z-50 flex items-end justify-center bg-black/50 sm:items-center">
+          <div className="max-h-[90vh] w-full overflow-y-auto rounded-t-2xl bg-white p-6 sm:max-w-lg sm:rounded-2xl">
+            <div className="mb-6 text-center">
+              <h2 className="text-xl font-bold text-slate-900">Complete Job Survey</h2>
+              <p className="mt-1 text-sm text-slate-500">Help us improve by sharing your experience</p>
+            </div>
+
+            {/* Satisfaction Rating */}
+            <div className="mb-6">
+              <label className="mb-2 block text-sm font-semibold text-slate-700">
+                How satisfied were you with this gig?
+              </label>
+              <div className="flex justify-between gap-2">
+                {[1, 2, 3, 4, 5].map((rating) => (
+                  <button
+                    key={rating}
+                    onClick={() => setSurvey((prev) => ({ ...prev, satisfaction: rating as 1 | 2 | 3 | 4 | 5 }))}
+                    className={`flex-1 rounded-lg border-2 py-3 text-center text-lg font-semibold transition ${
+                      survey.satisfaction === rating
+                        ? 'border-emerald-500 bg-emerald-50 text-emerald-700'
+                        : 'border-slate-200 text-slate-400 hover:border-slate-300'
+                    }`}
+                  >
+                    {rating === 1 ? '😞' : rating === 2 ? '😐' : rating === 3 ? '🙂' : rating === 4 ? '😊' : '🤩'}
+                  </button>
+                ))}
+              </div>
+              <div className="mt-1 flex justify-between text-xs text-slate-400">
+                <span>Not satisfied</span>
+                <span>Very satisfied</span>
+              </div>
+            </div>
+
+            {/* Duration */}
+            <div className="mb-6">
+              <label className="mb-2 block text-sm font-semibold text-slate-700">
+                How long did this job take? <span className="text-rose-500">*</span>
+              </label>
+              <div className="grid grid-cols-2 gap-2">
+                {DURATION_OPTIONS.map((option) => (
+                  <button
+                    key={option.value}
+                    onClick={() => setSurvey((prev) => ({ ...prev, actualDuration: option.value }))}
+                    className={`rounded-lg border-2 px-3 py-2 text-sm font-medium transition ${
+                      survey.actualDuration === option.value
+                        ? 'border-emerald-500 bg-emerald-50 text-emerald-700'
+                        : 'border-slate-200 text-slate-600 hover:border-slate-300'
+                    }`}
+                  >
+                    {option.label}
+                  </button>
+                ))}
+              </div>
+            </div>
+
+            {/* What was completed */}
+            <div className="mb-6">
+              <label className="mb-2 block text-sm font-semibold text-slate-700">
+                What was completed?
+              </label>
+              <div className="space-y-2">
+                {COMPLETION_OPTIONS.map((option) => (
+                  <button
+                    key={option.id}
+                    onClick={() => toggleCompletionTask(option.id)}
+                    className={`flex w-full items-center gap-3 rounded-lg border-2 px-4 py-3 text-left text-sm transition ${
+                      survey.completedTasks.includes(option.id)
+                        ? 'border-emerald-500 bg-emerald-50'
+                        : 'border-slate-200 hover:border-slate-300'
+                    }`}
+                  >
+                    <span
+                      className={`flex h-5 w-5 shrink-0 items-center justify-center rounded border-2 text-xs ${
+                        survey.completedTasks.includes(option.id)
+                          ? 'border-emerald-500 bg-emerald-500 text-white'
+                          : 'border-slate-300'
+                      }`}
+                    >
+                      {survey.completedTasks.includes(option.id) && '✓'}
+                    </span>
+                    <span className={survey.completedTasks.includes(option.id) ? 'text-emerald-700' : 'text-slate-600'}>
+                      {option.label}
+                    </span>
+                  </button>
+                ))}
+              </div>
+            </div>
+
+            {/* Additional Notes */}
+            <div className="mb-6">
+              <label className="mb-2 block text-sm font-semibold text-slate-700">
+                Additional notes (optional)
+              </label>
+              <textarea
+                value={survey.additionalNotes}
+                onChange={(e) => setSurvey((prev) => ({ ...prev, additionalNotes: e.target.value }))}
+                placeholder="Describe anything missing, added, or changed about this job..."
+                rows={3}
+                className="w-full rounded-lg border border-slate-300 px-4 py-3 text-sm placeholder-slate-400 focus:border-emerald-500 focus:outline-none focus:ring-1 focus:ring-emerald-500"
+              />
+            </div>
+
+            {/* Buttons */}
+            <div className="flex gap-3">
+              <button
+                onClick={() => setShowSurvey(false)}
+                className="flex-1 rounded-lg border border-slate-300 py-3 text-sm font-semibold text-slate-700 hover:bg-slate-50"
+              >
+                Cancel
+              </button>
+              <button
+                onClick={handleSurveySubmit}
+                disabled={!survey.actualDuration || actionLoading === 'checkout'}
+                className="flex-1 rounded-lg bg-emerald-600 py-3 text-sm font-semibold text-white hover:bg-emerald-700 disabled:bg-emerald-400"
+              >
+                {actionLoading === 'checkout' ? 'Submitting...' : 'Submit & Check Out'}
+              </button>
+            </div>
+          </div>
+        </div>
+      )}
     </div>
   );
 }
