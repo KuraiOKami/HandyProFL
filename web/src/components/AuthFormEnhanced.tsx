@@ -78,10 +78,15 @@ export default function AuthFormEnhanced() {
     setMessage(null);
     setError(null);
 
+    const redirectUrl = `${window.location.origin}/auth/callback`;
     const action =
       mode === 'login'
         ? supabase.auth.signInWithPassword({ email, password })
-        : supabase.auth.signUp({ email, password });
+        : supabase.auth.signUp({
+            email,
+            password,
+            options: { emailRedirectTo: redirectUrl },
+          });
 
     const { error: authError } = await action;
     if (authError) {

@@ -119,9 +119,14 @@ export default function AgentOnboardingPage() {
     setError(null);
 
     try {
+      const redirectUrl = `${window.location.origin}/auth/callback`;
       const action =
         authMode === 'signup'
-          ? supabase.auth.signUp({ email: email.trim(), password })
+          ? supabase.auth.signUp({
+              email: email.trim(),
+              password,
+              options: { emailRedirectTo: redirectUrl },
+            })
           : supabase.auth.signInWithPassword({ email: email.trim(), password });
 
       const { error: authError, data } = await action;
