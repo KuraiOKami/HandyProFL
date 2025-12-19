@@ -4,6 +4,7 @@ import { useCallback, useEffect, useMemo, useState } from 'react';
 import type { Session } from '@supabase/supabase-js';
 import { useRouter } from 'next/navigation';
 import { getSupabaseClient } from '@/lib/supabaseClient';
+import { US_STATES } from '@/lib/usStates';
 
 type Step = 'account' | 'personal' | 'address' | 'complete';
 
@@ -386,14 +387,18 @@ export default function CustomerOnboardingPage() {
             </div>
             <div>
               <label className="block text-sm font-medium text-slate-700">State</label>
-              <input
-                type="text"
+              <select
                 value={stateCode}
-                onChange={(e) => setStateCode(e.target.value.toUpperCase())}
+                onChange={(e) => setStateCode(e.target.value)}
                 className="mt-1 w-full rounded-lg border border-slate-300 px-3 py-2.5 text-sm focus:border-indigo-500 focus:outline-none focus:ring-1 focus:ring-indigo-500"
-                placeholder="FL"
-                maxLength={2}
-              />
+              >
+                <option value="">Select state</option>
+                {US_STATES.map((s) => (
+                  <option key={s.code} value={s.code}>
+                    {s.code} - {s.name}
+                  </option>
+                ))}
+              </select>
             </div>
           </div>
 

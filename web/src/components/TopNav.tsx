@@ -41,6 +41,7 @@ export default function TopNav() {
   };
 
   const isAdmin = role === 'admin';
+  const isAgent = role === 'agent';
 
   const NavLinks = ({ onNav }: { onNav?: () => void }) => (
     <>
@@ -57,6 +58,15 @@ export default function TopNav() {
       <Link href="/settings" className="hover:text-indigo-700 transition" onClick={onNav}>
         Settings
       </Link>
+      {session?.user && isAgent && (
+        <Link
+          href="/agent"
+          className="rounded-full bg-emerald-600 px-3 py-1.5 text-white shadow-sm transition hover:bg-emerald-700"
+          onClick={onNav}
+        >
+          Agent Dashboard
+        </Link>
+      )}
       {session?.user && isAdmin && (
         <Link href="/admin" className="hover:text-indigo-700 transition" onClick={onNav}>
           Admin

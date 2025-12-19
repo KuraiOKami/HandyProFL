@@ -24,6 +24,15 @@ a {
   text-decoration: none;
 }
 
+/* Prevent iOS zoom on input focus - ensures inputs are at least 16px */
+@media screen and (max-width: 768px) {
+  input,
+  select,
+  textarea {
+    font-size: 16px !important;
+  }
+}
+
 ::selection {
   background: #e0e7ff;
 }

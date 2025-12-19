@@ -24,6 +24,9 @@ export type RequestItem = {
   mountType: MountType;
   assemblyType: string;
   assemblyOther: string;
+  electricalType: string;
+  electricalOther: string;
+  punchTasks: string[];
   extraItems: string[];
   notes: string;
   photoNames: string[];
@@ -47,6 +50,7 @@ export const services: Record<
       wallTypes?: string[];
       hasMount?: boolean;
       assemblyTypes?: string[];
+      electricalTypes?: string[];
     };
   }
 > = {
@@ -72,10 +76,13 @@ export const services: Record<
     name: 'Light/Fan Swap',
     description: 'Replace fixtures, fans, dimmers, or switches.',
     icon: '💡',
+    options: {
+      electricalTypes: ['Ceiling Fan', 'Indoor Light Fixture', 'Outdoor Light', 'Dimmer Switch', 'Light Switch', 'Outlet', 'Other'],
+    },
   },
   punch: {
     name: 'General Handyman (Hourly)',
-    description: 'Mixed small jobs, billed hourly with materials as needed.',
+    description: 'Mixed small jobs, billed hourly. 2hr minimum.',
     icon: '📋',
   },
 };
@@ -126,6 +133,10 @@ export function useRequestWizard() {
   const [mountType, setMountType] = useState<MountType>('none');
   const [assemblyType, setAssemblyType] = useState('Chair');
   const [assemblyOther, setAssemblyOther] = useState('');
+  const [electricalType, setElectricalType] = useState('Ceiling Fan');
+  const [electricalOther, setElectricalOther] = useState('');
+  const [punchTasks, setPunchTasks] = useState<string[]>([]);
+  const [newPunchTask, setNewPunchTask] = useState('');
 
   // Details state
   const [notes, setNotes] = useState('');
@@ -167,6 +178,10 @@ export function useRequestWizard() {
     setMountType('none');
     setAssemblyType('Chair');
     setAssemblyOther('');
+    setElectricalType('Ceiling Fan');
+    setElectricalOther('');
+    setPunchTasks([]);
+    setNewPunchTask('');
     setNotes('');
     setExtraItems([]);
     setNewItem('');
@@ -190,6 +205,10 @@ export function useRequestWizard() {
     setMountType('none');
     setAssemblyType('Chair');
     setAssemblyOther('');
+    setElectricalType('Ceiling Fan');
+    setElectricalOther('');
+    setPunchTasks([]);
+    setNewPunchTask('');
     setNotes('');
     setExtraItems([]);
     setNewItem('');
@@ -206,11 +225,14 @@ export function useRequestWizard() {
       mountType: hasMount === 'no' ? mountType : 'none',
       assemblyType,
       assemblyOther,
+      electricalType,
+      electricalOther,
+      punchTasks,
       extraItems,
       notes,
       photoNames,
     }),
-    [service, tvSize, wallType, hasMount, mountType, assemblyType, assemblyOther, extraItems, notes, photoNames],
+    [service, tvSize, wallType, hasMount, mountType, assemblyType, assemblyOther, electricalType, electricalOther, punchTasks, extraItems, notes, photoNames],
   );
 
   // Load service catalog durations and prices
@@ -420,7 +442,6 @@ export function useRequestWizard() {
     });
     const chargeBody = await chargeRes.json().catch(() => ({}));
     const chargeStatus = (chargeBody.status as string | undefined) ?? null;
-    const paymentIntentId = (chargeBody.payment_intent_id as string | undefined) ?? null;
     if (!chargeRes.ok || chargeStatus !== 'succeeded') {
       setStatus('Request submitted, but your card was not charged.');
       setError(
@@ -433,9 +454,11 @@ export function useRequestWizard() {
       setStep(5);
       return;
     }
-    setStatus(
-      `Request submitted and card charged. Payment ID: ${paymentIntentId ?? 'created'}. See you soon!`,
-    );
+    // Generate a friendly confirmation number from request ID (last 8 chars, uppercase)
+    const confirmationNumber = newRequestId
+      ? `HPF-${newRequestId.slice(-8).toUpperCase()}`
+      : `HPF-${Date.now().toString(36).toUpperCase()}`;
+    setStatus(confirmationNumber);
 
     setSubmitting(false);
     setStep(5);
@@ -481,6 +504,14 @@ export function useRequestWizard() {
     setAssemblyType,
     assemblyOther,
     setAssemblyOther,
+    electricalType,
+    setElectricalType,
+    electricalOther,
+    setElectricalOther,
+    punchTasks,
+    setPunchTasks,
+    newPunchTask,
+    setNewPunchTask,
 
     // Details
     notes,

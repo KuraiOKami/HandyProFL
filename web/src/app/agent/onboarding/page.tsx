@@ -4,6 +4,7 @@ import { useEffect, useMemo, useState } from 'react';
 import type { Session } from '@supabase/supabase-js';
 import { useRouter } from 'next/navigation';
 import { getSupabaseClient } from '@/lib/supabaseClient';
+import { US_STATES } from '@/lib/usStates';
 
 const SKILL_OPTIONS = [
   { id: 'assembly', label: 'Furniture Assembly', icon: '🪑' },
@@ -384,14 +385,18 @@ export default function AgentOnboardingPage() {
             </div>
             <div>
               <label className="block text-sm font-medium text-slate-700">State</label>
-              <input
-                type="text"
+              <select
                 value={stateCode}
                 onChange={(e) => setStateCode(e.target.value)}
                 className="mt-1 w-full rounded-lg border border-slate-300 px-3 py-2.5 text-sm focus:border-emerald-500 focus:outline-none focus:ring-1 focus:ring-emerald-500"
-                placeholder="FL"
-                maxLength={2}
-              />
+              >
+                <option value="">Select state</option>
+                {US_STATES.map((s) => (
+                  <option key={s.code} value={s.code}>
+                    {s.code} - {s.name}
+                  </option>
+                ))}
+              </select>
             </div>
           </div>
 
@@ -575,8 +580,8 @@ export default function AgentOnboardingPage() {
   }
 
   return (
-    <div className="fixed inset-0 flex items-center justify-center bg-slate-50 p-4">
-      <div className="w-full max-w-3xl rounded-2xl border border-slate-200 bg-white shadow-xl">
+    <div className="fixed inset-0 overflow-y-auto bg-slate-50 p-4">
+      <div className="mx-auto my-4 w-full max-w-3xl rounded-2xl border border-slate-200 bg-white shadow-xl sm:my-8">
         {/* Header */}
         <div className="border-b border-slate-200 px-6 py-4">
           <div className="flex items-center justify-between gap-3">

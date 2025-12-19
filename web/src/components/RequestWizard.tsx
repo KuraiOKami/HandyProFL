@@ -108,7 +108,7 @@ const RequestWizard = forwardRef<RequestWizardHandle>((_props, ref) => {
           </button>
         </div>
 
-        <div className="grid flex-1 gap-4 overflow-y-auto px-4 py-4 sm:px-6 sm:py-5">
+        <div className="flex flex-1 flex-col gap-4 overflow-y-auto px-4 py-4 sm:px-6 sm:py-5">
           <WizardProgress currentStep={wizard.step} />
 
           {wizard.step === 1 && (
@@ -127,6 +127,14 @@ const RequestWizard = forwardRef<RequestWizardHandle>((_props, ref) => {
               onAssemblyTypeChange={wizard.setAssemblyType}
               assemblyOther={wizard.assemblyOther}
               onAssemblyOtherChange={wizard.setAssemblyOther}
+              electricalType={wizard.electricalType}
+              onElectricalTypeChange={wizard.setElectricalType}
+              electricalOther={wizard.electricalOther}
+              onElectricalOtherChange={wizard.setElectricalOther}
+              punchTasks={wizard.punchTasks}
+              onPunchTasksChange={wizard.setPunchTasks}
+              newPunchTask={wizard.newPunchTask}
+              onNewPunchTaskChange={wizard.setNewPunchTask}
             />
           )}
 
@@ -174,14 +182,27 @@ const RequestWizard = forwardRef<RequestWizardHandle>((_props, ref) => {
           )}
 
           {wizard.step === 5 && (
-            <div className="grid gap-3 rounded-xl border border-green-200 bg-green-50 p-4">
-              <p className="text-sm font-semibold text-green-800">All set</p>
-              <p className="text-sm text-green-900">{wizard.status}</p>
+            <div className="grid gap-4 rounded-xl border border-green-200 bg-green-50 p-5 text-center">
+              <div className="flex flex-col items-center gap-2">
+                <span className="text-4xl">✅</span>
+                <p className="text-lg font-semibold text-green-800">Booking Confirmed!</p>
+                <p className="text-sm text-green-700">Your handyman visit has been scheduled.</p>
+              </div>
+              <div className="rounded-lg border border-green-300 bg-white p-4">
+                <p className="text-xs uppercase tracking-wide text-slate-500">Confirmation Number</p>
+                <p className="mt-1 font-mono text-xl font-bold text-slate-900">{wizard.status}</p>
+              </div>
+              <div className="grid gap-1 text-sm text-green-800">
+                <p><strong>Date:</strong> {wizard.date}</p>
+                <p><strong>Time:</strong> {wizard.slot?.time}</p>
+                <p><strong>Total:</strong> {(wizard.totalPriceCents / 100).toLocaleString(undefined, { style: 'currency', currency: 'USD' })}</p>
+              </div>
+              <p className="text-xs text-slate-500">We&apos;ll send you a reminder before your appointment.</p>
               <button
                 onClick={() => wizard.setOpen(false)}
-                className="inline-flex w-fit items-center justify-center rounded-lg bg-indigo-700 px-4 py-2 text-sm font-semibold text-white shadow-sm hover:bg-indigo-800"
+                className="inline-flex w-full items-center justify-center rounded-lg bg-indigo-700 px-4 py-3 text-sm font-semibold text-white shadow-sm hover:bg-indigo-800"
               >
-                Close
+                Done
               </button>
             </div>
           )}

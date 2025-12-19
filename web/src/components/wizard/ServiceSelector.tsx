@@ -15,6 +15,14 @@ type ServiceSelectorProps = {
   onAssemblyTypeChange: (type: string) => void;
   assemblyOther: string;
   onAssemblyOtherChange: (value: string) => void;
+  electricalType: string;
+  onElectricalTypeChange: (type: string) => void;
+  electricalOther: string;
+  onElectricalOtherChange: (value: string) => void;
+  punchTasks: string[];
+  onPunchTasksChange: (tasks: string[]) => void;
+  newPunchTask: string;
+  onNewPunchTaskChange: (value: string) => void;
 };
 
 const formatUpcharge = (cents: number) => cents > 0 ? `+$${cents / 100}` : '';
@@ -34,7 +42,25 @@ export default function ServiceSelector({
   onAssemblyTypeChange,
   assemblyOther,
   onAssemblyOtherChange,
+  electricalType,
+  onElectricalTypeChange,
+  electricalOther,
+  onElectricalOtherChange,
+  punchTasks,
+  onPunchTasksChange,
+  newPunchTask,
+  onNewPunchTaskChange,
 }: ServiceSelectorProps) {
+  const handleAddPunchTask = () => {
+    if (newPunchTask.trim()) {
+      onPunchTasksChange([...punchTasks, newPunchTask.trim()]);
+      onNewPunchTaskChange('');
+    }
+  };
+
+  const handleRemovePunchTask = (index: number) => {
+    onPunchTasksChange(punchTasks.filter((_, i) => i !== index));
+  };
   return (
     <div className="grid gap-3 sm:gap-4 grid-cols-2 md:grid-cols-2">
       {Object.entries(services).map(([id, svc]) => (
@@ -138,6 +164,86 @@ export default function ServiceSelector({
                 placeholder="e.g., custom cabinet, gym equipment"
               />
             </label>
+          )}
+        </div>
+      )}
+
+      {service === 'electrical' && (
+        <div className="col-span-2 md:col-span-2 grid gap-3 rounded-lg sm:rounded-xl border border-slate-200 bg-slate-50 p-3 sm:p-4">
+          <div className="grid gap-2">
+            <FieldLabel>What type of fixture?</FieldLabel>
+            <div className="flex flex-wrap gap-1.5 sm:gap-2">
+              {services.electrical.options?.electricalTypes?.map((type) => (
+                <Chip key={type} selected={electricalType === type} onClick={() => onElectricalTypeChange(type)}>
+                  {type}
+                </Chip>
+              ))}
+            </div>
+          </div>
+          {electricalType === 'Other' && (
+            <label className="grid gap-1 text-sm text-slate-800">
+              Describe the fixture
+              <input
+                type="text"
+                value={electricalOther}
+                onChange={(e) => onElectricalOtherChange(e.target.value)}
+                className="w-full rounded-lg border border-slate-300 px-3 py-2.5 text-slate-900 shadow-inner shadow-slate-100 focus:border-indigo-600 focus:outline-none focus:ring-2 focus:ring-indigo-100"
+                placeholder="e.g., chandelier, under-cabinet lighting"
+              />
+            </label>
+          )}
+        </div>
+      )}
+
+      {service === 'punch' && (
+        <div className="col-span-2 md:col-span-2 grid gap-3 rounded-lg sm:rounded-xl border border-slate-200 bg-slate-50 p-3 sm:p-4">
+          <div className="grid gap-2">
+            <FieldLabel>Create your task list</FieldLabel>
+            <p className="text-xs text-slate-600">Add the small jobs you need done. 2-hour minimum.</p>
+            <div className="flex gap-2">
+              <input
+                type="text"
+                value={newPunchTask}
+                onChange={(e) => onNewPunchTaskChange(e.target.value)}
+                onKeyDown={(e) => e.key === 'Enter' && (e.preventDefault(), handleAddPunchTask())}
+                className="flex-1 rounded-lg border border-slate-300 px-3 py-2.5 text-sm text-slate-900 shadow-inner shadow-slate-100 focus:border-indigo-600 focus:outline-none focus:ring-2 focus:ring-indigo-100"
+                placeholder="e.g., Hang picture frames, fix door handle"
+              />
+              <button
+                type="button"
+                onClick={handleAddPunchTask}
+                className="rounded-lg bg-indigo-600 px-4 py-2 text-sm font-semibold text-white hover:bg-indigo-700"
+              >
+                Add
+              </button>
+            </div>
+          </div>
+          {punchTasks.length > 0 && (
+            <div className="grid gap-2">
+              <FieldLabel>Your tasks ({punchTasks.length})</FieldLabel>
+              <ul className="grid gap-1.5">
+                {punchTasks.map((task, idx) => (
+                  <li
+                    key={idx}
+                    className="flex items-center justify-between gap-2 rounded-lg border border-slate-200 bg-white px-3 py-2"
+                  >
+                    <span className="text-sm text-slate-800">{task}</span>
+                    <button
+                      type="button"
+                      onClick={() => handleRemovePunchTask(idx)}
+                      className="text-xs font-semibold text-rose-600 hover:text-rose-700"
+                    >
+                      Remove
+                    </button>
+                  </li>
+                ))}
+              </ul>
+            </div>
+          )}
+          {punchTasks.length === 0 && (
+            <div className="rounded-lg border border-dashed border-slate-300 bg-white p-4 text-center text-sm text-slate-500">
+              No tasks yet. Add your first task above.
+            </div>
           )}
         </div>
       )}
