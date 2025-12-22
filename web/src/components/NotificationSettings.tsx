@@ -7,12 +7,14 @@ import { getSupabaseClient } from "@/lib/supabaseClient";
 type Preferences = {
   email_updates: boolean;
   sms_updates: boolean;
+  push_updates: boolean;
   marketing: boolean;
 };
 
 const defaultPrefs: Preferences = {
   email_updates: true,
   sms_updates: true,
+  push_updates: true,
   marketing: false,
 };
 
@@ -38,7 +40,7 @@ export default function NotificationSettings() {
       setError(null);
       const { data, error: fetchError } = await supabase
         .from("notification_preferences")
-        .select("email_updates, sms_updates, marketing")
+        .select("email_updates, sms_updates, push_updates, marketing")
         .eq("user_id", userId)
         .maybeSingle();
       if (fetchError && fetchError.code !== "PGRST116") {
@@ -47,6 +49,7 @@ export default function NotificationSettings() {
         setPrefs({
           email_updates: data.email_updates ?? true,
           sms_updates: data.sms_updates ?? true,
+          push_updates: data.push_updates ?? true,
           marketing: data.marketing ?? false,
         });
       }
@@ -69,6 +72,7 @@ export default function NotificationSettings() {
         user_id: userId,
         email_updates: prefs.email_updates,
         sms_updates: prefs.sms_updates,
+        push_updates: prefs.push_updates,
         marketing: prefs.marketing,
         updated_at: new Date().toISOString(),
       });
@@ -124,6 +128,15 @@ export default function NotificationSettings() {
           checked={prefs.sms_updates}
           onChange={(checked) =>
             setPrefs((p) => ({ ...p, sms_updates: checked }))
+          }
+          disabled={!session}
+        />
+        <Toggle
+          label="Push notifications"
+          description="Mobile or browser push alerts when available."
+          checked={prefs.push_updates}
+          onChange={(checked) =>
+            setPrefs((p) => ({ ...p, push_updates: checked }))
           }
           disabled={!session}
         />

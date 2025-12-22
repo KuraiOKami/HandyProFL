@@ -369,6 +369,81 @@ create policy "Authenticated update agent-verification files"
   using (bucket_id = 'agent-verification')
   with check (bucket_id = 'agent-verification');
 
+-- ============================================
+-- Notifications (preferences + log)
+-- ============================================
+
+CREATE TABLE IF NOT EXISTS notification_preferences (
+  user_id UUID PRIMARY KEY REFERENCES auth.users(id) ON DELETE CASCADE,
+  email_updates BOOLEAN DEFAULT true,
+  sms_updates BOOLEAN DEFAULT true,
+  push_updates BOOLEAN DEFAULT true,
+  marketing BOOLEAN DEFAULT false,
+  created_at TIMESTAMPTZ DEFAULT NOW(),
+  updated_at TIMESTAMPTZ DEFAULT NOW()
+);
+
+ALTER TABLE notification_preferences ENABLE ROW LEVEL SECURITY;
+
+CREATE POLICY "Users manage own notification prefs"
+  ON notification_preferences FOR ALL
+  USING (auth.uid() = user_id)
+  WITH CHECK (auth.uid() = user_id);
+
+CREATE POLICY "Admins can view notification prefs"
+  ON notification_preferences FOR SELECT
+  USING (
+    EXISTS (
+      SELECT 1 FROM profiles
+      WHERE profiles.id = auth.uid()
+      AND profiles.role = 'admin'
+    )
+  );
+
+CREATE TRIGGER update_notification_preferences_updated_at
+  BEFORE UPDATE ON notification_preferences
+  FOR EACH ROW
+  EXECUTE FUNCTION update_updated_at_column();
+
+CREATE TABLE IF NOT EXISTS notifications (
+  id UUID PRIMARY KEY DEFAULT gen_random_uuid(),
+  user_id UUID REFERENCES auth.users(id) ON DELETE SET NULL,
+  channel TEXT NOT NULL, -- sms, push, email
+  template TEXT,
+  title TEXT,
+  body TEXT NOT NULL,
+  payload JSONB,
+  status TEXT DEFAULT 'queued', -- queued, sent, failed, skipped
+  error TEXT,
+  sent_at TIMESTAMPTZ,
+  created_at TIMESTAMPTZ DEFAULT NOW(),
+  updated_at TIMESTAMPTZ DEFAULT NOW()
+);
+
+ALTER TABLE notifications ENABLE ROW LEVEL SECURITY;
+
+CREATE POLICY "Users can view own notifications"
+  ON notifications FOR SELECT
+  USING (user_id IS NOT NULL AND auth.uid() = user_id);
+
+CREATE POLICY "Admins can manage notifications"
+  ON notifications FOR ALL
+  USING (
+    EXISTS (
+      SELECT 1 FROM profiles
+      WHERE profiles.id = auth.uid()
+      AND profiles.role = 'admin'
+    )
+  );
+
+CREATE TRIGGER update_notifications_updated_at
+  BEFORE UPDATE ON notifications
+  FOR EACH ROW
+  EXECUTE FUNCTION update_updated_at_column();
+
+CREATE INDEX IF NOT EXISTS idx_notifications_user ON notifications(user_id);
+CREATE INDEX IF NOT EXISTS idx_notifications_status ON notifications(status);
+
 -- Agent earnings per job
 CREATE TABLE IF NOT EXISTS agent_earnings (
   id UUID PRIMARY KEY DEFAULT gen_random_uuid(),
