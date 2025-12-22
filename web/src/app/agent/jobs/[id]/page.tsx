@@ -340,7 +340,8 @@ export default function JobDetailPage() {
   const canCancel = ['assigned', 'in_progress'].includes(job.status);
 
   return (
-    <div className="fixed inset-0 overflow-y-auto bg-slate-50">
+    <>
+      <div className="fixed inset-0 overflow-y-auto bg-slate-50">
       {/* Header */}
       <header className="sticky top-0 z-10 border-b border-slate-200 bg-white px-4 py-3">
         <div className="flex items-center justify-between">
@@ -656,14 +657,14 @@ export default function JobDetailPage() {
         )}
       </div>
 
-      {/* Checkout Survey Modal */}
-      {showSurvey && (
-        <div className="fixed inset-0 z-50 flex items-end justify-center bg-black/50 sm:items-center">
-          <div className="max-h-[90vh] w-full overflow-y-auto rounded-t-2xl bg-white p-6 sm:max-w-lg sm:rounded-2xl">
-            <div className="mb-6 text-center">
-              <h2 className="text-xl font-bold text-slate-900">Complete Job Survey</h2>
-              <p className="mt-1 text-sm text-slate-500">Help us improve by sharing your experience</p>
-            </div>
+        {/* Checkout Survey Modal */}
+        {showSurvey && (
+          <div className="fixed inset-0 z-50 flex items-end justify-center bg-black/50 sm:items-center">
+            <div className="max-h-[90vh] w-full overflow-y-auto rounded-t-2xl bg-white p-6 sm:max-w-lg sm:rounded-2xl">
+              <div className="mb-6 text-center">
+                <h2 className="text-xl font-bold text-slate-900">Complete Job Survey</h2>
+                <p className="mt-1 text-sm text-slate-500">Help us improve by sharing your experience</p>
+              </div>
 
             {/* Satisfaction Rating */}
             <div className="mb-6">
@@ -760,26 +761,26 @@ export default function JobDetailPage() {
               />
             </div>
 
-            {/* Buttons */}
-            <div className="flex gap-3">
-              <button
-                onClick={() => setShowSurvey(false)}
-                className="flex-1 rounded-lg border border-slate-300 py-3 text-sm font-semibold text-slate-700 hover:bg-slate-50"
-              >
-                Cancel
-              </button>
-              <button
-                onClick={handleSurveySubmit}
-                disabled={!survey.actualDuration || actionLoading === 'checkout'}
-                className="flex-1 rounded-lg bg-emerald-600 py-3 text-sm font-semibold text-white hover:bg-emerald-700 disabled:bg-emerald-400"
-              >
-                {actionLoading === 'checkout' ? 'Submitting...' : 'Submit & Check Out'}
-              </button>
+              {/* Buttons */}
+              <div className="flex gap-3">
+                <button
+                  onClick={() => setShowSurvey(false)}
+                  className="flex-1 rounded-lg border border-slate-300 py-3 text-sm font-semibold text-slate-700 hover:bg-slate-50"
+                >
+                  Cancel
+                </button>
+                <button
+                  onClick={handleSurveySubmit}
+                  disabled={!survey.actualDuration || actionLoading === 'checkout'}
+                  className="flex-1 rounded-lg bg-emerald-600 py-3 text-sm font-semibold text-white hover:bg-emerald-700 disabled:bg-emerald-400"
+                >
+                  {actionLoading === 'checkout' ? 'Submitting...' : 'Submit & Check Out'}
+                </button>
+              </div>
             </div>
           </div>
-        </div>
-      )}
-    </div>
+        )}
+      </div>
 
       {/* Cancel Modal */}
       {cancelModalOpen && (
@@ -856,5 +857,6 @@ export default function JobDetailPage() {
           </div>
         </div>
       )}
+    </>
   );
 }
