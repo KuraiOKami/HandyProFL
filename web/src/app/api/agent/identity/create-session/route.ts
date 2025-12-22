@@ -2,10 +2,7 @@ import { NextRequest, NextResponse } from "next/server";
 import { createClient, createServiceRoleClient } from "@/utils/supabase/server";
 import Stripe from "stripe";
 
-const stripe = new Stripe(process.env.STRIPE_SECRET_KEY || "", {
-  // Use a Stripe API version supported by the installed SDK to satisfy TS literal union
-  apiVersion: "2024-11-20",
-});
+const stripe = new Stripe(process.env.STRIPE_SECRET_KEY || "");
 
 export async function POST(req: NextRequest) {
   const supabase = await createClient();
