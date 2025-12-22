@@ -125,18 +125,20 @@ export async function POST(
 
   // Record cancellation fee as negative earning to be netted from next payout
   if (feeCents > 0) {
+    // Remove any prior negative fee entries for this assignment to avoid duplicates
     await adminSupabase
       .from("agent_earnings")
-      .upsert(
-        {
-          agent_id: session.user.id,
-          assignment_id: jobId,
-          amount_cents: -feeCents,
-          status: "available",
-          available_at: nowIso,
-        },
-        { onConflict: "assignment_id" }
-      );
+      .delete()
+      .eq("assignment_id", jobId)
+      .lt("amount_cents", 0);
+
+    await adminSupabase.from("agent_earnings").insert({
+      agent_id: session.user.id,
+      assignment_id: jobId,
+      amount_cents: -feeCents,
+      status: "available",
+      available_at: nowIso,
+    });
   }
 
   return NextResponse.json({ status: "cancelled", fee_cents: feeCents });
