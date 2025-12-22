@@ -13,6 +13,7 @@ type Job = {
   estimated_minutes: number;
   details: string | null;
   status: string;
+  cancellation_reason?: string | null;
   customer_name: string;
   customer_phone: string;
   address: string;
@@ -257,7 +258,9 @@ export default function AgentJobsContent() {
                           ? 'Continue'
                           : job.status === 'pending_verification'
                             ? 'Submitted'
-                            : 'View Details'}
+                            : job.status === 'cancelled'
+                              ? 'Cancelled'
+                              : 'View Details'}
                     </button>
                   </div>
                 </div>
