@@ -54,7 +54,7 @@ export default async function AdminRequestDetailPage({ params }: PageProps) {
   } = await adminSupabase
     .from("service_requests")
     .select(
-      "id, user_id, service_type, preferred_date, preferred_time, details, status, estimated_minutes, created_at",
+      "id, user_id, service_type, preferred_date, preferred_time, details, status, estimated_minutes, created_at, cancelled_at, cancellation_reason, cancellation_fee_cents",
     )
     .eq("id", id)
     .maybeSingle();

@@ -63,6 +63,10 @@ ALTER TABLE service_requests
   ADD COLUMN IF NOT EXISTS google_calendar_event_id TEXT,
   ADD COLUMN IF NOT EXISTS synced_to_calendar BOOLEAN DEFAULT false,
   ADD COLUMN IF NOT EXISTS calendar_sync_error TEXT;
+ALTER TABLE service_requests
+  ADD COLUMN IF NOT EXISTS cancelled_at TIMESTAMPTZ,
+  ADD COLUMN IF NOT EXISTS cancellation_reason TEXT,
+  ADD COLUMN IF NOT EXISTS cancellation_fee_cents INTEGER DEFAULT 0;
 
 -- Create index for faster lookups
 CREATE INDEX IF NOT EXISTS idx_service_requests_calendar_event

@@ -3,6 +3,7 @@
 import { useEffect, useMemo, useState } from "react";
 import { useSupabaseSession } from "@/hooks/useSupabaseSession";
 import { getSupabaseClient } from "@/lib/supabaseClient";
+import { formatCurrency } from "@/lib/formatting";
 import ProfileForm from "./ProfileForm";
 import AddressesSettings from "./AddressesSettings";
 import NotificationSettings from "./NotificationSettings";
@@ -18,6 +19,9 @@ type Request = {
   details: string | null;
   status: string | null;
   created_at: string | null;
+  cancelled_at?: string | null;
+  cancellation_reason?: string | null;
+  cancellation_fee_cents?: number | null;
 };
 
 export default function SettingsDashboard() {
@@ -27,6 +31,13 @@ export default function SettingsDashboard() {
   const [loading, setLoading] = useState(false);
   const [savingId, setSavingId] = useState<string | null>(null);
   const [error, setError] = useState<string | null>(null);
+  const [cancelModal, setCancelModal] = useState<{ open: boolean; request: Request | null }>({
+    open: false,
+    request: null,
+  });
+  const [cancelReason, setCancelReason] = useState("");
+  const [cancelSaving, setCancelSaving] = useState(false);
+  const [cancelError, setCancelError] = useState<string | null>(null);
 
   const userId = session?.user?.id ?? null;
   const canFetch = useMemo(
@@ -42,7 +53,7 @@ export default function SettingsDashboard() {
       const { data, error: fetchError } = await supabase
         .from("service_requests")
         .select(
-          "id, service_type, preferred_date, preferred_time, details, status, created_at"
+          "id, service_type, preferred_date, preferred_time, details, status, created_at, cancelled_at, cancellation_reason, cancellation_fee_cents"
         )
         .eq("user_id", userId)
         .order("created_at", { ascending: false });
@@ -76,12 +87,56 @@ export default function SettingsDashboard() {
   };
 
   const handleCancel = (id: string) =>
-    updateRequest(id, { status: "cancelled" });
+    {
+      const req = requests.find((r) => r.id === id) || null;
+      setCancelReason("");
+      setCancelError(null);
+      setCancelModal({ open: true, request: req });
+    };
   const handleReschedule = (
     id: string,
     preferred_date: string | null,
     preferred_time: string | null
   ) => updateRequest(id, { preferred_date, preferred_time, status: "pending" });
+
+  const confirmCancel = async () => {
+    if (!cancelModal.request) return;
+    setCancelSaving(true);
+    setCancelError(null);
+    try {
+      const res = await fetch(`/api/requests/${cancelModal.request.id}/cancel`, {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ reason: cancelReason }),
+      });
+
+      const data = await res.json().catch(() => ({}));
+      if (!res.ok) {
+        throw new Error(data.error || "Failed to cancel request");
+      }
+
+      setRequests((prev) =>
+        prev.map((r) =>
+          r.id === cancelModal.request?.id
+            ? {
+                ...r,
+                status: "cancelled",
+                cancelled_at: data.cancelled_at || new Date().toISOString(),
+                cancellation_reason: cancelReason || r.cancellation_reason || null,
+                cancellation_fee_cents: typeof data.fee_cents === "number" ? data.fee_cents : computeCancellationFee(r.preferred_time, r.preferred_date),
+              }
+            : r
+        )
+      );
+
+      setCancelModal({ open: false, request: null });
+      setCancelReason("");
+    } catch (err) {
+      setCancelError(err instanceof Error ? err.message : "Failed to cancel request");
+    } finally {
+      setCancelSaving(false);
+    }
+  };
 
   return (
     <div className="grid gap-6">
@@ -148,7 +203,7 @@ export default function SettingsDashboard() {
               <RequestCard
                 key={req.id}
                 request={req}
-                onCancel={handleCancel}
+                onCancel={() => handleCancel(req.id)}
                 onReschedule={handleReschedule}
                 saving={savingId === req.id}
               />
@@ -156,8 +211,108 @@ export default function SettingsDashboard() {
           </div>
         )}
       </section>
+
+      {cancelModal.open && cancelModal.request && (
+        <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/50 px-4">
+          <div className="w-full max-w-lg rounded-2xl bg-white p-6 shadow-2xl">
+            <div className="flex items-start justify-between gap-3">
+              <div>
+                <p className="text-xs uppercase tracking-[0.2em] text-rose-700">Cancel request</p>
+                <h3 className="text-lg font-semibold text-slate-900">{cancelModal.request.service_type || "Service"}</h3>
+                <p className="text-sm text-slate-600">
+                  {cancelModal.request.preferred_time
+                    ? new Date(cancelModal.request.preferred_time).toLocaleString()
+                    : cancelModal.request.preferred_date || "No date set"}
+                </p>
+              </div>
+              <button
+                onClick={() => setCancelModal({ open: false, request: null })}
+                className="rounded-lg p-2 text-slate-500 hover:bg-slate-100"
+                aria-label="Close"
+              >
+                ✕
+              </button>
+            </div>
+
+            <div className="mt-4 space-y-3">
+              <label className="grid gap-1 text-sm text-slate-800">
+                Reason (optional)
+                <textarea
+                  value={cancelReason}
+                  onChange={(e) => setCancelReason(e.target.value)}
+                  rows={3}
+                  placeholder="Tell us why you're cancelling"
+                  className="w-full rounded-lg border border-slate-300 px-3 py-2 text-sm focus:border-rose-500 focus:outline-none focus:ring-1 focus:ring-rose-500"
+                />
+              </label>
+
+              <div className="rounded-lg border border-slate-200 bg-slate-50 p-3 text-sm text-slate-700">
+                {(() => {
+                  const fee = computeCancellationFee(
+                    cancelModal.request?.preferred_time ?? null,
+                    cancelModal.request?.preferred_date ?? null
+                  );
+                  return (
+                    <>
+                      <p className="font-semibold text-slate-900">
+                        Cancellation fee: {fee > 0 ? formatCurrency(fee / 100) : "Free"}
+                      </p>
+                      <ul className="mt-2 space-y-1 text-xs text-slate-600">
+                        <li>• Within 2 hours of service: $40 fee</li>
+                        <li>• Within 24 hours of service: $10 fee</li>
+                        <li>• More than 24 hours: free cancellation</li>
+                      </ul>
+                    </>
+                  );
+                })()}
+              </div>
+
+              {cancelError && (
+                <p className="rounded-md bg-rose-50 px-3 py-2 text-sm text-rose-800">{cancelError}</p>
+              )}
+            </div>
+
+            <div className="mt-6 flex items-center justify-end gap-2">
+              <button
+                onClick={() => setCancelModal({ open: false, request: null })}
+                disabled={cancelSaving}
+                className="rounded-lg border border-slate-200 px-4 py-2 text-sm font-medium text-slate-700 hover:bg-slate-50 disabled:opacity-60"
+              >
+                Keep booking
+              </button>
+              <button
+                onClick={confirmCancel}
+                disabled={cancelSaving}
+                className="rounded-lg bg-rose-600 px-4 py-2 text-sm font-semibold text-white hover:bg-rose-700 disabled:bg-rose-300"
+              >
+                {cancelSaving ? "Cancelling..." : "Confirm cancel"}
+              </button>
+            </div>
+          </div>
+        </div>
+      )}
     </div>
   );
+}
+
+function computeCancellationFee(preferredTime: string | null, preferredDate: string | null) {
+  let serviceDate: Date | null = null;
+
+  if (preferredTime) {
+    const d = new Date(preferredTime);
+    if (!Number.isNaN(d.getTime())) serviceDate = d;
+  }
+
+  if (!serviceDate && preferredDate) {
+    const d = new Date(`${preferredDate}T12:00:00`);
+    if (!Number.isNaN(d.getTime())) serviceDate = d;
+  }
+
+  if (!serviceDate) return 0;
+  const diffHours = (serviceDate.getTime() - Date.now()) / (1000 * 60 * 60);
+  if (diffHours <= 2) return 4000;
+  if (diffHours <= 24) return 1000;
+  return 0;
 }
 
 type RequestCardProps = {
@@ -183,6 +338,8 @@ function RequestCard({
   const [preferredTime, setPreferredTime] = useState(
     request.preferred_time ?? ""
   );
+  const isCancelled = request.status === "cancelled";
+  const fee = request.cancellation_fee_cents ?? computeCancellationFee(request.preferred_time, request.preferred_date);
 
   return (
     <div className="grid gap-3 rounded-lg border border-slate-200 p-4">
@@ -234,20 +391,35 @@ function RequestCard({
                 preferredTime || null
               )
             }
-            disabled={saving}
+            disabled={saving || isCancelled}
             className="rounded-lg bg-indigo-700 px-3 py-2 text-sm font-semibold text-white shadow-sm hover:bg-indigo-800 disabled:cursor-not-allowed disabled:bg-slate-300"
           >
             {saving ? "Saving..." : "Reschedule"}
           </button>
           <button
             onClick={() => onCancel(request.id)}
-            disabled={saving}
+            disabled={saving || isCancelled}
             className="rounded-lg border border-rose-200 px-3 py-2 text-sm font-semibold text-rose-700 hover:bg-rose-50 disabled:cursor-not-allowed disabled:opacity-60"
           >
             Cancel
           </button>
         </div>
       </div>
+
+      {isCancelled && (
+        <div className="rounded-lg border border-rose-200 bg-rose-50 p-3 text-sm text-rose-800">
+          <p className="font-semibold">Cancelled</p>
+          {request.cancellation_reason && <p className="mt-1">Reason: {request.cancellation_reason}</p>}
+          <p className="mt-1">
+            Fee: {fee && fee > 0 ? formatCurrency(fee / 100) : "No fee (canceled with sufficient notice)"}
+          </p>
+          {request.cancelled_at && (
+            <p className="mt-1 text-xs text-rose-700">
+              Cancelled at {new Date(request.cancelled_at).toLocaleString()}
+            </p>
+          )}
+        </div>
+      )}
     </div>
   );
 }

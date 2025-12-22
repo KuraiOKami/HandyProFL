@@ -15,6 +15,9 @@ export type RequestDetail = {
   status: string | null;
   estimated_minutes?: number | null;
   created_at?: string | null;
+  cancelled_at?: string | null;
+  cancellation_reason?: string | null;
+  cancellation_fee_cents?: number | null;
 };
 
 export type RelatedRequest = {
@@ -873,7 +876,17 @@ export default function AdminRequestDetailView({ request, client, otherRequests,
                   </div>
                   <div>
                     <p className="text-sm font-medium text-slate-900">Request cancelled</p>
-                    <p className="text-xs text-slate-500">No longer active</p>
+                    <p className="text-xs text-slate-500">
+                      {localRequest.cancelled_at ? formatDateTime(localRequest.cancelled_at) : "No longer active"}
+                    </p>
+                    {localRequest.cancellation_reason && (
+                      <p className="text-xs text-slate-600 mt-1">Reason: {localRequest.cancellation_reason}</p>
+                    )}
+                    {typeof localRequest.cancellation_fee_cents === "number" && (
+                      <p className="text-xs text-slate-600 mt-1">
+                        Fee: {localRequest.cancellation_fee_cents > 0 ? formatCurrency((localRequest.cancellation_fee_cents || 0) / 100) : "No fee"}
+                      </p>
+                    )}
                   </div>
                 </div>
               )}
