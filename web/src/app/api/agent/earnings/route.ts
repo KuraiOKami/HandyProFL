@@ -88,7 +88,9 @@ export async function GET() {
     const createdAt = new Date(e.created_at);
 
     totalEarnings += amount;
-    completedJobs++;
+    if (amount > 0) {
+      completedJobs++;
+    }
 
     const isAvailable = e.status === "available";
 

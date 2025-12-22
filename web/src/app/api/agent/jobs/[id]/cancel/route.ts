@@ -28,6 +28,26 @@ async function getAgentSession() {
   return { supabase, session, adminSupabase: createServiceRoleClient() ?? supabase };
 }
 
+function computeCancellationFee(preferredTime: string | null, preferredDate: string | null) {
+  let serviceDate: Date | null = null;
+
+  if (preferredTime) {
+    const d = new Date(preferredTime);
+    if (!Number.isNaN(d.getTime())) serviceDate = d;
+  }
+
+  if (!serviceDate && preferredDate) {
+    const d = new Date(`${preferredDate}T12:00:00`);
+    if (!Number.isNaN(d.getTime())) serviceDate = d;
+  }
+
+  if (!serviceDate) return 0;
+  const diffHours = (serviceDate.getTime() - Date.now()) / (1000 * 60 * 60);
+  if (diffHours <= 2) return 4000; // $40 within 2 hours
+  if (diffHours <= 24) return 1000; // $10 within 24 hours
+  return 0; // free beyond 24 hours
+}
+
 export async function POST(
   req: NextRequest,
   { params }: { params: Promise<{ id: string }> }
@@ -75,6 +95,7 @@ export async function POST(
   const preferredTime = srRaw?.preferred_time as string | null;
 
   const nowIso = new Date().toISOString();
+  const feeCents = computeCancellationFee(srRaw?.preferred_time as string | null, srRaw?.preferred_date as string | null);
 
   // Update job assignment
   const { error: updateJobError } = await adminSupabase
@@ -102,5 +123,21 @@ export async function POST(
     }
   }
 
-  return NextResponse.json({ status: "cancelled" });
+  // Record cancellation fee as negative earning to be netted from next payout
+  if (feeCents > 0) {
+    await adminSupabase
+      .from("agent_earnings")
+      .upsert(
+        {
+          agent_id: session.user.id,
+          assignment_id: jobId,
+          amount_cents: -feeCents,
+          status: "available",
+          available_at: nowIso,
+        },
+        { onConflict: "assignment_id" }
+      );
+  }
+
+  return NextResponse.json({ status: "cancelled", fee_cents: feeCents });
 }
