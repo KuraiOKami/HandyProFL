@@ -72,6 +72,13 @@ export type ProofOfWork = {
   uploaded_at: string;
 };
 
+export type SurveyData = {
+  satisfaction: 'satisfied' | 'neutral' | 'issues' | null;
+  actual_duration: 'less' | 'expected' | 'more' | null;
+  completed_tasks: 'all' | 'most' | 'some' | null;
+  additional_notes: string | null;
+};
+
 type Props = {
   request: RequestDetail;
   client: ClientProfile | null;
@@ -80,6 +87,7 @@ type Props = {
   agentProfile?: { first_name: string | null; last_name: string | null; email: string | null; phone: string | null } | null;
   checkins?: AgentCheckin[];
   proofs?: ProofOfWork[];
+  surveyData?: SurveyData | null;
 };
 
 const statusOptions = ["pending", "confirmed", "complete", "cancelled"];
@@ -153,7 +161,7 @@ function formatRelativeTime(dateStr: string | null | undefined) {
   return `${Math.floor(diffDays / 30)} months ago`;
 }
 
-export default function AdminRequestDetailView({ request, client, otherRequests, jobAssignment, agentProfile, checkins = [], proofs = [] }: Props) {
+export default function AdminRequestDetailView({ request, client, otherRequests, jobAssignment, agentProfile, checkins = [], proofs = [], surveyData }: Props) {
   const [localRequest, setLocalRequest] = useState<RequestDetail>(request);
   const [localJob, setLocalJob] = useState<JobAssignment | null>(jobAssignment ?? null);
   const [dateInput, setDateInput] = useState(localRequest.preferred_date ?? "");
@@ -591,6 +599,50 @@ export default function AdminRequestDetailView({ request, client, otherRequests,
                             </div>
                           ))}
                         </div>
+                      </div>
+                    </div>
+                  )}
+
+                  {/* Agent Survey Responses */}
+                  {surveyData && (
+                    <div>
+                      <h4 className="mb-3 text-sm font-semibold uppercase tracking-wide text-slate-500">Agent Survey</h4>
+                      <div className="rounded-lg border border-slate-200 bg-slate-50 p-4">
+                        <div className="grid gap-4 sm:grid-cols-3">
+                          <div>
+                            <p className="text-xs font-medium text-slate-500">Customer Satisfaction</p>
+                            <p className="mt-1 text-sm font-semibold text-slate-900">
+                              {surveyData.satisfaction === 'satisfied' && '😊 Satisfied'}
+                              {surveyData.satisfaction === 'neutral' && '😐 Neutral'}
+                              {surveyData.satisfaction === 'issues' && '😟 Had Issues'}
+                              {!surveyData.satisfaction && 'Not answered'}
+                            </p>
+                          </div>
+                          <div>
+                            <p className="text-xs font-medium text-slate-500">Actual Duration</p>
+                            <p className="mt-1 text-sm font-semibold text-slate-900">
+                              {surveyData.actual_duration === 'less' && '⏱️ Less than expected'}
+                              {surveyData.actual_duration === 'expected' && '⏱️ As expected'}
+                              {surveyData.actual_duration === 'more' && '⏱️ More than expected'}
+                              {!surveyData.actual_duration && 'Not answered'}
+                            </p>
+                          </div>
+                          <div>
+                            <p className="text-xs font-medium text-slate-500">Tasks Completed</p>
+                            <p className="mt-1 text-sm font-semibold text-slate-900">
+                              {surveyData.completed_tasks === 'all' && '✅ All tasks'}
+                              {surveyData.completed_tasks === 'most' && '📋 Most tasks'}
+                              {surveyData.completed_tasks === 'some' && '⚠️ Some tasks'}
+                              {!surveyData.completed_tasks && 'Not answered'}
+                            </p>
+                          </div>
+                        </div>
+                        {surveyData.additional_notes && (
+                          <div className="mt-4 border-t border-slate-200 pt-4">
+                            <p className="text-xs font-medium text-slate-500">Agent Notes</p>
+                            <p className="mt-1 text-sm text-slate-700 whitespace-pre-wrap">{surveyData.additional_notes}</p>
+                          </div>
+                        )}
                       </div>
                     </div>
                   )}

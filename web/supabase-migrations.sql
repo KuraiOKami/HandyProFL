@@ -143,6 +143,11 @@ CREATE TABLE IF NOT EXISTS agent_profiles (
   stripe_charges_enabled BOOLEAN DEFAULT false,
   instant_payout_enabled BOOLEAN DEFAULT false,
   payout_schedule TEXT DEFAULT 'weekly', -- weekly, instant
+  selfie_url TEXT, -- optional selfie/profile photo
+  identity_verification_status TEXT DEFAULT 'not_started', -- not_started, pending, verified, canceled
+  stripe_identity_session_id TEXT, -- last created Stripe Identity session
+  identity_verified_at TIMESTAMPTZ, -- when identity was verified
+  identity_verification_notes TEXT, -- optional notes or last error
   created_at TIMESTAMPTZ DEFAULT NOW(),
   updated_at TIMESTAMPTZ DEFAULT NOW()
 );
@@ -341,6 +346,28 @@ create policy "Authenticated manage proof-of-work objects"
   to authenticated
   using (bucket_id = 'proof-of-work')
   with check (bucket_id = 'proof-of-work');
+
+-- Storage bucket for agent verification selfies/photos
+insert into storage.buckets (id, name, public)
+values ('agent-verification', 'agent-verification', true)
+on conflict (id) do nothing;
+
+-- Allow public read of verification assets (e.g., admin review)
+create policy "Public read agent-verification files"
+  on storage.objects for select
+  using (bucket_id = 'agent-verification');
+
+-- Authenticated users can upload/update their own verification photos
+create policy "Authenticated upload agent-verification files"
+  on storage.objects for insert
+  to authenticated
+  with check (bucket_id = 'agent-verification');
+
+create policy "Authenticated update agent-verification files"
+  on storage.objects for update
+  to authenticated
+  using (bucket_id = 'agent-verification')
+  with check (bucket_id = 'agent-verification');
 
 -- Agent earnings per job
 CREATE TABLE IF NOT EXISTS agent_earnings (

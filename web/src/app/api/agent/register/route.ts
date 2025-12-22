@@ -27,6 +27,7 @@ export async function POST(req: NextRequest) {
     city,
     state,
     postal_code,
+    selfie_url,
   } = body ?? {};
 
   if (!first_name || !last_name) {
@@ -35,15 +36,15 @@ export async function POST(req: NextRequest) {
 
   const adminSupabase = createServiceRoleClient() ?? supabase;
 
-  // Check if already an agent
+  // Check if an agent profile already exists (may have been created during ID verification)
   const { data: existingAgent } = await adminSupabase
     .from("agent_profiles")
-    .select("id")
+    .select("id, status, identity_verification_status, selfie_url")
     .eq("id", session.user.id)
-    .single();
+    .maybeSingle();
 
-  if (existingAgent) {
-    return NextResponse.json({ error: "Agent profile already exists" }, { status: 409 });
+  if (existingAgent?.identity_verification_status && existingAgent.identity_verification_status !== "verified") {
+    return NextResponse.json({ error: "Identity verification must be completed before submitting your application." }, { status: 400 });
   }
 
   // Upsert the main profile so new users don't fail if their profile row doesn't exist yet
@@ -67,24 +68,27 @@ export async function POST(req: NextRequest) {
     return NextResponse.json({ error: profileError.message }, { status: 500 });
   }
 
-  // Create agent profile
+  const derivedStatus =
+    existingAgent?.status === "approved" || existingAgent?.status === "suspended"
+      ? existingAgent.status
+      : "pending_approval";
+
+  // Insert or update the agent profile (might already exist from ID verification session creation)
   const { error: agentError } = await adminSupabase
     .from("agent_profiles")
-    .insert({
-      id: session.user.id,
-      bio: bio || null,
-      skills: skills || [],
-      service_area_miles: service_area_miles || 25,
-      status: "pending_approval",
-    });
+    .upsert(
+      {
+        id: session.user.id,
+        bio: bio || null,
+        skills: skills || [],
+        service_area_miles: service_area_miles || 25,
+        status: derivedStatus,
+        selfie_url: selfie_url || existingAgent?.selfie_url || null,
+      },
+      { onConflict: "id" }
+    );
 
   if (agentError) {
-    // Rollback role change
-    await adminSupabase
-      .from("profiles")
-      .update({ role: "client" })
-      .eq("id", session.user.id);
-
     return NextResponse.json({ error: agentError.message }, { status: 500 });
   }
 

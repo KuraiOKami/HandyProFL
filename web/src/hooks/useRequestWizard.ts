@@ -16,6 +16,24 @@ export type PaymentMethod = {
 
 export type MountType = 'none' | 'static' | 'full_motion';
 
+export type ServiceRecipient = 'myself' | 'family' | 'friend' | 'tenant' | 'business' | 'other';
+
+export const SERVICE_RECIPIENTS: { value: ServiceRecipient; label: string; description: string }[] = [
+  { value: 'myself', label: 'Myself', description: 'Service at my home address' },
+  { value: 'family', label: 'Family Member', description: 'Service for a family member' },
+  { value: 'friend', label: 'Friend', description: 'Service for a friend' },
+  { value: 'tenant', label: 'Tenant', description: 'Service for a rental property tenant' },
+  { value: 'business', label: 'Business', description: 'Service for a commercial location' },
+  { value: 'other', label: 'Other', description: 'Another recipient' },
+];
+
+export type ServiceAddress = {
+  street: string;
+  city: string;
+  state: string;
+  postalCode: string;
+};
+
 export type RequestItem = {
   service: ServiceId;
   tvSize: string;
@@ -125,6 +143,16 @@ export function useRequestWizard() {
   const [open, setOpen] = useState(false);
   const [step, setStep] = useState<Step>(1);
 
+  // Service recipient and address
+  const [serviceRecipient, setServiceRecipient] = useState<ServiceRecipient>('myself');
+  const [serviceAddress, setServiceAddress] = useState<ServiceAddress>({
+    street: '',
+    city: '',
+    state: 'FL',
+    postalCode: '',
+  });
+  const [useProfileAddress, setUseProfileAddress] = useState(true);
+
   // Service selection state
   const [service, setService] = useState<ServiceId>('tv_mount');
   const [tvSize, setTvSize] = useState('55"');
@@ -171,6 +199,9 @@ export function useRequestWizard() {
 
   const reset = useCallback((nextService: ServiceId = 'tv_mount') => {
     setStep(1);
+    setServiceRecipient('myself');
+    setServiceAddress({ street: '', city: '', state: 'FL', postalCode: '' });
+    setUseProfileAddress(true);
     setService(nextService);
     setTvSize('55"');
     setWallType('Drywall');
@@ -364,6 +395,12 @@ export function useRequestWizard() {
 
     const itemsToSave: RequestItem[] = [...items, buildCurrentItem()];
 
+    // Build service address info
+    const recipientLabel = SERVICE_RECIPIENTS.find(r => r.value === serviceRecipient)?.label ?? 'Myself';
+    const addressLine = useProfileAddress
+      ? 'Using profile address'
+      : [serviceAddress.street, serviceAddress.city, serviceAddress.state, serviceAddress.postalCode].filter(Boolean).join(', ');
+
     const details = itemsToSave
       .map((item, idx) => {
         const mountTypeLabel = item.mountType === 'static' ? 'Static mount (+$30)'
@@ -379,6 +416,11 @@ export function useRequestWizard() {
           item.service === 'assembly' && item.assemblyType === 'Other' && item.assemblyOther
             ? `Other: ${item.assemblyOther}`
             : null,
+          item.service === 'electrical' ? `Electrical type: ${item.electricalType}` : null,
+          item.service === 'electrical' && item.electricalType === 'Other' && item.electricalOther
+            ? `Other: ${item.electricalOther}`
+            : null,
+          item.service === 'punch' && item.punchTasks.length ? `Tasks: ${item.punchTasks.join(', ')}` : null,
           item.extraItems.length ? `Additional items: ${item.extraItems.join(', ')}` : null,
           item.photoNames.length ? `Photos: ${item.photoNames.join(', ')}` : null,
           item.notes ? `Notes: ${item.notes}` : null,
@@ -388,7 +430,7 @@ export function useRequestWizard() {
         return parts;
       })
       .join(' || ');
-    const detailsWithDuration = `${details}${details ? ' | ' : ''}Estimated minutes: ${requiredMinutes} | Subtotal: ${(totalPriceCents / 100).toLocaleString(undefined, { style: 'currency', currency: 'USD' })}`;
+    const detailsWithDuration = `Service for: ${recipientLabel} | Address: ${addressLine} | ${details}${details ? ' | ' : ''}Estimated minutes: ${requiredMinutes} | Subtotal: ${(totalPriceCents / 100).toLocaleString(undefined, { style: 'currency', currency: 'USD' })}`;
 
     const selectedSlots = availableSlots[date] ?? [];
     const selectedIdx = selectedSlots.findIndex((s) => s.startIso === slot?.startIso);
@@ -479,6 +521,9 @@ export function useRequestWizard() {
     requiredSlots,
     requestId,
     service,
+    serviceRecipient,
+    serviceAddress,
+    useProfileAddress,
   ]);
 
   return {
@@ -488,6 +533,14 @@ export function useRequestWizard() {
     step,
     setStep,
     reset,
+
+    // Service recipient and address
+    serviceRecipient,
+    setServiceRecipient,
+    serviceAddress,
+    setServiceAddress,
+    useProfileAddress,
+    setUseProfileAddress,
 
     // Service selection
     service,

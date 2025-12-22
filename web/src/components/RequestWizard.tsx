@@ -3,6 +3,7 @@
 import { forwardRef, useCallback, useImperativeHandle } from 'react';
 import { useRequestWizard, type ServiceId, type Step } from '@/hooks/useRequestWizard';
 import WizardProgress from './wizard/WizardProgress';
+import RecipientAddressSelector from './wizard/RecipientAddressSelector';
 import ServiceSelector from './wizard/ServiceSelector';
 import SchedulingPicker from './wizard/SchedulingPicker';
 import DetailsStep from './wizard/DetailsStep';
@@ -112,30 +113,46 @@ const RequestWizard = forwardRef<RequestWizardHandle>((_props, ref) => {
           <WizardProgress currentStep={wizard.step} />
 
           {wizard.step === 1 && (
-            <ServiceSelector
-              service={wizard.service}
-              onServiceChange={wizard.setService}
-              tvSize={wizard.tvSize}
-              onTvSizeChange={wizard.setTvSize}
-              wallType={wizard.wallType}
-              onWallTypeChange={wizard.setWallType}
-              hasMount={wizard.hasMount}
-              onHasMountChange={wizard.setHasMount}
-              mountType={wizard.mountType}
-              onMountTypeChange={wizard.setMountType}
-              assemblyType={wizard.assemblyType}
-              onAssemblyTypeChange={wizard.setAssemblyType}
-              assemblyOther={wizard.assemblyOther}
-              onAssemblyOtherChange={wizard.setAssemblyOther}
-              electricalType={wizard.electricalType}
-              onElectricalTypeChange={wizard.setElectricalType}
-              electricalOther={wizard.electricalOther}
-              onElectricalOtherChange={wizard.setElectricalOther}
-              punchTasks={wizard.punchTasks}
-              onPunchTasksChange={wizard.setPunchTasks}
-              newPunchTask={wizard.newPunchTask}
-              onNewPunchTaskChange={wizard.setNewPunchTask}
-            />
+            <div className="grid gap-4">
+              <RecipientAddressSelector
+                serviceRecipient={wizard.serviceRecipient}
+                onServiceRecipientChange={wizard.setServiceRecipient}
+                serviceAddress={wizard.serviceAddress}
+                onServiceAddressChange={wizard.setServiceAddress}
+                useProfileAddress={wizard.useProfileAddress}
+                onUseProfileAddressChange={wizard.setUseProfileAddress}
+              />
+              <div className="grid gap-2">
+                <div className="flex items-center gap-2">
+                  <span className="text-lg">🛠️</span>
+                  <p className="text-sm font-semibold text-slate-900">What service do you need?</p>
+                </div>
+                <ServiceSelector
+                  service={wizard.service}
+                  onServiceChange={wizard.setService}
+                  tvSize={wizard.tvSize}
+                  onTvSizeChange={wizard.setTvSize}
+                  wallType={wizard.wallType}
+                  onWallTypeChange={wizard.setWallType}
+                  hasMount={wizard.hasMount}
+                  onHasMountChange={wizard.setHasMount}
+                  mountType={wizard.mountType}
+                  onMountTypeChange={wizard.setMountType}
+                  assemblyType={wizard.assemblyType}
+                  onAssemblyTypeChange={wizard.setAssemblyType}
+                  assemblyOther={wizard.assemblyOther}
+                  onAssemblyOtherChange={wizard.setAssemblyOther}
+                  electricalType={wizard.electricalType}
+                  onElectricalTypeChange={wizard.setElectricalType}
+                  electricalOther={wizard.electricalOther}
+                  onElectricalOtherChange={wizard.setElectricalOther}
+                  punchTasks={wizard.punchTasks}
+                  onPunchTasksChange={wizard.setPunchTasks}
+                  newPunchTask={wizard.newPunchTask}
+                  onNewPunchTaskChange={wizard.setNewPunchTask}
+                />
+              </div>
+            </div>
           )}
 
           {wizard.step === 2 && (
