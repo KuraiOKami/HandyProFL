@@ -3,7 +3,8 @@ import { createClient, createServiceRoleClient } from "@/utils/supabase/server";
 import Stripe from "stripe";
 
 const stripe = new Stripe(process.env.STRIPE_SECRET_KEY || "", {
-  apiVersion: "2024-12-18.acacia",
+  // Use a Stripe API version supported by the installed SDK to satisfy TS literal union
+  apiVersion: "2024-11-20",
 });
 
 export async function POST(req: NextRequest) {
