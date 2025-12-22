@@ -9,7 +9,7 @@ const stripeSecret = process.env.STRIPE_SECRET_KEY;
 const webhookSecret = process.env.STRIPE_IDENTITY_WEBHOOK_SECRET || process.env.STRIPE_WEBHOOK_SECRET;
 
 const stripe = stripeSecret
-  ? new Stripe(stripeSecret, { apiVersion: "2024-11-20" })
+  ? new Stripe(stripeSecret)
   : null;
 
 const mapIdentityStatus = (
