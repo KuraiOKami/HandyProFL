@@ -42,7 +42,7 @@ async function requireAdmin() {
 export async function POST(req: NextRequest) {
   const auth = await requireAdmin();
   if ("error" in auth) return auth.error;
-  const { supabase, adminSupabase } = auth;
+  const { adminSupabase } = auth;
 
   const body = (await req.json().catch(() => null)) as SendBody | null;
   if (!body || !body.message) {
