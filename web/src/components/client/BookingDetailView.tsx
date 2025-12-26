@@ -8,23 +8,23 @@ import { getSupabaseClient } from '@/lib/supabaseClient';
 
 type Booking = {
   id: string;
-  service_type: string | null;
-  preferred_date: string | null;
-  preferred_time: string | null;
+  serviceType: string | null;
+  preferredDate: string | null;
+  preferredTime: string | null;
   details: string | null;
   status: string | null;
-  created_at: string | null;
-  total_price_cents: number | null;
-  labor_price_cents: number | null;
-  materials_cost_cents: number | null;
+  createdAt: string | null;
+  totalPriceCents: number | null;
+  laborPriceCents: number | null;
+  materialsCostCents: number | null;
   street: string | null;
   city: string | null;
   state: string | null;
-  postal_code: string | null;
-  assigned_agent_id: string | null;
-  cancelled_at: string | null;
-  cancellation_reason: string | null;
-  cancellation_fee_cents: number | null;
+  postalCode: string | null;
+  assignedAgentId: string | null;
+  cancelledAt: string | null;
+  cancellationReason: string | null;
+  cancellationFeeCents: number | null;
 };
 
 type AgentProfile = {
@@ -97,8 +97,8 @@ export default function BookingDetailView({ booking, agentProfile, jobAssignment
   const [error, setError] = useState<string | null>(null);
 
   const [showRescheduleModal, setShowRescheduleModal] = useState(false);
-  const [newDate, setNewDate] = useState(booking.preferred_date || '');
-  const [newTime, setNewTime] = useState(booking.preferred_time || '');
+  const [newDate, setNewDate] = useState(booking.preferredDate || '');
+  const [newTime, setNewTime] = useState(booking.preferredTime || '');
   const [rescheduling, setRescheduling] = useState(false);
 
   const statusConfig = STATUS_CONFIG[booking.status || 'pending'] || STATUS_CONFIG.pending;
@@ -209,19 +209,19 @@ export default function BookingDetailView({ booking, agentProfile, jobAssignment
           <div className="mt-4 space-y-4">
             <div className="flex items-center gap-4">
               <div className="flex h-12 w-12 items-center justify-center rounded-lg bg-indigo-100 text-2xl">
-                {booking.service_type === 'tv_mount' && '📺'}
-                {booking.service_type === 'assembly' && '🪑'}
-                {booking.service_type === 'electrical' && '💡'}
-                {booking.service_type === 'plumbing' && '🔧'}
-                {booking.service_type === 'punch' && '🔨'}
-                {!['tv_mount', 'assembly', 'electrical', 'plumbing', 'punch'].includes(booking.service_type || '') && '🛠️'}
+                {booking.serviceType === 'tv_mount' && '📺'}
+                {booking.serviceType === 'assembly' && '🪑'}
+                {booking.serviceType === 'electrical' && '💡'}
+                {booking.serviceType === 'plumbing' && '🔧'}
+                {booking.serviceType === 'punch' && '🔨'}
+                {!['tv_mount', 'assembly', 'electrical', 'plumbing', 'punch'].includes(booking.serviceType || '') && '🛠️'}
               </div>
               <div>
                 <p className="font-medium text-slate-900">
-                  {booking.service_type?.replace(/_/g, ' ').replace(/\b\w/g, (l) => l.toUpperCase()) || 'Service Request'}
+                  {booking.serviceType?.replace(/_/g, ' ').replace(/\b\w/g, (l) => l.toUpperCase()) || 'Service Request'}
                 </p>
                 <p className="text-sm text-slate-500">
-                  Booked on {booking.created_at ? new Date(booking.created_at).toLocaleDateString() : 'N/A'}
+                  Booked on {booking.createdAt ? new Date(booking.createdAt).toLocaleDateString() : 'N/A'}
                 </p>
               </div>
             </div>
@@ -229,18 +229,18 @@ export default function BookingDetailView({ booking, agentProfile, jobAssignment
             <div className="grid gap-4 sm:grid-cols-2">
               <div>
                 <p className="text-sm text-slate-500">Scheduled Date</p>
-                <p className="font-medium text-slate-900">{formatDate(booking.preferred_date)}</p>
+                <p className="font-medium text-slate-900">{formatDate(booking.preferredDate)}</p>
               </div>
               <div>
                 <p className="text-sm text-slate-500">Preferred Time</p>
-                <p className="font-medium text-slate-900">{booking.preferred_time || 'Flexible'}</p>
+                <p className="font-medium text-slate-900">{booking.preferredTime || 'Flexible'}</p>
               </div>
             </div>
 
             <div>
               <p className="text-sm text-slate-500">Location</p>
               <p className="font-medium text-slate-900">
-                {[booking.street, booking.city, booking.state, booking.postal_code].filter(Boolean).join(', ') || 'Not specified'}
+                {[booking.street, booking.city, booking.state, booking.postalCode].filter(Boolean).join(', ') || 'Not specified'}
               </p>
             </div>
 
@@ -258,28 +258,28 @@ export default function BookingDetailView({ booking, agentProfile, jobAssignment
           <h3 className="text-lg font-semibold text-slate-900">Pricing</h3>
 
           <div className="mt-4 space-y-3">
-            {booking.labor_price_cents !== null && (
+            {booking.laborPriceCents !== null && (
               <div className="flex justify-between text-sm">
                 <span className="text-slate-600">Labor</span>
-                <span className="font-medium text-slate-900">{formatPrice(booking.labor_price_cents)}</span>
+                <span className="font-medium text-slate-900">{formatPrice(booking.laborPriceCents)}</span>
               </div>
             )}
-            {booking.materials_cost_cents !== null && booking.materials_cost_cents > 0 && (
+            {booking.materialsCostCents !== null && booking.materialsCostCents > 0 && (
               <div className="flex justify-between text-sm">
                 <span className="text-slate-600">Materials</span>
-                <span className="font-medium text-slate-900">{formatPrice(booking.materials_cost_cents)}</span>
+                <span className="font-medium text-slate-900">{formatPrice(booking.materialsCostCents)}</span>
               </div>
             )}
-            {booking.cancellation_fee_cents !== null && booking.cancellation_fee_cents > 0 && (
+            {booking.cancellationFeeCents !== null && booking.cancellationFeeCents > 0 && (
               <div className="flex justify-between text-sm">
                 <span className="text-rose-600">Cancellation Fee</span>
-                <span className="font-medium text-rose-600">{formatPrice(booking.cancellation_fee_cents)}</span>
+                <span className="font-medium text-rose-600">{formatPrice(booking.cancellationFeeCents)}</span>
               </div>
             )}
             <div className="border-t border-slate-200 pt-3">
               <div className="flex justify-between">
                 <span className="font-semibold text-slate-900">Total</span>
-                <span className="text-xl font-bold text-slate-900">{formatPrice(booking.total_price_cents)}</span>
+                <span className="text-xl font-bold text-slate-900">{formatPrice(booking.totalPriceCents)}</span>
               </div>
             </div>
           </div>
@@ -454,10 +454,10 @@ export default function BookingDetailView({ booking, agentProfile, jobAssignment
           <div className="mt-6 rounded-xl border border-rose-200 bg-rose-50 p-6">
             <h3 className="text-lg font-semibold text-rose-700">Booking Cancelled</h3>
             <p className="mt-2 text-sm text-rose-600">
-              Cancelled on {formatDate(booking.cancelled_at)}
+              Cancelled on {formatDate(booking.cancelledAt)}
             </p>
-            {booking.cancellation_reason && (
-              <p className="mt-2 text-slate-700">{booking.cancellation_reason}</p>
+            {booking.cancellationReason && (
+              <p className="mt-2 text-slate-700">{booking.cancellationReason}</p>
             )}
           </div>
         )}
@@ -561,8 +561,8 @@ export default function BookingDetailView({ booking, agentProfile, jobAssignment
               <button
                 onClick={() => {
                   setShowRescheduleModal(false);
-                  setNewDate(booking.preferred_date || '');
-                  setNewTime(booking.preferred_time || '');
+                  setNewDate(booking.preferredDate || '');
+                  setNewTime(booking.preferredTime || '');
                 }}
                 className="flex-1 rounded-lg border border-slate-300 px-4 py-2 text-sm font-medium text-slate-700 hover:bg-slate-50"
               >

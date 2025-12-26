@@ -29,7 +29,7 @@ export default async function BookingDetailPage({ params }: PageProps) {
   }
 
   // Fetch the booking
-  const { data: booking, error } = await supabase
+  const { data: bookingRow, error } = await supabase
     .from("service_requests")
     .select(`
       id,
@@ -51,23 +51,44 @@ export default async function BookingDetailPage({ params }: PageProps) {
     .eq("user_id", session.user.id)
     .single();
 
-  if (error || !booking) {
+  if (error || !bookingRow) {
     notFound();
   }
 
+  const booking = {
+    id: bookingRow.id,
+    serviceType: bookingRow.service_type,
+    preferredDate: bookingRow.preferred_date,
+    preferredTime: bookingRow.preferred_time,
+    details: bookingRow.details,
+    status: bookingRow.status,
+    createdAt: bookingRow.created_at,
+    totalPriceCents: bookingRow.total_price_cents,
+    laborPriceCents: bookingRow.labor_price_cents,
+    materialsCostCents: bookingRow.materials_cost_cents,
+    street: null,
+    city: null,
+    state: null,
+    postalCode: null,
+    assignedAgentId: bookingRow.assigned_agent_id,
+    cancelledAt: bookingRow.cancelled_at,
+    cancellationReason: bookingRow.cancellation_reason,
+    cancellationFeeCents: bookingRow.cancellation_fee_cents,
+  };
+
   // Fetch agent info if assigned
   let agentProfile = null;
-  if (booking.assigned_agent_id) {
+  if (booking.assignedAgentId) {
     const { data: profile } = await supabase
       .from("profiles")
       .select("id, first_name, last_name, phone, email")
-      .eq("id", booking.assigned_agent_id)
+      .eq("id", booking.assignedAgentId)
       .single();
 
     const { data: agentData } = await supabase
       .from("agent_profiles")
       .select("photo_url, rating, total_jobs")
-      .eq("id", booking.assigned_agent_id)
+      .eq("id", booking.assignedAgentId)
       .single();
 
     if (profile) {
