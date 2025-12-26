@@ -1,4 +1,17 @@
+'use client';
+
+import { useState, useEffect, useMemo } from 'react';
 import { services, type ServiceId, type MountType, MOUNT_UPCHARGES } from '@/hooks/useRequestWizard';
+import { getSupabaseClient } from '@/lib/supabaseClient';
+
+type ServiceCatalogItem = {
+  id: string;
+  name: string;
+  category: string;
+  description: string | null;
+  price_cents: number;
+  base_minutes: number;
+};
 
 type ServiceSelectorProps = {
   service: ServiceId;
@@ -26,6 +39,14 @@ type ServiceSelectorProps = {
 };
 
 const formatUpcharge = (cents: number) => cents > 0 ? `+$${cents / 100}` : '';
+const formatPrice = (cents: number) => `$${(cents / 100).toFixed(0)}`;
+const formatDuration = (minutes: number) => {
+  const hrs = Math.floor(minutes / 60);
+  const mins = minutes % 60;
+  if (hrs && mins) return `${hrs}h ${mins}m`;
+  if (hrs) return `${hrs}h`;
+  return `${mins}m`;
+};
 
 export default function ServiceSelector({
   service,
@@ -51,6 +72,58 @@ export default function ServiceSelector({
   newPunchTask,
   onNewPunchTaskChange,
 }: ServiceSelectorProps) {
+  const supabase = getSupabaseClient();
+  const [searchQuery, setSearchQuery] = useState('');
+  const [showSearch, setShowSearch] = useState(false);
+  const [catalogItems, setCatalogItems] = useState<ServiceCatalogItem[]>([]);
+  const [loadingCatalog, setLoadingCatalog] = useState(false);
+
+  // Load service catalog when search is opened
+  useEffect(() => {
+    const loadCatalog = async () => {
+      if (!supabase || !showSearch || catalogItems.length > 0) return;
+
+      setLoadingCatalog(true);
+      try {
+        const { data, error } = await supabase
+          .from('service_catalog')
+          .select('id, name, category, description, price_cents, base_minutes')
+          .order('category', { ascending: true })
+          .order('name', { ascending: true });
+
+        if (!error && data) {
+          setCatalogItems(data);
+        }
+      } catch (err) {
+        console.error('Failed to load service catalog:', err);
+      } finally {
+        setLoadingCatalog(false);
+      }
+    };
+
+    loadCatalog();
+  }, [supabase, showSearch, catalogItems.length]);
+
+  // Filter catalog items based on search query
+  const filteredCatalog = useMemo(() => {
+    if (!searchQuery.trim()) return catalogItems;
+    const query = searchQuery.toLowerCase();
+    return catalogItems.filter(
+      (item) =>
+        item.name.toLowerCase().includes(query) ||
+        item.category.toLowerCase().includes(query) ||
+        (item.description && item.description.toLowerCase().includes(query))
+    );
+  }, [catalogItems, searchQuery]);
+
+  // Group by category
+  const groupedCatalog = useMemo(() => {
+    return filteredCatalog.reduce<Record<string, ServiceCatalogItem[]>>((acc, item) => {
+      acc[item.category] = acc[item.category] ? [...acc[item.category], item] : [item];
+      return acc;
+    }, {});
+  }, [filteredCatalog]);
+
   const handleAddPunchTask = () => {
     if (newPunchTask.trim()) {
       onPunchTasksChange([...punchTasks, newPunchTask.trim()]);
@@ -61,25 +134,124 @@ export default function ServiceSelector({
   const handleRemovePunchTask = (index: number) => {
     onPunchTasksChange(punchTasks.filter((_, i) => i !== index));
   };
+
+  const handleCatalogItemSelect = (item: ServiceCatalogItem) => {
+    // Map catalog items to punch list (most flexible option)
+    onServiceChange('punch');
+    onPunchTasksChange([...punchTasks, `${item.name} - ${formatPrice(item.price_cents)}`]);
+    setSearchQuery('');
+    setShowSearch(false);
+  };
+
   return (
-    <div className="grid gap-3 sm:gap-4 grid-cols-2 md:grid-cols-2">
-      {Object.entries(services).map(([id, svc]) => (
+    <div className="grid gap-3 sm:gap-4">
+      {/* Search Bar */}
+      <div className="col-span-2">
         <button
-          key={id}
-          onClick={() => onServiceChange(id as ServiceId)}
-          className={`flex h-full flex-col items-start gap-1.5 sm:gap-2 rounded-lg sm:rounded-xl border px-2.5 py-2.5 sm:px-4 sm:py-4 text-left transition ${
-            service === id
-              ? 'border-indigo-600 bg-indigo-50 shadow-sm'
-              : 'border-slate-200 bg-white hover:border-indigo-200'
-          }`}
+          type="button"
+          onClick={() => setShowSearch(!showSearch)}
+          className="flex w-full items-center gap-2 rounded-lg border border-slate-200 bg-white px-3 py-2.5 text-left text-sm text-slate-500 transition hover:border-indigo-300 hover:bg-slate-50"
         >
-          <span className="text-xl sm:text-2xl">{svc.icon}</span>
-          <div className="grid gap-0.5 sm:gap-1">
-            <span className="text-sm sm:text-base font-semibold text-slate-900 leading-tight">{svc.name}</span>
-            <span className="text-xs sm:text-sm text-slate-600 leading-snug">{svc.description}</span>
-          </div>
+          <svg className="h-5 w-5 text-slate-400" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+            <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M21 21l-6-6m2-5a7 7 0 11-14 0 7 7 0 0114 0z" />
+          </svg>
+          <span>Search all services...</span>
         </button>
-      ))}
+      </div>
+
+      {/* Search Panel */}
+      {showSearch && (
+        <div className="col-span-2 rounded-xl border border-indigo-200 bg-indigo-50 p-4">
+          <div className="mb-3 flex items-center gap-2">
+            <input
+              type="text"
+              value={searchQuery}
+              onChange={(e) => setSearchQuery(e.target.value)}
+              placeholder="Search for any service..."
+              autoFocus
+              className="flex-1 rounded-lg border border-slate-300 px-3 py-2 text-sm focus:border-indigo-500 focus:outline-none focus:ring-1 focus:ring-indigo-500"
+            />
+            <button
+              type="button"
+              onClick={() => setShowSearch(false)}
+              className="rounded-lg border border-slate-300 px-3 py-2 text-sm font-medium text-slate-600 hover:bg-slate-100"
+            >
+              Close
+            </button>
+          </div>
+
+          {loadingCatalog && (
+            <div className="py-4 text-center text-sm text-slate-500">
+              Loading services...
+            </div>
+          )}
+
+          {!loadingCatalog && filteredCatalog.length === 0 && searchQuery && (
+            <div className="py-4 text-center">
+              <p className="text-sm text-slate-600">No services found for &quot;{searchQuery}&quot;</p>
+              <p className="mt-1 text-xs text-slate-500">Try a different search or select from the main categories below.</p>
+            </div>
+          )}
+
+          {!loadingCatalog && Object.entries(groupedCatalog).length > 0 && (
+            <div className="max-h-64 space-y-4 overflow-y-auto">
+              {Object.entries(groupedCatalog).map(([category, items]) => (
+                <div key={category}>
+                  <p className="mb-2 text-xs font-semibold uppercase tracking-wide text-indigo-700">{category}</p>
+                  <div className="grid gap-2">
+                    {items.map((item) => (
+                      <button
+                        key={item.id}
+                        type="button"
+                        onClick={() => handleCatalogItemSelect(item)}
+                        className="flex items-center justify-between gap-3 rounded-lg border border-slate-200 bg-white p-3 text-left transition hover:border-indigo-300 hover:shadow-sm"
+                      >
+                        <div className="min-w-0 flex-1">
+                          <p className="text-sm font-medium text-slate-900">{item.name}</p>
+                          {item.description && (
+                            <p className="mt-0.5 truncate text-xs text-slate-500">{item.description}</p>
+                          )}
+                        </div>
+                        <div className="text-right">
+                          <p className="text-sm font-semibold text-slate-900">{formatPrice(item.price_cents)}</p>
+                          <p className="text-xs text-slate-500">{formatDuration(item.base_minutes)}</p>
+                        </div>
+                      </button>
+                    ))}
+                  </div>
+                </div>
+              ))}
+            </div>
+          )}
+
+          {!loadingCatalog && catalogItems.length === 0 && !searchQuery && (
+            <div className="py-4 text-center text-sm text-slate-500">
+              Service catalog not available. Select from the categories below.
+            </div>
+          )}
+        </div>
+      )}
+
+      {/* Main Service Buttons */}
+      <div className="col-span-2 grid grid-cols-2 gap-3 sm:gap-4">
+        {Object.entries(services).map(([id, svc]) => (
+          <button
+            key={id}
+            onClick={() => onServiceChange(id as ServiceId)}
+            className={`flex h-full flex-col items-start gap-1.5 sm:gap-2 rounded-lg sm:rounded-xl border px-2.5 py-2.5 sm:px-4 sm:py-4 text-left transition ${
+              service === id
+                ? 'border-indigo-600 bg-indigo-50 shadow-sm'
+                : 'border-slate-200 bg-white hover:border-indigo-200'
+            }`}
+          >
+            <span className="text-xl sm:text-2xl">{svc.icon}</span>
+            <div className="grid gap-0.5 sm:gap-1">
+              <span className="text-sm sm:text-base font-semibold text-slate-900 leading-tight">{svc.name}</span>
+              <span className="text-xs sm:text-sm text-slate-600 leading-snug">{svc.description}</span>
+            </div>
+          </button>
+        ))}
+      </div>
 
       {service === 'tv_mount' && (
         <div className="col-span-2 md:col-span-2 grid gap-3 rounded-lg sm:rounded-xl border border-slate-200 bg-slate-50 p-3 sm:p-4">

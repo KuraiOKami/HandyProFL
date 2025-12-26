@@ -1,7 +1,32 @@
 import Link from "next/link";
 import { coreServices } from "@/lib/services";
+import { createClient } from "@/utils/supabase/server";
+import { redirect } from "next/navigation";
 
-export default function Home() {
+export default async function Home() {
+  // Redirect logged-in users to their dashboard
+  const supabase = await createClient();
+  if (supabase) {
+    const {
+      data: { session },
+    } = await supabase.auth.getSession();
+
+    if (session) {
+      // Check if user is an agent
+      const { data: agentProfile } = await supabase
+        .from("agent_profiles")
+        .select("id")
+        .eq("id", session.user.id)
+        .single();
+
+      if (agentProfile) {
+        redirect("/agent");
+      } else {
+        redirect("/dashboard");
+      }
+    }
+  }
+
   return (
     <div className="grid gap-10">
       <section className="grid gap-8 rounded-3xl bg-gradient-to-br from-indigo-900 via-indigo-800 to-slate-900 px-8 py-10 text-white shadow-lg">

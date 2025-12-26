@@ -5,6 +5,7 @@ import { useSupabaseSession } from '@/hooks/useSupabaseSession';
 import { getSupabaseClient } from '@/lib/supabaseClient';
 import Link from 'next/link';
 import Image from 'next/image';
+import type { ServiceId } from '@/hooks/useRequestWizard';
 
 type Booking = {
   id: string;
@@ -66,7 +67,11 @@ function formatPrice(cents: number | null): string {
   return `$${(cents / 100).toFixed(2)}`;
 }
 
-export default function ClientBookingsContent() {
+type Props = {
+  onNewRequest?: (service?: ServiceId) => void;
+};
+
+export default function ClientBookingsContent({ onNewRequest }: Props) {
   const { session } = useSupabaseSession();
   const supabase = getSupabaseClient();
 
@@ -304,12 +309,12 @@ export default function ClientBookingsContent() {
               ? "You haven't made any service requests yet."
               : `No ${filter} bookings to show.`}
           </p>
-          <Link
-            href="/requests"
+          <button
+            onClick={() => onNewRequest?.()}
             className="mt-4 inline-flex rounded-lg bg-indigo-600 px-4 py-2 text-sm font-semibold text-white hover:bg-indigo-700"
           >
             Book a Service
-          </Link>
+          </button>
         </div>
       )}
 

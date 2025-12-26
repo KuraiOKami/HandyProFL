@@ -1,13 +1,15 @@
 'use client';
 
-import { lazy, Suspense, useEffect, useMemo, useState } from 'react';
+import { lazy, Suspense, useEffect, useMemo, useRef, useState } from 'react';
 import { usePathname, useRouter, useSearchParams } from 'next/navigation';
 import { getSupabaseClient } from '@/lib/supabaseClient';
 import Link from 'next/link';
+import RequestWizard, { RequestWizardHandle, ServiceId } from '@/components/RequestWizard';
 
 // Lazy load dashboard section components
 const ClientBookingsContent = lazy(() => import('./ClientBookingsContent'));
 const ClientMessagesContent = lazy(() => import('./ClientMessagesContent'));
+const ClientSettingsContent = lazy(() => import('./ClientSettingsContent'));
 
 type Tab = 'bookings' | 'messages' | 'settings';
 
@@ -37,6 +39,7 @@ export default function ClientDashboardLayout({ userEmail, userName }: Props) {
   const router = useRouter();
   const pathname = usePathname();
   const searchParams = useSearchParams();
+  const wizardRef = useRef<RequestWizardHandle | null>(null);
 
   const normalizeTab = useMemo(() => {
     const set = new Set(tabs.map((t) => t.id));
@@ -57,10 +60,6 @@ export default function ClientDashboardLayout({ userEmail, userName }: Props) {
   }, [activeTab]);
 
   const handleTabChange = (tab: Tab) => {
-    if (tab === 'settings') {
-      router.push('/settings');
-      return;
-    }
     setActiveTab(tab);
     const params = new URLSearchParams(searchParams);
     if (tab === 'bookings') {
@@ -76,6 +75,10 @@ export default function ClientDashboardLayout({ userEmail, userName }: Props) {
     if (!supabase) return;
     await supabase.auth.signOut();
     router.push('/auth');
+  };
+
+  const openRequestWizard = (service?: ServiceId) => {
+    wizardRef.current?.open(service);
   };
 
   const initials = userName
@@ -120,7 +123,7 @@ export default function ClientDashboardLayout({ userEmail, userName }: Props) {
       >
         {/* Logo / Brand */}
         <div className="flex items-center justify-between border-b border-slate-700 px-4 py-4">
-          <Link href="/" className="flex items-center gap-3">
+          <Link href="/dashboard" className="flex items-center gap-3">
             <div className="flex h-9 w-9 items-center justify-center rounded-lg bg-indigo-600 text-lg font-bold">
               H
             </div>
@@ -142,13 +145,13 @@ export default function ClientDashboardLayout({ userEmail, userName }: Props) {
 
         {/* Quick Action */}
         <div className="border-b border-slate-700 px-3 py-3">
-          <Link
-            href="/requests"
+          <button
+            onClick={() => openRequestWizard()}
             className="flex w-full items-center justify-center gap-2 rounded-lg bg-indigo-600 px-4 py-2.5 text-sm font-semibold text-white transition hover:bg-indigo-700"
           >
             <span>+</span>
             <span>New Request</span>
-          </Link>
+          </button>
         </div>
 
         {/* Navigation */}
@@ -197,20 +200,21 @@ export default function ClientDashboardLayout({ userEmail, userName }: Props) {
         {/* Desktop Header */}
         <header className="sticky top-0 z-10 hidden border-b border-slate-200 bg-white px-6 py-4 lg:flex lg:items-center lg:justify-between">
           <h1 className="text-xl font-semibold text-slate-900">{activeTabInfo?.label}</h1>
-          <Link
-            href="/requests"
+          <button
+            onClick={() => openRequestWizard()}
             className="inline-flex items-center gap-2 rounded-lg bg-indigo-600 px-4 py-2 text-sm font-semibold text-white transition hover:bg-indigo-700"
           >
             <span>+</span>
             <span>New Request</span>
-          </Link>
+          </button>
         </header>
 
         {/* Page Content */}
         <div className="p-4 lg:p-6">
           <Suspense fallback={<LoadingSpinner />}>
-            {activeTab === 'bookings' && <ClientBookingsContent />}
+            {activeTab === 'bookings' && <ClientBookingsContent onNewRequest={openRequestWizard} />}
             {activeTab === 'messages' && <ClientMessagesContent />}
+            {activeTab === 'settings' && <ClientSettingsContent />}
           </Suspense>
         </div>
       </main>
@@ -238,6 +242,9 @@ export default function ClientDashboardLayout({ userEmail, userName }: Props) {
         {/* Safe area for iPhone */}
         <div className="h-safe-area-inset-bottom bg-white" />
       </nav>
+
+      {/* Request Wizard Modal */}
+      <RequestWizard ref={wizardRef} />
     </div>
   );
 }

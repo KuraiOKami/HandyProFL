@@ -639,3 +639,54 @@ COMMENT ON TABLE agent_checkins IS 'GPS check-in/out records for job tracking';
 COMMENT ON TABLE proof_of_work IS 'Before/after photos documenting completed work';
 COMMENT ON TABLE agent_earnings IS 'Per-job earnings for agents (70% split)';
 COMMENT ON TABLE agent_payouts IS 'Batch payout records (weekly or instant)';
+
+-- ============================================
+-- CLIENT DASHBOARD RLS POLICIES
+-- Allow users to read and update their own service requests
+-- ============================================
+
+-- Enable RLS on service_requests if not already enabled
+ALTER TABLE service_requests ENABLE ROW LEVEL SECURITY;
+
+-- Users can view their own service requests
+CREATE POLICY "Users can view own service requests"
+  ON service_requests FOR SELECT
+  TO authenticated
+  USING (user_id = auth.uid());
+
+-- Users can insert service requests for themselves
+CREATE POLICY "Users can create service requests"
+  ON service_requests FOR INSERT
+  TO authenticated
+  WITH CHECK (user_id = auth.uid());
+
+-- Users can update their own service requests (e.g., cancel, reschedule)
+CREATE POLICY "Users can update own service requests"
+  ON service_requests FOR UPDATE
+  TO authenticated
+  USING (user_id = auth.uid())
+  WITH CHECK (user_id = auth.uid());
+
+-- Admins can view all service requests
+CREATE POLICY "Admins can view all service requests"
+  ON service_requests FOR SELECT
+  TO authenticated
+  USING (
+    EXISTS (
+      SELECT 1 FROM profiles
+      WHERE profiles.id = auth.uid()
+      AND profiles.role = 'admin'
+    )
+  );
+
+-- Admins can update any service request
+CREATE POLICY "Admins can update all service requests"
+  ON service_requests FOR UPDATE
+  TO authenticated
+  USING (
+    EXISTS (
+      SELECT 1 FROM profiles
+      WHERE profiles.id = auth.uid()
+      AND profiles.role = 'admin'
+    )
+  );
