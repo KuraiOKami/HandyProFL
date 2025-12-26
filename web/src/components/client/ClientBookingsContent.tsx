@@ -103,6 +103,10 @@ export default function ClientBookingsContent({ onNewRequest }: Props) {
             status,
             created_at,
             total_price_cents,
+            street,
+            city,
+            state,
+            postal_code,
             assigned_agent_id,
             cancelled_at,
             cancellation_reason
@@ -165,11 +169,11 @@ export default function ClientBookingsContent({ onNewRequest }: Props) {
         }
 
         // Combine data
-        const enrichedBookings: Booking[] = (data || []).map((b) => ({
+        const enrichedBookings = (data ?? []).map((b) => ({
           ...b,
-          agent_profile: b.assigned_agent_id ? agentProfiles[b.assigned_agent_id] : null,
-          job_assignment: assignments[b.id] || null,
-        }));
+          agent_profile: b.assigned_agent_id ? agentProfiles[b.assigned_agent_id] ?? null : null,
+          job_assignment: assignments[b.id] ?? null,
+        })) as Booking[];
 
         setBookings(enrichedBookings);
       } catch (err) {
