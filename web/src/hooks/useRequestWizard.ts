@@ -422,26 +422,40 @@ export function useRequestWizard() {
       ? 'Using profile address'
       : [serviceAddress.street, serviceAddress.city, serviceAddress.state, serviceAddress.postalCode].filter(Boolean).join(', ');
 
+    // Determine service type - if catalog items are selected, use their names
+    const currentItem = buildCurrentItem();
+    const hasCatalogItems = currentItem.catalogItems && currentItem.catalogItems.length > 0;
+    const serviceTypeName = hasCatalogItems
+      ? currentItem.catalogItems.map(ci => ci.name).join(', ')
+      : services[service].name;
+
     const details = itemsToSave
       .map((item, idx) => {
         const mountTypeLabel = item.mountType === 'static' ? 'Static mount (+$30)'
           : item.mountType === 'full_motion' ? 'Full motion mount (+$70)'
           : null;
+
+        // Use catalog item names if present, otherwise use service name
+        const itemServiceName = item.catalogItems && item.catalogItems.length > 0
+          ? item.catalogItems.map(ci => ci.name).join(', ')
+          : services[item.service].name;
+
         const parts = [
-          `Item ${idx + 1}: ${services[item.service].name}`,
-          item.service === 'tv_mount' ? `TV size: ${item.tvSize}` : null,
-          item.service === 'tv_mount' ? `Wall: ${item.wallType}` : null,
-          item.service === 'tv_mount' ? `Mount provided: ${item.hasMount === 'yes' ? 'Yes' : 'No'}` : null,
-          item.service === 'tv_mount' && item.hasMount === 'no' && mountTypeLabel ? `Mount type: ${mountTypeLabel}` : null,
-          item.service === 'assembly' ? `Assembly type: ${item.assemblyType}` : null,
-          item.service === 'assembly' && item.assemblyType === 'Other' && item.assemblyOther
+          `Item ${idx + 1}: ${itemServiceName}`,
+          // Only include service-specific details if no catalog items
+          !item.catalogItems?.length && item.service === 'tv_mount' ? `TV size: ${item.tvSize}` : null,
+          !item.catalogItems?.length && item.service === 'tv_mount' ? `Wall: ${item.wallType}` : null,
+          !item.catalogItems?.length && item.service === 'tv_mount' ? `Mount provided: ${item.hasMount === 'yes' ? 'Yes' : 'No'}` : null,
+          !item.catalogItems?.length && item.service === 'tv_mount' && item.hasMount === 'no' && mountTypeLabel ? `Mount type: ${mountTypeLabel}` : null,
+          !item.catalogItems?.length && item.service === 'assembly' ? `Assembly type: ${item.assemblyType}` : null,
+          !item.catalogItems?.length && item.service === 'assembly' && item.assemblyType === 'Other' && item.assemblyOther
             ? `Other: ${item.assemblyOther}`
             : null,
-          item.service === 'electrical' ? `Electrical type: ${item.electricalType}` : null,
-          item.service === 'electrical' && item.electricalType === 'Other' && item.electricalOther
+          !item.catalogItems?.length && item.service === 'electrical' ? `Electrical type: ${item.electricalType}` : null,
+          !item.catalogItems?.length && item.service === 'electrical' && item.electricalType === 'Other' && item.electricalOther
             ? `Other: ${item.electricalOther}`
             : null,
-          item.service === 'punch' && item.punchTasks.length ? `Tasks: ${item.punchTasks.join(', ')}` : null,
+          !item.catalogItems?.length && item.service === 'punch' && item.punchTasks.length ? `Tasks: ${item.punchTasks.join(', ')}` : null,
           item.extraItems.length ? `Additional items: ${item.extraItems.join(', ')}` : null,
           item.photoNames.length ? `Photos: ${item.photoNames.join(', ')}` : null,
           item.notes ? `Notes: ${item.notes}` : null,
@@ -471,7 +485,7 @@ export function useRequestWizard() {
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({
           user_id: session.user.id,
-          service_type: services[service].name,
+          service_type: serviceTypeName,
           date,
           slots: slotStartIso,
           required_minutes: requiredMinutes,
