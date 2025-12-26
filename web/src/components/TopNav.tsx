@@ -55,6 +55,11 @@ export default function TopNav() {
       >
         Book a request
       </Link>
+      {session?.user && (
+        <Link href="/dashboard" className="hover:text-indigo-700 transition" onClick={onNav}>
+          My Bookings
+        </Link>
+      )}
       <Link href="/settings" className="hover:text-indigo-700 transition" onClick={onNav}>
         Settings
       </Link>
