@@ -34,6 +34,13 @@ export type ServiceAddress = {
   postalCode: string;
 };
 
+export type CatalogItem = {
+  id: string;
+  name: string;
+  priceCents: number;
+  baseMinutes: number;
+};
+
 export type RequestItem = {
   service: ServiceId;
   tvSize: string;
@@ -45,6 +52,7 @@ export type RequestItem = {
   electricalType: string;
   electricalOther: string;
   punchTasks: string[];
+  catalogItems: CatalogItem[]; // Items selected from service catalog search
   extraItems: string[];
   notes: string;
   photoNames: string[];
@@ -165,6 +173,7 @@ export function useRequestWizard() {
   const [electricalOther, setElectricalOther] = useState('');
   const [punchTasks, setPunchTasks] = useState<string[]>([]);
   const [newPunchTask, setNewPunchTask] = useState('');
+  const [catalogItems, setCatalogItems] = useState<CatalogItem[]>([]);
 
   // Details state
   const [notes, setNotes] = useState('');
@@ -213,6 +222,7 @@ export function useRequestWizard() {
     setElectricalOther('');
     setPunchTasks([]);
     setNewPunchTask('');
+    setCatalogItems([]);
     setNotes('');
     setExtraItems([]);
     setNewItem('');
@@ -240,6 +250,7 @@ export function useRequestWizard() {
     setElectricalOther('');
     setPunchTasks([]);
     setNewPunchTask('');
+    setCatalogItems([]);
     setNotes('');
     setExtraItems([]);
     setNewItem('');
@@ -259,11 +270,12 @@ export function useRequestWizard() {
       electricalType,
       electricalOther,
       punchTasks,
+      catalogItems,
       extraItems,
       notes,
       photoNames,
     }),
-    [service, tvSize, wallType, hasMount, mountType, assemblyType, assemblyOther, electricalType, electricalOther, punchTasks, extraItems, notes, photoNames],
+    [service, tvSize, wallType, hasMount, mountType, assemblyType, assemblyOther, electricalType, electricalOther, punchTasks, catalogItems, extraItems, notes, photoNames],
   );
 
   // Load service catalog durations and prices
@@ -289,6 +301,10 @@ export function useRequestWizard() {
 
   const getMinutesForItem = useCallback(
     (item: RequestItem) => {
+      // If item has catalog items, sum their minutes
+      if (item.catalogItems && item.catalogItems.length > 0) {
+        return item.catalogItems.reduce((sum, ci) => sum + ci.baseMinutes, 0);
+      }
       const id = getServiceId(item);
       return (
         serviceDurations[id] ??
@@ -306,6 +322,11 @@ export function useRequestWizard() {
 
   const getPriceBreakdown = useCallback(
     (item: RequestItem) => {
+      // If item has catalog items, sum their prices
+      if (item.catalogItems && item.catalogItems.length > 0) {
+        const catalogTotal = item.catalogItems.reduce((sum, ci) => sum + ci.priceCents, 0);
+        return { laborPrice: catalogTotal, materialsCost: 0, total: catalogTotal };
+      }
       const id = getServiceId(item);
       const laborPrice = servicePrices[id] ?? 0;
       // Mount cost is pass-through (100% reimbursed to agent, not commissioned)
@@ -565,6 +586,8 @@ export function useRequestWizard() {
     setPunchTasks,
     newPunchTask,
     setNewPunchTask,
+    catalogItems,
+    setCatalogItems,
 
     // Details
     notes,

@@ -150,6 +150,8 @@ const RequestWizard = forwardRef<RequestWizardHandle>((_props, ref) => {
                   onPunchTasksChange={wizard.setPunchTasks}
                   newPunchTask={wizard.newPunchTask}
                   onNewPunchTaskChange={wizard.setNewPunchTask}
+                  selectedCatalogItems={wizard.catalogItems}
+                  onCatalogItemsChange={wizard.setCatalogItems}
                 />
               </div>
             </div>

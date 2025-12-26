@@ -1,7 +1,7 @@
 'use client';
 
 import { useState, useEffect, useMemo } from 'react';
-import { services, type ServiceId, type MountType, MOUNT_UPCHARGES } from '@/hooks/useRequestWizard';
+import { services, type ServiceId, type MountType, type CatalogItem, MOUNT_UPCHARGES } from '@/hooks/useRequestWizard';
 import { getSupabaseClient } from '@/lib/supabaseClient';
 
 type ServiceCatalogItem = {
@@ -36,6 +36,8 @@ type ServiceSelectorProps = {
   onPunchTasksChange: (tasks: string[]) => void;
   newPunchTask: string;
   onNewPunchTaskChange: (value: string) => void;
+  selectedCatalogItems: CatalogItem[];
+  onCatalogItemsChange: (items: CatalogItem[]) => void;
 };
 
 const formatUpcharge = (cents: number) => cents > 0 ? `+$${cents / 100}` : '';
@@ -71,6 +73,8 @@ export default function ServiceSelector({
   onPunchTasksChange,
   newPunchTask,
   onNewPunchTaskChange,
+  selectedCatalogItems,
+  onCatalogItemsChange,
 }: ServiceSelectorProps) {
   const supabase = getSupabaseClient();
   const [searchQuery, setSearchQuery] = useState('');
@@ -136,11 +140,20 @@ export default function ServiceSelector({
   };
 
   const handleCatalogItemSelect = (item: ServiceCatalogItem) => {
-    // Map catalog items to punch list (most flexible option)
-    onServiceChange('punch');
-    onPunchTasksChange([...punchTasks, `${item.name} - ${formatPrice(item.price_cents)}`]);
+    // Add to catalog items with proper pricing
+    const newCatalogItem: CatalogItem = {
+      id: item.id,
+      name: item.name,
+      priceCents: item.price_cents,
+      baseMinutes: item.base_minutes,
+    };
+    onCatalogItemsChange([...selectedCatalogItems, newCatalogItem]);
     setSearchQuery('');
     setShowSearch(false);
+  };
+
+  const handleRemoveCatalogItem = (index: number) => {
+    onCatalogItemsChange(selectedCatalogItems.filter((_, i) => i !== index));
   };
 
   return (
@@ -229,6 +242,43 @@ export default function ServiceSelector({
               Service catalog not available. Select from the categories below.
             </div>
           )}
+        </div>
+      )}
+
+      {/* Selected Catalog Items */}
+      {selectedCatalogItems.length > 0 && (
+        <div className="col-span-2 rounded-xl border border-emerald-200 bg-emerald-50 p-4">
+          <div className="mb-3 flex items-center justify-between">
+            <FieldLabel>Selected Services ({selectedCatalogItems.length})</FieldLabel>
+            <span className="text-sm font-semibold text-emerald-700">
+              {formatPrice(selectedCatalogItems.reduce((sum, item) => sum + item.priceCents, 0))}
+            </span>
+          </div>
+          <div className="grid gap-2">
+            {selectedCatalogItems.map((item, idx) => (
+              <div
+                key={`${item.id}-${idx}`}
+                className="flex items-center justify-between gap-3 rounded-lg border border-emerald-200 bg-white p-3"
+              >
+                <div className="min-w-0 flex-1">
+                  <p className="text-sm font-medium text-slate-900">{item.name}</p>
+                  <p className="text-xs text-slate-500">
+                    {formatPrice(item.priceCents)} · {formatDuration(item.baseMinutes)}
+                  </p>
+                </div>
+                <button
+                  type="button"
+                  onClick={() => handleRemoveCatalogItem(idx)}
+                  className="text-xs font-semibold text-rose-600 hover:text-rose-700"
+                >
+                  Remove
+                </button>
+              </div>
+            ))}
+          </div>
+          <p className="mt-3 text-xs text-emerald-700">
+            These services will be priced according to the catalog. You can add more services or select a category below for additional work.
+          </p>
         </div>
       )}
 
