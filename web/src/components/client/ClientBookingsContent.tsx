@@ -103,10 +103,6 @@ export default function ClientBookingsContent({ onNewRequest }: Props) {
             status,
             created_at,
             total_price_cents,
-            street,
-            city,
-            state,
-            postal_code,
             assigned_agent_id,
             cancelled_at,
             cancellation_reason
