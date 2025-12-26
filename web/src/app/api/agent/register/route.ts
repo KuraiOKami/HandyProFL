@@ -1,5 +1,6 @@
 import { NextRequest, NextResponse } from "next/server";
 import { createClient, createServiceRoleClient } from "@/utils/supabase/server";
+import { notifyAdmins } from "@/lib/adminNotifications";
 
 export async function POST(req: NextRequest) {
   const supabase = await createClient();
@@ -91,6 +92,21 @@ export async function POST(req: NextRequest) {
   if (agentError) {
     return NextResponse.json({ error: agentError.message }, { status: 500 });
   }
+
+  const name = [first_name, last_name].filter(Boolean).join(" ") || "Agent";
+  const email = session.user.email || "Not provided";
+  const messageLines = [
+    `New agent application: ${name}.`,
+    `Email: ${email}.`,
+    `Phone: ${phone || "Not provided"}.`,
+    `Service area: ${service_area_miles || 25} miles.`,
+  ];
+
+  await notifyAdmins(adminSupabase, {
+    subject: "New agent application",
+    message: messageLines.join("\n"),
+    sms: `New agent application: ${name}.`,
+  });
 
   return NextResponse.json({ ok: true, status: "pending_approval" });
 }

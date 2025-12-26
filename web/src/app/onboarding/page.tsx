@@ -178,21 +178,24 @@ export default function CustomerOnboardingPage() {
     setError(null);
 
     try {
-      const { error: upsertError } = await supabase.from('profiles').upsert({
-        id: session.user.id,
-        first_name: firstName.trim(),
-        last_name: lastName.trim(),
-        phone: phone.trim(),
-        email: email.trim() || session.user.email || '',
-        street: street.trim(),
-        city: city.trim(),
-        state: stateCode.trim().toUpperCase(),
-        postal_code: postalCode.trim(),
-        updated_at: new Date().toISOString(),
+      const res = await fetch('/api/onboarding/complete', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({
+          first_name: firstName.trim(),
+          last_name: lastName.trim(),
+          phone: phone.trim(),
+          email: email.trim(),
+          street: street.trim(),
+          city: city.trim(),
+          state: stateCode.trim().toUpperCase(),
+          postal_code: postalCode.trim(),
+        }),
       });
 
-      if (upsertError) {
-        throw upsertError;
+      const data = await res.json().catch(() => ({}));
+      if (!res.ok) {
+        throw new Error(data.error || 'Failed to save profile');
       }
 
       // Move to complete step
