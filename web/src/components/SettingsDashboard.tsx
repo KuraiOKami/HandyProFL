@@ -259,7 +259,8 @@ export default function SettingsDashboard() {
                       </p>
                       <ul className="mt-2 space-y-1 text-xs text-slate-600">
                         <li>• Within 2 hours of service: $40 fee</li>
-                        <li>• Within 24 hours of service: $10 fee</li>
+                        <li>• 2-8 hours before service: $20 fee</li>
+                        <li>• 8-24 hours before service: $10 fee</li>
                         <li>• More than 24 hours: free cancellation</li>
                       </ul>
                     </>
@@ -311,6 +312,7 @@ function computeCancellationFee(preferredTime: string | null, preferredDate: str
   if (!serviceDate) return 0;
   const diffHours = (serviceDate.getTime() - Date.now()) / (1000 * 60 * 60);
   if (diffHours <= 2) return 4000;
+  if (diffHours <= 8) return 2000;
   if (diffHours <= 24) return 1000;
   return 0;
 }

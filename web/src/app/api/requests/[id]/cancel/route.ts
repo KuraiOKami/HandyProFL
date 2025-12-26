@@ -21,7 +21,8 @@ function computeCancellationFee(preferredTime: string | null, preferredDate: str
   const diffHours = (serviceDate.getTime() - Date.now()) / (1000 * 60 * 60);
 
   if (diffHours <= 2) return 4000; // $40 within 2 hours
-  if (diffHours <= 24) return 1000; // $10 within 24 hours
+  if (diffHours <= 8) return 2000; // $20 within 2-8 hours
+  if (diffHours <= 24) return 1000; // $10 within 8-24 hours
   return 0; // free beyond 24 hours
 }
 
