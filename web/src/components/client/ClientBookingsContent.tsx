@@ -23,14 +23,14 @@ type Booking = {
   assigned_agent_id: string | null;
   cancelled_at: string | null;
   cancellation_reason: string | null;
-  agent_profile?: {
+  agent_profile: {
     id: string;
     first_name: string | null;
     last_name: string | null;
     photo_url: string | null;
     rating: number | null;
   } | null;
-  job_assignment?: {
+  job_assignment: {
     id: string;
     status: string;
     started_at: string | null;
