@@ -14,6 +14,7 @@ export type ApiErrorCode =
   | "job.not_assigned"
   | "job.invalid_status"
   | "gig.unavailable"
+  | "payment.failed"
   | "internal.error"
   | "service.unconfigured";
 

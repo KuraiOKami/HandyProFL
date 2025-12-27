@@ -76,8 +76,21 @@ export async function POST(req: NextRequest, { params }: Params) {
     return NextResponse.json({ error: "Request is already closed" }, { status: 400 });
   }
 
-  const feeResult = computeCancellationFee(requestRow.preferred_time, requestRow.preferred_date);
-  const { feeCents, agentShareCents } = feeResult;
+  // Cancellation fees only apply AFTER confirmation
+  // Before confirmation (pending status): FREE cancellation, no charge was made
+  const wasConfirmed = requestRow.status !== "pending";
+
+  let feeCents = 0;
+  let agentShareCents = 0;
+  let feeTier: "2hr" | "8hr" | "24hr" | "free" | "not_confirmed" = "not_confirmed";
+
+  if (wasConfirmed) {
+    const feeResult = computeCancellationFee(requestRow.preferred_time, requestRow.preferred_date);
+    feeCents = feeResult.feeCents;
+    agentShareCents = feeResult.agentShareCents;
+    feeTier = feeResult.tier;
+  }
+
   const cancelledAt = new Date().toISOString();
 
   const { error: updateError } = await adminSupabase
@@ -132,27 +145,31 @@ export async function POST(req: NextRequest, { params }: Params) {
   let refundStatus: string | null = null;
   let agentEarningsStatus: string | null = null;
 
-  if (typeof requestRow.total_price_cents === "number" && requestRow.total_price_cents > 0) {
+  // Only process refund if request was confirmed (payment was made)
+  if (!wasConfirmed) {
+    // No payment was made yet, no refund needed
+    refundStatus = "not_charged";
+  } else if (typeof requestRow.total_price_cents === "number" && requestRow.total_price_cents > 0) {
     refundAmountCents = Math.max(0, requestRow.total_price_cents - feeCents);
-  }
 
-  if (!stripe) {
-    refundStatus = "not_configured";
-  } else if (!requestRow.payment_intent_id) {
-    refundStatus = "missing_payment_intent";
-  } else if (!refundAmountCents || refundAmountCents <= 0) {
-    refundStatus = "skipped_fee";
-  } else {
-    try {
-      const refund = await stripe.refunds.create({
-        payment_intent: requestRow.payment_intent_id,
-        amount: refundAmountCents,
-      });
-      refundStatus = refund.status || "succeeded";
-    } catch (err) {
-      const errorMessage = err instanceof Error ? err.message : "Refund failed";
-      console.error("Refund error:", errorMessage);
-      refundStatus = "failed";
+    if (!stripe) {
+      refundStatus = "not_configured";
+    } else if (!requestRow.payment_intent_id) {
+      refundStatus = "missing_payment_intent";
+    } else if (!refundAmountCents || refundAmountCents <= 0) {
+      refundStatus = "skipped_fee";
+    } else {
+      try {
+        const refund = await stripe.refunds.create({
+          payment_intent: requestRow.payment_intent_id,
+          amount: refundAmountCents,
+        });
+        refundStatus = refund.status || "succeeded";
+      } catch (err) {
+        const errorMessage = err instanceof Error ? err.message : "Refund failed";
+        console.error("Refund error:", errorMessage);
+        refundStatus = "failed";
+      }
     }
   }
 
@@ -189,6 +206,8 @@ export async function POST(req: NextRequest, { params }: Params) {
 
   return NextResponse.json({
     status: "cancelled",
+    was_confirmed: wasConfirmed,
+    fee_tier: feeTier,
     fee_cents: feeCents,
     agent_share_cents: agentShareCents,
     agent_earnings_status: agentEarningsStatus,

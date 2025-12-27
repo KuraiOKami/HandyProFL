@@ -1,6 +1,8 @@
 import { NextRequest, NextResponse } from "next/server";
 import { createClient, createServiceRoleClient } from "@/utils/supabase/server";
 import { errorResponse } from "@/lib/api-errors";
+import { stripe } from "@/lib/stripe";
+import { getOrCreateCustomer } from "@/lib/stripeCustomer";
 import * as Sentry from "@sentry/nextjs";
 
 // Agent payout policy:
@@ -83,11 +85,11 @@ export async function POST(
       return errorResponse("request.invalid", "Request ID required", 400);
     }
 
-    // Get the service request
+    // Get the service request with user and payment info
     const { data: request, error: reqError } = await adminSupabase
       .from("service_requests")
       .select(
-        "id, service_type, status, assigned_agent_id, estimated_minutes, total_price_cents, labor_price_cents, materials_cost_cents"
+        "id, user_id, service_type, status, assigned_agent_id, estimated_minutes, total_price_cents, labor_price_cents, materials_cost_cents, payment_method_id"
       )
       .eq("id", requestId)
       .single();
@@ -159,10 +161,71 @@ export async function POST(
       return errorResponse("internal.error", assignError.message, 500);
     }
 
-    // Update service request with assigned agent and status to scheduled
+    // Charge the customer now that an agent has accepted
+    let paymentIntentId: string | null = null;
+    let chargeStatus: string | null = null;
+
+    if (totalCents > 0 && request.payment_method_id && request.user_id) {
+      if (!stripe) {
+        chargeStatus = "stripe_not_configured";
+      } else {
+        try {
+          // Get customer's email for Stripe
+          const { data: userProfile } = await adminSupabase
+            .from("profiles")
+            .select("email")
+            .eq("id", request.user_id)
+            .single();
+
+          const customerId = await getOrCreateCustomer(request.user_id, userProfile?.email ?? undefined);
+
+          const intent = await stripe.paymentIntents.create({
+            amount: totalCents,
+            currency: "usd",
+            customer: customerId,
+            payment_method: request.payment_method_id,
+            off_session: true,
+            confirm: true,
+            automatic_payment_methods: { enabled: true },
+            metadata: {
+              user_id: request.user_id,
+              request_id: requestId,
+              agent_id: session.user.id,
+            },
+          });
+
+          paymentIntentId = intent.id;
+          chargeStatus = intent.status;
+
+          if (intent.status !== "succeeded") {
+            // Rollback the assignment if payment fails
+            await adminSupabase.from("job_assignments").delete().eq("id", assignment.id);
+            return errorResponse("payment.failed", `Payment failed: ${intent.status}`, 402);
+          }
+        } catch (err) {
+          const errorMessage = err instanceof Error ? err.message : "Payment failed";
+          console.error("Payment error:", errorMessage);
+          // Rollback the assignment
+          await adminSupabase.from("job_assignments").delete().eq("id", assignment.id);
+          return errorResponse("payment.failed", errorMessage, 402);
+        }
+      }
+    } else if (totalCents > 0 && !request.payment_method_id) {
+      chargeStatus = "no_payment_method";
+    }
+
+    // Update service request with assigned agent, status, and payment intent
+    const updateData: Record<string, unknown> = {
+      assigned_agent_id: session.user.id,
+      status: "scheduled",
+    };
+    if (paymentIntentId) {
+      updateData.payment_intent_id = paymentIntentId;
+    }
+
     const { error: updateError } = await adminSupabase
       .from("service_requests")
-      .update({ assigned_agent_id: session.user.id, status: "scheduled" })
+      .update(updateData)
       .eq("id", requestId);
 
     if (updateError) {
@@ -175,6 +238,8 @@ export async function POST(
       ok: true,
       assignment_id: assignment.id,
       agent_payout_cents: agentPayoutCents,
+      charge_status: chargeStatus,
+      payment_intent_id: paymentIntentId,
     });
   });
 }
