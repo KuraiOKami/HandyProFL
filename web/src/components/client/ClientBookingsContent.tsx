@@ -3,6 +3,7 @@
 import { useEffect, useState } from 'react';
 import { useSupabaseSession } from '@/hooks/useSupabaseSession';
 import { getSupabaseClient } from '@/lib/supabaseClient';
+import { formatTime } from '@/lib/formatting';
 import Link from 'next/link';
 import Image from 'next/image';
 import type { ServiceId } from '@/hooks/useRequestWizard';
@@ -48,15 +49,23 @@ const STATUS_CONFIG: Record<string, { label: string; color: string; bgColor: str
   cancelled: { label: 'Cancelled', color: 'text-rose-700', bgColor: 'bg-rose-50' },
 };
 
+const DISPLAY_TIME_ZONE = 'America/New_York';
+
+function parseBookingDate(value: string) {
+  if (value.includes('T')) return new Date(value);
+  return new Date(`${value}T12:00:00`);
+}
+
 function formatDate(dateStr: string | null): string {
   if (!dateStr) return 'Not scheduled';
-  const date = new Date(dateStr);
-  return date.toLocaleDateString('en-US', {
+  const date = parseBookingDate(dateStr);
+  return new Intl.DateTimeFormat('en-US', {
     weekday: 'short',
     month: 'short',
     day: 'numeric',
     year: 'numeric',
-  });
+    timeZone: DISPLAY_TIME_ZONE,
+  }).format(date);
 }
 
 function formatPrice(cents: number | null): string {
@@ -64,21 +73,25 @@ function formatPrice(cents: number | null): string {
   return `$${(cents / 100).toFixed(2)}`;
 }
 
-function computeCancellationFee(preferredTime: string | null, preferredDate: string | null) {
+function computeCancellationFee(
+  preferredTime: string | null,
+  preferredDate: string | null,
+  nowMs: number
+) {
   let serviceDate: Date | null = null;
 
   if (preferredTime) {
-    const d = new Date(preferredTime);
+    const d = parseBookingDate(preferredTime);
     if (!Number.isNaN(d.getTime())) serviceDate = d;
   }
 
   if (!serviceDate && preferredDate) {
-    const d = new Date(`${preferredDate}T12:00:00`);
+    const d = parseBookingDate(preferredDate);
     if (!Number.isNaN(d.getTime())) serviceDate = d;
   }
 
   if (!serviceDate) return 0;
-  const diffHours = (serviceDate.getTime() - Date.now()) / (1000 * 60 * 60);
+  const diffHours = (serviceDate.getTime() - nowMs) / (1000 * 60 * 60);
   if (diffHours <= 2) return 4000;
   if (diffHours <= 8) return 2000;
   if (diffHours <= 24) return 1000;
@@ -512,7 +525,7 @@ function BookingCard({ booking, onCancel }: BookingCardProps) {
           <p className="text-slate-500">Scheduled Date</p>
           <p className="font-medium text-slate-900">{formatDate(booking.preferred_date)}</p>
           {booking.preferred_time && (
-            <p className="text-slate-600">{booking.preferred_time}</p>
+            <p className="text-slate-600">{formatTime(booking.preferred_time)}</p>
           )}
         </div>
         <div>
