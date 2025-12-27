@@ -1,6 +1,6 @@
 'use client';
 
-import { useState } from 'react';
+import { useEffect, useState } from 'react';
 import { useRouter } from 'next/navigation';
 import Image from 'next/image';
 import Link from 'next/link';
@@ -72,15 +72,23 @@ const STATUS_CONFIG: Record<string, { label: string; color: string; bgColor: str
   cancelled: { label: 'Cancelled', color: 'text-rose-700', bgColor: 'bg-rose-50', description: 'This booking has been cancelled.' },
 };
 
+const DISPLAY_TIME_ZONE = 'America/New_York';
+
+function parseBookingDate(value: string) {
+  if (value.includes('T')) return new Date(value);
+  return new Date(`${value}T12:00:00`);
+}
+
 function formatDate(dateStr: string | null): string {
   if (!dateStr) return 'Not scheduled';
-  const date = new Date(dateStr);
-  return date.toLocaleDateString('en-US', {
+  const date = parseBookingDate(dateStr);
+  return new Intl.DateTimeFormat('en-US', {
     weekday: 'long',
     month: 'long',
     day: 'numeric',
     year: 'numeric',
-  });
+    timeZone: DISPLAY_TIME_ZONE,
+  }).format(date);
 }
 
 function formatPrice(cents: number | null): string {
@@ -88,43 +96,51 @@ function formatPrice(cents: number | null): string {
   return `$${(cents / 100).toFixed(2)}`;
 }
 
-function computeCancellationFee(preferredTime: string | null, preferredDate: string | null) {
+function computeCancellationFee(
+  preferredTime: string | null,
+  preferredDate: string | null,
+  nowMs: number
+) {
   let serviceDate: Date | null = null;
 
   if (preferredTime) {
-    const d = new Date(preferredTime);
+    const d = parseBookingDate(preferredTime);
     if (!Number.isNaN(d.getTime())) serviceDate = d;
   }
 
   if (!serviceDate && preferredDate) {
-    const d = new Date(`${preferredDate}T12:00:00`);
+    const d = parseBookingDate(preferredDate);
     if (!Number.isNaN(d.getTime())) serviceDate = d;
   }
 
   if (!serviceDate) return 0;
-  const diffHours = (serviceDate.getTime() - Date.now()) / (1000 * 60 * 60);
+  const diffHours = (serviceDate.getTime() - nowMs) / (1000 * 60 * 60);
   if (diffHours <= 2) return 4000;
   if (diffHours <= 8) return 2000;
   if (diffHours <= 24) return 1000;
   return 0;
 }
 
-function getTimeUntilService(preferredTime: string | null, preferredDate: string | null): { description: string; diffHours: number } | null {
+function getTimeUntilService(
+  preferredTime: string | null,
+  preferredDate: string | null,
+  nowMs: number
+): { description: string; diffHours: number } | null {
   let serviceDate: Date | null = null;
 
   if (preferredTime) {
-    const d = new Date(preferredTime);
+    const d = parseBookingDate(preferredTime);
     if (!Number.isNaN(d.getTime())) serviceDate = d;
   }
 
   if (!serviceDate && preferredDate) {
-    const d = new Date(`${preferredDate}T12:00:00`);
+    const d = parseBookingDate(preferredDate);
     if (!Number.isNaN(d.getTime())) serviceDate = d;
   }
 
   if (!serviceDate) return null;
 
-  const diffMs = serviceDate.getTime() - Date.now();
+  const diffMs = serviceDate.getTime() - nowMs;
   const diffHours = diffMs / (1000 * 60 * 60);
 
   if (diffHours < 0) {
@@ -158,12 +174,22 @@ export default function BookingDetailView({ booking, agentProfile, jobAssignment
   const [newDate, setNewDate] = useState(booking.preferredDate || '');
   const [newTime, setNewTime] = useState(formatTime(booking.preferredTime) || '');
   const [rescheduling, setRescheduling] = useState(false);
-  const cancelFeeCents = computeCancellationFee(booking.preferredTime, booking.preferredDate);
+  const [nowMs, setNowMs] = useState<number | null>(null);
+
+  useEffect(() => {
+    setNowMs(Date.now());
+  }, []);
+
+  const cancelFeeCents = nowMs !== null
+    ? computeCancellationFee(booking.preferredTime, booking.preferredDate, nowMs)
+    : null;
   const refundCents =
-    typeof booking.totalPriceCents === 'number'
+    typeof booking.totalPriceCents === 'number' && cancelFeeCents !== null
       ? Math.max(0, booking.totalPriceCents - cancelFeeCents)
       : null;
-  const timeUntilService = getTimeUntilService(booking.preferredTime, booking.preferredDate);
+  const timeUntilService = nowMs !== null
+    ? getTimeUntilService(booking.preferredTime, booking.preferredDate, nowMs)
+    : null;
 
   const statusConfig = STATUS_CONFIG[booking.status || 'pending'] || STATUS_CONFIG.pending;
   const isCancellable = !['completed', 'cancelled', 'in_progress', 'pending_verification'].includes(booking.status || '');
@@ -565,11 +591,19 @@ export default function BookingDetailView({ booking, agentProfile, jobAssignment
             <p className="mt-2 text-sm text-slate-600">
               Are you sure you want to cancel this booking? This action cannot be undone.
             </p>
-            <div className={`mt-3 rounded-lg border p-3 text-sm ${cancelFeeCents > 0 ? 'border-amber-200 bg-amber-50 text-amber-800' : 'border-emerald-200 bg-emerald-50 text-emerald-800'}`}>
+            <div className={`mt-3 rounded-lg border p-3 text-sm ${
+              cancelFeeCents === null
+                ? 'border-slate-200 bg-slate-50 text-slate-700'
+                : cancelFeeCents > 0
+                  ? 'border-amber-200 bg-amber-50 text-amber-800'
+                  : 'border-emerald-200 bg-emerald-50 text-emerald-800'
+            }`}>
               {timeUntilService ? (
                 <p>
                   You are <strong>{timeUntilService.description}</strong>.
-                  {cancelFeeCents > 0 ? (
+                  {cancelFeeCents === null ? (
+                    <> Checking your cancellation fee...</>
+                  ) : cancelFeeCents > 0 ? (
                     <> Canceling now will incur a <strong>{formatPrice(cancelFeeCents)}</strong> fee on your refund.</>
                   ) : (
                     <> Canceling now is <strong>free</strong>.</>
@@ -577,7 +611,13 @@ export default function BookingDetailView({ booking, agentProfile, jobAssignment
                 </p>
               ) : (
                 <p>
-                  Cancellation fee: {cancelFeeCents > 0 ? formatPrice(cancelFeeCents) : 'Free'}.
+                  Cancellation fee:{' '}
+                  {cancelFeeCents === null
+                    ? 'Calculating...'
+                    : cancelFeeCents > 0
+                      ? formatPrice(cancelFeeCents)
+                      : 'Free'}
+                  .
                 </p>
               )}
               {refundCents !== null && (

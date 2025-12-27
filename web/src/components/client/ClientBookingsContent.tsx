@@ -98,22 +98,26 @@ function computeCancellationFee(
   return 0;
 }
 
-function getTimeUntilService(preferredTime: string | null, preferredDate: string | null): string | null {
+function getTimeUntilService(
+  preferredTime: string | null,
+  preferredDate: string | null,
+  nowMs: number
+): string | null {
   let serviceDate: Date | null = null;
 
   if (preferredTime) {
-    const d = new Date(preferredTime);
+    const d = parseBookingDate(preferredTime);
     if (!Number.isNaN(d.getTime())) serviceDate = d;
   }
 
   if (!serviceDate && preferredDate) {
-    const d = new Date(`${preferredDate}T12:00:00`);
+    const d = parseBookingDate(preferredDate);
     if (!Number.isNaN(d.getTime())) serviceDate = d;
   }
 
   if (!serviceDate) return null;
 
-  const diffMs = serviceDate.getTime() - Date.now();
+  const diffMs = serviceDate.getTime() - nowMs;
   const diffHours = diffMs / (1000 * 60 * 60);
 
   if (diffHours < 0) {
@@ -149,6 +153,11 @@ export default function ClientBookingsContent({ onNewRequest }: Props) {
   const [selectedBooking, setSelectedBooking] = useState<Booking | null>(null);
   const [cancelling, setCancelling] = useState(false);
   const [cancelReason, setCancelReason] = useState('');
+  const [nowMs, setNowMs] = useState<number | null>(null);
+
+  useEffect(() => {
+    setNowMs(Date.now());
+  }, []);
 
   useEffect(() => {
     const loadBookings = async () => {
@@ -268,7 +277,7 @@ export default function ClientBookingsContent({ onNewRequest }: Props) {
 
       const feeCents = typeof data.fee_cents === 'number'
         ? data.fee_cents
-        : computeCancellationFee(selectedBooking.preferred_time, selectedBooking.preferred_date);
+        : computeCancellationFee(selectedBooking.preferred_time, selectedBooking.preferred_date, Date.now());
       const cancelledAt = data.cancelled_at || new Date().toISOString();
 
       setBookings((prev) =>
@@ -305,16 +314,25 @@ export default function ClientBookingsContent({ onNewRequest }: Props) {
 
   const activeCount = bookings.filter((b) => !['completed', 'cancelled'].includes(b.status || '')).length;
   const completedCount = bookings.filter((b) => b.status === 'completed').length;
-  const selectedFeeCents = selectedBooking
-    ? computeCancellationFee(selectedBooking.preferred_time, selectedBooking.preferred_date)
-    : 0;
+  const selectedFeeCents =
+    selectedBooking && nowMs !== null
+      ? computeCancellationFee(
+          selectedBooking.preferred_time,
+          selectedBooking.preferred_date,
+          nowMs
+        )
+      : null;
   const selectedRefundCents =
-    selectedBooking && typeof selectedBooking.total_price_cents === 'number'
+    selectedBooking &&
+    nowMs !== null &&
+    typeof selectedBooking.total_price_cents === 'number' &&
+    selectedFeeCents !== null
       ? Math.max(0, selectedBooking.total_price_cents - selectedFeeCents)
       : null;
-  const selectedTimeUntil = selectedBooking
-    ? getTimeUntilService(selectedBooking.preferred_time, selectedBooking.preferred_date)
-    : null;
+  const selectedTimeUntil =
+    selectedBooking && nowMs !== null
+      ? getTimeUntilService(selectedBooking.preferred_time, selectedBooking.preferred_date, nowMs)
+      : null;
 
   if (!session) {
     return (
@@ -422,11 +440,21 @@ export default function ClientBookingsContent({ onNewRequest }: Props) {
             <p className="mt-2 text-sm text-slate-600">
               Are you sure you want to cancel this booking? This action cannot be undone.
             </p>
-            <div className={`mt-3 rounded-lg border p-3 text-sm ${selectedFeeCents > 0 ? 'border-amber-200 bg-amber-50 text-amber-800' : 'border-emerald-200 bg-emerald-50 text-emerald-800'}`}>
+            <div
+              className={`mt-3 rounded-lg border p-3 text-sm ${
+                selectedFeeCents === null
+                  ? 'border-slate-200 bg-slate-50 text-slate-700'
+                  : selectedFeeCents > 0
+                    ? 'border-amber-200 bg-amber-50 text-amber-800'
+                    : 'border-emerald-200 bg-emerald-50 text-emerald-800'
+              }`}
+            >
               {selectedTimeUntil ? (
                 <p>
                   You are <strong>{selectedTimeUntil}</strong>.
-                  {selectedFeeCents > 0 ? (
+                  {selectedFeeCents === null ? (
+                    <> Checking your cancellation fee...</>
+                  ) : selectedFeeCents > 0 ? (
                     <> Canceling now will incur a <strong>{formatPrice(selectedFeeCents)}</strong> fee on your refund.</>
                   ) : (
                     <> Canceling now is <strong>free</strong>.</>
@@ -434,7 +462,13 @@ export default function ClientBookingsContent({ onNewRequest }: Props) {
                 </p>
               ) : (
                 <p>
-                  Cancellation fee: {selectedFeeCents > 0 ? formatPrice(selectedFeeCents) : 'Free'}.
+                  Cancellation fee:{' '}
+                  {selectedFeeCents === null
+                    ? 'Calculating...'
+                    : selectedFeeCents > 0
+                      ? formatPrice(selectedFeeCents)
+                      : 'Free'}
+                  .
                 </p>
               )}
               {selectedRefundCents !== null && (
