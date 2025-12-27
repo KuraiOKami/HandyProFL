@@ -62,6 +62,16 @@ export default function AgentSettingsContent() {
   const [locationError, setLocationError] = useState<string | null>(null);
   const [autoBookingEnabled, setAutoBookingEnabled] = useState(false);
 
+  // Service suggestion modal state
+  const [showSuggestionModal, setShowSuggestionModal] = useState(false);
+  const [suggestionName, setSuggestionName] = useState('');
+  const [suggestionCategory, setSuggestionCategory] = useState('');
+  const [suggestionDescription, setSuggestionDescription] = useState('');
+  const [suggestionWhy, setSuggestionWhy] = useState('');
+  const [submittingSuggestion, setSubmittingSuggestion] = useState(false);
+  const [suggestionError, setSuggestionError] = useState<string | null>(null);
+  const [suggestionSuccess, setSuggestionSuccess] = useState(false);
+
   useEffect(() => {
     loadProfile();
     loadServiceCatalog();
@@ -76,6 +86,51 @@ export default function AgentSettingsContent() {
       }
     } catch (err) {
       console.error('Failed to load service catalog:', err);
+    }
+  };
+
+  const handleSubmitSuggestion = async () => {
+    if (!suggestionName.trim()) {
+      setSuggestionError('Service name is required');
+      return;
+    }
+
+    setSubmittingSuggestion(true);
+    setSuggestionError(null);
+
+    try {
+      const res = await fetch('/api/agent/suggest-service', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({
+          name: suggestionName,
+          category: suggestionCategory,
+          description: suggestionDescription,
+          why_needed: suggestionWhy,
+        }),
+      });
+
+      const data = await res.json();
+
+      if (!res.ok) {
+        throw new Error(data.error || 'Failed to submit suggestion');
+      }
+
+      setSuggestionSuccess(true);
+      setSuggestionName('');
+      setSuggestionCategory('');
+      setSuggestionDescription('');
+      setSuggestionWhy('');
+
+      // Close modal after 2 seconds
+      setTimeout(() => {
+        setShowSuggestionModal(false);
+        setSuggestionSuccess(false);
+      }, 2000);
+    } catch (err) {
+      setSuggestionError(err instanceof Error ? err.message : 'Failed to submit suggestion');
+    } finally {
+      setSubmittingSuggestion(false);
     }
   };
 
@@ -448,6 +503,23 @@ export default function AgentSettingsContent() {
         {serviceCatalog.length === 0 && (
           <p className="mt-4 text-sm text-slate-500">Loading services...</p>
         )}
+
+        {/* Suggest a Service */}
+        <div className="mt-6 rounded-lg border border-dashed border-slate-300 bg-slate-50 p-4">
+          <div className="flex items-center justify-between">
+            <div>
+              <h4 className="text-sm font-medium text-slate-900">Don&apos;t see your skill?</h4>
+              <p className="text-sm text-slate-500">Suggest a new service to be added</p>
+            </div>
+            <button
+              type="button"
+              onClick={() => setShowSuggestionModal(true)}
+              className="rounded-lg border border-emerald-500 px-3 py-2 text-sm font-medium text-emerald-700 hover:bg-emerald-50"
+            >
+              Suggest Service
+            </button>
+          </div>
+        </div>
       </div>
 
       {/* Service Area & Location */}
@@ -627,6 +699,107 @@ export default function AgentSettingsContent() {
           </div>
         </div>
       </div>
+
+      {/* Service Suggestion Modal */}
+      {showSuggestionModal && (
+        <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/50 p-4">
+          <div className="w-full max-w-md rounded-xl bg-white p-6 shadow-xl">
+            {suggestionSuccess ? (
+              <div className="text-center">
+                <div className="mx-auto mb-4 flex h-12 w-12 items-center justify-center rounded-full bg-emerald-100">
+                  <svg className="h-6 w-6 text-emerald-600" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+                    <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M5 13l4 4L19 7" />
+                  </svg>
+                </div>
+                <h3 className="text-lg font-semibold text-slate-900">Suggestion Submitted!</h3>
+                <p className="mt-1 text-sm text-slate-500">We&apos;ll review your suggestion soon.</p>
+              </div>
+            ) : (
+              <>
+                <h3 className="text-lg font-semibold text-slate-900">Suggest a New Service</h3>
+                <p className="mt-1 text-sm text-slate-500">
+                  Tell us about a service you can provide that&apos;s not listed.
+                </p>
+
+                {suggestionError && (
+                  <div className="mt-4 rounded-lg border border-rose-200 bg-rose-50 px-4 py-3 text-sm text-rose-700">
+                    {suggestionError}
+                  </div>
+                )}
+
+                <div className="mt-4 space-y-4">
+                  <div>
+                    <label className="block text-sm font-medium text-slate-700">
+                      Service Name <span className="text-rose-500">*</span>
+                    </label>
+                    <input
+                      type="text"
+                      value={suggestionName}
+                      onChange={(e) => setSuggestionName(e.target.value)}
+                      placeholder="e.g., Pool Cleaning, Fence Repair"
+                      className="mt-1 w-full rounded-lg border border-slate-300 px-3 py-2 text-sm focus:border-emerald-500 focus:outline-none focus:ring-1 focus:ring-emerald-500"
+                    />
+                  </div>
+
+                  <div>
+                    <label className="block text-sm font-medium text-slate-700">Category</label>
+                    <input
+                      type="text"
+                      value={suggestionCategory}
+                      onChange={(e) => setSuggestionCategory(e.target.value)}
+                      placeholder="e.g., Outdoor, Electrical, Plumbing"
+                      className="mt-1 w-full rounded-lg border border-slate-300 px-3 py-2 text-sm focus:border-emerald-500 focus:outline-none focus:ring-1 focus:ring-emerald-500"
+                    />
+                  </div>
+
+                  <div>
+                    <label className="block text-sm font-medium text-slate-700">Description</label>
+                    <textarea
+                      value={suggestionDescription}
+                      onChange={(e) => setSuggestionDescription(e.target.value)}
+                      rows={2}
+                      placeholder="What does this service include?"
+                      className="mt-1 w-full rounded-lg border border-slate-300 px-3 py-2 text-sm focus:border-emerald-500 focus:outline-none focus:ring-1 focus:ring-emerald-500"
+                    />
+                  </div>
+
+                  <div>
+                    <label className="block text-sm font-medium text-slate-700">Why is this service needed?</label>
+                    <textarea
+                      value={suggestionWhy}
+                      onChange={(e) => setSuggestionWhy(e.target.value)}
+                      rows={2}
+                      placeholder="Tell us why customers would want this..."
+                      className="mt-1 w-full rounded-lg border border-slate-300 px-3 py-2 text-sm focus:border-emerald-500 focus:outline-none focus:ring-1 focus:ring-emerald-500"
+                    />
+                  </div>
+                </div>
+
+                <div className="mt-6 flex gap-3">
+                  <button
+                    type="button"
+                    onClick={() => {
+                      setShowSuggestionModal(false);
+                      setSuggestionError(null);
+                    }}
+                    className="flex-1 rounded-lg border border-slate-300 px-4 py-2.5 text-sm font-medium text-slate-700 hover:bg-slate-50"
+                  >
+                    Cancel
+                  </button>
+                  <button
+                    type="button"
+                    onClick={handleSubmitSuggestion}
+                    disabled={submittingSuggestion}
+                    className="flex-1 rounded-lg bg-emerald-600 px-4 py-2.5 text-sm font-semibold text-white hover:bg-emerald-700 disabled:bg-emerald-400"
+                  >
+                    {submittingSuggestion ? 'Submitting...' : 'Submit Suggestion'}
+                  </button>
+                </div>
+              </>
+            )}
+          </div>
+        </div>
+      )}
     </div>
   );
 }
