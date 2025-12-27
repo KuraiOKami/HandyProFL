@@ -55,6 +55,12 @@ export default async function BookingDetailPage({ params }: PageProps) {
     notFound();
   }
 
+  // Calculate urgency/surcharge fee (total - labor - materials)
+  const laborCents = bookingRow.labor_price_cents ?? 0;
+  const materialsCents = bookingRow.materials_cost_cents ?? 0;
+  const totalCents = bookingRow.total_price_cents ?? 0;
+  const urgencyFeeCents = Math.max(0, totalCents - laborCents - materialsCents);
+
   const booking = {
     id: bookingRow.id,
     serviceType: bookingRow.service_type,
@@ -66,6 +72,7 @@ export default async function BookingDetailPage({ params }: PageProps) {
     totalPriceCents: bookingRow.total_price_cents,
     laborPriceCents: bookingRow.labor_price_cents,
     materialsCostCents: bookingRow.materials_cost_cents,
+    urgencyFeeCents: urgencyFeeCents > 0 ? urgencyFeeCents : null,
     street: null,
     city: null,
     state: null,

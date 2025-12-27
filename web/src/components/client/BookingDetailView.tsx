@@ -18,6 +18,7 @@ type Booking = {
   totalPriceCents: number | null;
   laborPriceCents: number | null;
   materialsCostCents: number | null;
+  urgencyFeeCents: number | null;
   street: string | null;
   city: string | null;
   state: string | null;
@@ -394,6 +395,12 @@ export default function BookingDetailView({ booking, agentProfile, jobAssignment
               <div className="flex justify-between text-sm">
                 <span className="text-slate-600">Materials</span>
                 <span className="font-medium text-slate-900">{formatPrice(booking.materialsCostCents)}</span>
+              </div>
+            )}
+            {booking.urgencyFeeCents !== null && booking.urgencyFeeCents > 0 && (
+              <div className="flex justify-between text-sm">
+                <span className="text-slate-600">Same-Day Service Fee</span>
+                <span className="font-medium text-slate-900">{formatPrice(booking.urgencyFeeCents)}</span>
               </div>
             )}
             {booking.cancellationFeeCents !== null && booking.cancellationFeeCents > 0 && (
