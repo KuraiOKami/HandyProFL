@@ -11,6 +11,21 @@ type DashboardStats = {
   availableBalance: number;
   pendingBalance: number;
   rating: number;
+  tier: string;
+  totalJobs: number;
+};
+
+const TIER_CONFIG: Record<string, { label: string; color: string; bgColor: string; icon: string; payout: number }> = {
+  bronze: { label: 'Bronze', color: 'text-amber-700', bgColor: 'bg-amber-100', icon: '🥉', payout: 50 },
+  silver: { label: 'Silver', color: 'text-slate-600', bgColor: 'bg-slate-200', icon: '🥈', payout: 55 },
+  gold: { label: 'Gold', color: 'text-yellow-700', bgColor: 'bg-yellow-100', icon: '🥇', payout: 60 },
+  platinum: { label: 'Platinum', color: 'text-indigo-700', bgColor: 'bg-indigo-100', icon: '💎', payout: 70 },
+};
+
+const TIER_REQUIREMENTS = {
+  silver: { jobs: 10, rating: 4.0 },
+  gold: { jobs: 30, rating: 4.5 },
+  platinum: { jobs: 75, rating: 4.8 },
 };
 
 type UpcomingJob = {
@@ -32,6 +47,8 @@ export default function AgentDashboardContent() {
     availableBalance: 0,
     pendingBalance: 0,
     rating: 5.0,
+    tier: 'bronze',
+    totalJobs: 0,
   });
   const [upcomingJobs, setUpcomingJobs] = useState<UpcomingJob[]>([]);
   const [loading, setLoading] = useState(true);
@@ -48,10 +65,10 @@ export default function AgentDashboardContent() {
 
       const agentId = session.user.id;
 
-      // Get agent profile for rating
+      // Get agent profile for rating and tier
       const { data: agentProfile } = await supabase
         .from('agent_profiles')
-        .select('rating, total_jobs, total_earnings_cents')
+        .select('rating, total_jobs, total_earnings_cents, tier')
         .eq('id', agentId)
         .single();
 
@@ -92,6 +109,8 @@ export default function AgentDashboardContent() {
         availableBalance,
         pendingBalance,
         rating: agentProfile?.rating || 5.0,
+        tier: agentProfile?.tier || 'bronze',
+        totalJobs: agentProfile?.total_jobs || 0,
       });
 
       // Get upcoming jobs with customer info
@@ -226,6 +245,78 @@ export default function AgentDashboardContent() {
           </div>
         </div>
       </div>
+
+      {/* Tier Card */}
+      {stats.tier && TIER_CONFIG[stats.tier] && (
+        <div className={`rounded-xl border-2 p-5 shadow-sm ${
+          stats.tier === 'platinum' ? 'border-indigo-300 bg-gradient-to-r from-indigo-50 to-purple-50' :
+          stats.tier === 'gold' ? 'border-yellow-300 bg-gradient-to-r from-yellow-50 to-amber-50' :
+          stats.tier === 'silver' ? 'border-slate-300 bg-gradient-to-r from-slate-50 to-gray-100' :
+          'border-amber-200 bg-gradient-to-r from-amber-50 to-orange-50'
+        }`}>
+          <div className="flex flex-col sm:flex-row sm:items-center sm:justify-between gap-4">
+            <div className="flex items-center gap-4">
+              <div className="flex h-16 w-16 items-center justify-center rounded-full bg-white shadow-sm text-4xl">
+                {TIER_CONFIG[stats.tier].icon}
+              </div>
+              <div>
+                <div className="flex items-center gap-2">
+                  <span className={`inline-flex items-center gap-1 rounded-full px-3 py-1 text-sm font-bold ${TIER_CONFIG[stats.tier].bgColor} ${TIER_CONFIG[stats.tier].color}`}>
+                    {TIER_CONFIG[stats.tier].label} Agent
+                  </span>
+                </div>
+                <p className="mt-1 text-sm text-slate-600">
+                  You earn <span className="font-bold text-emerald-600">{TIER_CONFIG[stats.tier].payout}%</span> of labor costs
+                </p>
+              </div>
+            </div>
+
+            {/* Next tier progress */}
+            {stats.tier !== 'platinum' && (
+              <div className="flex-1 max-w-xs">
+                {(() => {
+                  const nextTier = stats.tier === 'bronze' ? 'silver' : stats.tier === 'silver' ? 'gold' : 'platinum';
+                  const req = TIER_REQUIREMENTS[nextTier as keyof typeof TIER_REQUIREMENTS];
+                  const jobsProgress = Math.min(100, (stats.totalJobs / req.jobs) * 100);
+                  const ratingMet = stats.rating >= req.rating;
+
+                  return (
+                    <div>
+                      <p className="text-xs font-medium text-slate-500 mb-1">
+                        Progress to {TIER_CONFIG[nextTier].icon} {TIER_CONFIG[nextTier].label}
+                      </p>
+                      <div className="flex items-center gap-2 text-sm">
+                        <div className="flex-1">
+                          <div className="h-2 rounded-full bg-slate-200">
+                            <div
+                              className="h-2 rounded-full bg-emerald-500 transition-all"
+                              style={{ width: `${jobsProgress}%` }}
+                            />
+                          </div>
+                        </div>
+                        <span className="text-xs text-slate-600 whitespace-nowrap">
+                          {stats.totalJobs}/{req.jobs} jobs
+                        </span>
+                      </div>
+                      <p className={`mt-1 text-xs ${ratingMet ? 'text-emerald-600' : 'text-slate-500'}`}>
+                        {ratingMet ? '✓' : '○'} {req.rating}+ rating required
+                        {ratingMet && ' (met!)'}
+                      </p>
+                    </div>
+                  );
+                })()}
+              </div>
+            )}
+
+            {stats.tier === 'platinum' && (
+              <div className="text-right">
+                <p className="text-sm font-semibold text-indigo-700">Top Tier!</p>
+                <p className="text-xs text-slate-500">Maximum payout rate</p>
+              </div>
+            )}
+          </div>
+        </div>
+      )}
 
       {/* Upcoming Jobs Section */}
       <div className="rounded-xl border border-slate-200 bg-white shadow-sm">

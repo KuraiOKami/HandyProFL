@@ -38,7 +38,15 @@ type AgentProfile = {
   photo_url: string | null;
   rating: number | null;
   total_jobs: number | null;
+  tier: string | null;
 } | null;
+
+const TIER_CONFIG: Record<string, { label: string; color: string; bgColor: string; icon: string }> = {
+  bronze: { label: 'Bronze', color: 'text-amber-700', bgColor: 'bg-amber-100', icon: '🥉' },
+  silver: { label: 'Silver', color: 'text-slate-600', bgColor: 'bg-slate-200', icon: '🥈' },
+  gold: { label: 'Gold', color: 'text-yellow-700', bgColor: 'bg-yellow-100', icon: '🥇' },
+  platinum: { label: 'Platinum', color: 'text-indigo-700', bgColor: 'bg-indigo-100', icon: '💎' },
+};
 
 type JobAssignment = {
   id: string;
@@ -495,9 +503,17 @@ export default function BookingDetailView({ booking, agentProfile, jobAssignment
                 </div>
               )}
               <div className="flex-1">
-                <p className="text-lg font-medium text-slate-900">
-                  {[agentProfile.first_name, agentProfile.last_name].filter(Boolean).join(' ') || 'Your Agent'}
-                </p>
+                <div className="flex items-center gap-2">
+                  <p className="text-lg font-medium text-slate-900">
+                    {[agentProfile.first_name, agentProfile.last_name].filter(Boolean).join(' ') || 'Your Agent'}
+                  </p>
+                  {agentProfile.tier && TIER_CONFIG[agentProfile.tier] && (
+                    <span className={`inline-flex items-center gap-1 rounded-full px-2 py-0.5 text-xs font-semibold ${TIER_CONFIG[agentProfile.tier].bgColor} ${TIER_CONFIG[agentProfile.tier].color}`}>
+                      <span>{TIER_CONFIG[agentProfile.tier].icon}</span>
+                      {TIER_CONFIG[agentProfile.tier].label}
+                    </span>
+                  )}
+                </div>
                 {agentProfile.rating && (
                   <div className="flex items-center gap-1 text-sm text-slate-600">
                     <span className="text-amber-500">★</span>

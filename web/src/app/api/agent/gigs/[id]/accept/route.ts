@@ -5,11 +5,16 @@ import { stripe } from "@/lib/stripe";
 import { getOrCreateCustomer } from "@/lib/stripeCustomer";
 import * as Sentry from "@sentry/nextjs";
 
-// Agent payout policy:
-// - 70% of labor
+// Agent payout policy (tier-based):
+// - Labor: Bronze 50%, Silver 55%, Gold 60%, Platinum 70%
 // - 100% of materials (reimbursed/pass-through)
 // - 50% of any additional surcharge (e.g., urgency/priority fee)
-const LABOR_PAYOUT_PERCENTAGE = 0.7;
+const TIER_PAYOUT_PERCENTAGES: Record<string, number> = {
+  bronze: 0.50,
+  silver: 0.55,
+  gold: 0.60,
+  platinum: 0.70,
+};
 const SURCHARGE_PAYOUT_PERCENTAGE = 0.5;
 const DEFAULT_RATE_PER_MINUTE_CENTS = 150; // $90/hr fallback
 
@@ -22,9 +27,11 @@ function computeAgentPayoutCents(args: {
   totalCents: number;
   laborCents: number;
   materialsCents: number;
+  tier: string;
 }) {
+  const laborPayoutPercentage = TIER_PAYOUT_PERCENTAGES[args.tier] || TIER_PAYOUT_PERCENTAGES.bronze;
   const surchargeCents = Math.max(0, args.totalCents - args.laborCents - args.materialsCents);
-  const laborPayoutCents = Math.round(args.laborCents * LABOR_PAYOUT_PERCENTAGE);
+  const laborPayoutCents = Math.round(args.laborCents * laborPayoutPercentage);
   const surchargePayoutCents = Math.round(surchargeCents * SURCHARGE_PAYOUT_PERCENTAGE);
   const payoutCents = laborPayoutCents + args.materialsCents + surchargePayoutCents;
   return Math.min(args.totalCents, Math.max(1, payoutCents));
@@ -57,7 +64,7 @@ async function getApprovedAgentSession() {
   const adminSupabase = createServiceRoleClient() ?? supabase;
   const { data: agentProfile } = await adminSupabase
     .from("agent_profiles")
-    .select("status")
+    .select("status, tier")
     .eq("id", session.user.id)
     .single();
 
@@ -65,7 +72,7 @@ async function getApprovedAgentSession() {
     return { error: errorResponse("auth.forbidden", "Agent approval required", 403) };
   }
 
-  return { supabase, session, adminSupabase };
+  return { supabase, session, adminSupabase, agentTier: (agentProfile.tier as string) || "bronze" };
 }
 
 export async function POST(
@@ -75,7 +82,7 @@ export async function POST(
   return Sentry.startSpan({ op: "job.accept", name: "Agent accepts gig" }, async (span) => {
     const auth = await getApprovedAgentSession();
     if ("error" in auth) return auth.error;
-    const { session, adminSupabase } = auth;
+    const { session, adminSupabase, agentTier } = auth;
 
     const { id: requestId } = await params;
     span.setAttribute("request_id", requestId);
@@ -130,7 +137,9 @@ export async function POST(
       totalCents,
       laborCents: baseLaborCents,
       materialsCents: storedMaterialsCents,
+      tier: agentTier,
     });
+    span.setAttribute("agent_tier", agentTier);
     span.setAttribute("service_type", request.service_type);
     span.setAttribute("total_price_cents", totalCents);
     span.setAttribute("labor_price_cents", baseLaborCents);

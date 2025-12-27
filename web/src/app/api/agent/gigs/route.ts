@@ -3,11 +3,16 @@ import { createClient, createServiceRoleClient } from "@/utils/supabase/server";
 import { sanitizeDetailsForAgent } from "@/lib/formatting";
 import { errorResponse } from "@/lib/api-errors";
 
-// Agent payout policy:
-// - 70% of labor
+// Agent payout policy (tier-based):
+// - Labor: Bronze 50%, Silver 55%, Gold 60%, Platinum 70%
 // - 100% of materials (reimbursed/pass-through)
 // - 50% of any additional surcharge (e.g., urgency/priority fee)
-const LABOR_PAYOUT_PERCENTAGE = 0.7;
+const TIER_PAYOUT_PERCENTAGES: Record<string, number> = {
+  bronze: 0.50,
+  silver: 0.55,
+  gold: 0.60,
+  platinum: 0.70,
+};
 const SURCHARGE_PAYOUT_PERCENTAGE = 0.5;
 const DEFAULT_RATE_PER_MINUTE_CENTS = 150; // $90/hr fallback
 
@@ -20,9 +25,11 @@ function computeAgentPayoutCents(args: {
   totalCents: number;
   laborCents: number;
   materialsCents: number;
+  tier: string;
 }) {
+  const laborPayoutPercentage = TIER_PAYOUT_PERCENTAGES[args.tier] || TIER_PAYOUT_PERCENTAGES.bronze;
   const surchargeCents = Math.max(0, args.totalCents - args.laborCents - args.materialsCents);
-  const laborPayoutCents = Math.round(args.laborCents * LABOR_PAYOUT_PERCENTAGE);
+  const laborPayoutCents = Math.round(args.laborCents * laborPayoutPercentage);
   const surchargePayoutCents = Math.round(surchargeCents * SURCHARGE_PAYOUT_PERCENTAGE);
   const payoutCents = laborPayoutCents + args.materialsCents + surchargePayoutCents;
   return Math.min(args.totalCents, Math.max(1, payoutCents));
@@ -76,7 +83,7 @@ async function getApprovedAgentSession() {
   const adminSupabase = createServiceRoleClient() ?? supabase;
   const { data: agentProfile } = await adminSupabase
     .from("agent_profiles")
-    .select("status, skills, service_area_miles")
+    .select("status, skills, service_area_miles, tier")
     .eq("id", session.user.id)
     .single();
 
@@ -97,6 +104,7 @@ async function getApprovedAgentSession() {
     adminSupabase,
     agentSkills: (agentProfile.skills as string[]) || [],
     serviceAreaMiles: agentProfile.service_area_miles || 25,
+    agentTier: (agentProfile.tier as string) || "bronze",
     agentLocation: {
       latitude: agentUserProfile?.location_latitude as number | null,
       longitude: agentUserProfile?.location_longitude as number | null,
@@ -107,7 +115,7 @@ async function getApprovedAgentSession() {
 export async function GET() {
   const auth = await getApprovedAgentSession();
   if ("error" in auth) return auth.error;
-  const { adminSupabase, agentSkills, serviceAreaMiles, agentLocation } = auth;
+  const { adminSupabase, agentSkills, serviceAreaMiles, agentTier, agentLocation } = auth;
 
   // Get unassigned, confirmed requests
   const { data: requests, error } = await adminSupabase
@@ -180,6 +188,7 @@ export async function GET() {
         totalCents,
         laborCents: baseLaborCents,
         materialsCents: storedMaterialsCents,
+        tier: agentTier,
       });
 
       // Calculate distance from agent if both locations are available

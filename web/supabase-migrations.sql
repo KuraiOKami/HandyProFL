@@ -968,3 +968,95 @@ CREATE TRIGGER update_auto_offers_updated_at
 GRANT ALL ON auto_assignment_offers TO authenticated;
 
 COMMENT ON TABLE auto_assignment_offers IS 'Tracks auto-assignment offers sent to agents based on priority';
+
+-- ============================================
+-- AGENT TIER SYSTEM
+-- Progressive payout splits based on performance
+-- ============================================
+
+-- Add tier column to agent_profiles
+ALTER TABLE agent_profiles
+  ADD COLUMN IF NOT EXISTS tier TEXT DEFAULT 'bronze' CHECK (tier IN ('bronze', 'silver', 'gold', 'platinum'));
+
+COMMENT ON COLUMN agent_profiles.tier IS 'Agent tier level: bronze (50%), silver (55%), gold (60%), platinum (70%)';
+
+-- Tier requirements and payout percentages:
+-- Bronze:   New agent, 50% payout
+-- Silver:   10+ jobs, 4.0+ rating, 55% payout
+-- Gold:     30+ jobs, 4.5+ rating, 60% payout
+-- Platinum: 75+ jobs, 4.8+ rating, 70% payout
+
+-- Function to calculate agent tier based on performance
+CREATE OR REPLACE FUNCTION calculate_agent_tier(
+  p_total_jobs INTEGER,
+  p_rating DECIMAL
+) RETURNS TEXT AS $$
+BEGIN
+  -- Platinum: 75+ jobs and 4.8+ rating
+  IF p_total_jobs >= 75 AND p_rating >= 4.8 THEN
+    RETURN 'platinum';
+  -- Gold: 30+ jobs and 4.5+ rating
+  ELSIF p_total_jobs >= 30 AND p_rating >= 4.5 THEN
+    RETURN 'gold';
+  -- Silver: 10+ jobs and 4.0+ rating
+  ELSIF p_total_jobs >= 10 AND p_rating >= 4.0 THEN
+    RETURN 'silver';
+  -- Default: Bronze
+  ELSE
+    RETURN 'bronze';
+  END IF;
+END;
+$$ LANGUAGE plpgsql IMMUTABLE;
+
+-- Function to get payout percentage based on tier
+CREATE OR REPLACE FUNCTION get_tier_payout_percentage(p_tier TEXT)
+RETURNS DECIMAL AS $$
+BEGIN
+  CASE p_tier
+    WHEN 'platinum' THEN RETURN 0.70;
+    WHEN 'gold' THEN RETURN 0.60;
+    WHEN 'silver' THEN RETURN 0.55;
+    ELSE RETURN 0.50; -- bronze
+  END CASE;
+END;
+$$ LANGUAGE plpgsql IMMUTABLE;
+
+-- Function to auto-update agent tier when stats change
+CREATE OR REPLACE FUNCTION update_agent_tier()
+RETURNS TRIGGER AS $$
+DECLARE
+  v_rating DECIMAL;
+  v_new_tier TEXT;
+BEGIN
+  -- Get the agent's current rating (use agent_rating if available, fall back to rating)
+  v_rating := COALESCE(NEW.agent_rating, NEW.rating, 5.0);
+
+  -- Calculate new tier
+  v_new_tier := calculate_agent_tier(NEW.total_jobs, v_rating);
+
+  -- Only update if tier changed
+  IF NEW.tier IS DISTINCT FROM v_new_tier THEN
+    NEW.tier := v_new_tier;
+  END IF;
+
+  RETURN NEW;
+END;
+$$ LANGUAGE plpgsql;
+
+-- Trigger to auto-update tier when agent stats change
+DROP TRIGGER IF EXISTS update_agent_tier_trigger ON agent_profiles;
+CREATE TRIGGER update_agent_tier_trigger
+  BEFORE UPDATE OF total_jobs, rating, agent_rating ON agent_profiles
+  FOR EACH ROW
+  EXECUTE FUNCTION update_agent_tier();
+
+-- Update existing agents to correct tier based on current stats
+UPDATE agent_profiles
+SET tier = calculate_agent_tier(
+  COALESCE(total_jobs, 0),
+  COALESCE(agent_rating, rating, 5.0)
+);
+
+COMMENT ON FUNCTION calculate_agent_tier IS 'Calculate tier based on total jobs and rating';
+COMMENT ON FUNCTION get_tier_payout_percentage IS 'Get labor payout percentage for a tier';
+COMMENT ON FUNCTION update_agent_tier IS 'Auto-update agent tier when stats change';

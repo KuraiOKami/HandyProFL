@@ -94,7 +94,7 @@ export default async function BookingDetailPage({ params }: PageProps) {
 
     const { data: agentData } = await supabase
       .from("agent_profiles")
-      .select("photo_url, rating, total_jobs")
+      .select("photo_url, rating, total_jobs, tier")
       .eq("id", booking.assignedAgentId)
       .single();
 
@@ -104,6 +104,7 @@ export default async function BookingDetailPage({ params }: PageProps) {
         photo_url: agentData?.photo_url,
         rating: agentData?.rating,
         total_jobs: agentData?.total_jobs,
+        tier: agentData?.tier || "bronze",
       };
     }
   }
