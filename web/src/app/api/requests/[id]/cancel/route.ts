@@ -4,7 +4,13 @@ import { stripe } from "@/lib/stripe";
 
 type Params = { params: Promise<{ id: string }> };
 
-function computeCancellationFee(preferredTime: string | null, preferredDate: string | null) {
+type CancellationFeeResult = {
+  feeCents: number;
+  agentShareCents: number;
+  tier: "2hr" | "8hr" | "24hr" | "free";
+};
+
+function computeCancellationFee(preferredTime: string | null, preferredDate: string | null): CancellationFeeResult {
   let serviceDate: Date | null = null;
 
   if (preferredTime) {
@@ -17,14 +23,21 @@ function computeCancellationFee(preferredTime: string | null, preferredDate: str
     if (!Number.isNaN(d.getTime())) serviceDate = d;
   }
 
-  if (!serviceDate) return 0;
+  if (!serviceDate) return { feeCents: 0, agentShareCents: 0, tier: "free" };
 
   const diffHours = (serviceDate.getTime() - Date.now()) / (1000 * 60 * 60);
 
-  if (diffHours <= 2) return 4000; // $40 within 2 hours
-  if (diffHours <= 8) return 2000; // $20 within 2-8 hours
-  if (diffHours <= 24) return 1000; // $10 within 8-24 hours
-  return 0; // free beyond 24 hours
+  // Tier 1: Within 2 hours - $40 fee, 50/50 split (agent gets $20)
+  if (diffHours <= 2) return { feeCents: 4000, agentShareCents: 2000, tier: "2hr" };
+
+  // Tier 2: 2-8 hours - $20 fee, 50/50 split (agent gets $10)
+  if (diffHours <= 8) return { feeCents: 2000, agentShareCents: 1000, tier: "8hr" };
+
+  // Tier 3: 8-24 hours - $10 fee, 30/70 split (agent gets $3)
+  if (diffHours <= 24) return { feeCents: 1000, agentShareCents: 300, tier: "24hr" };
+
+  // Free beyond 24 hours
+  return { feeCents: 0, agentShareCents: 0, tier: "free" };
 }
 
 export async function POST(req: NextRequest, { params }: Params) {
@@ -43,7 +56,7 @@ export async function POST(req: NextRequest, { params }: Params) {
 
   const { data: requestRow, error: requestError } = await adminSupabase
     .from("service_requests")
-    .select("id, user_id, status, preferred_time, preferred_date, total_price_cents, payment_intent_id")
+    .select("id, user_id, status, preferred_time, preferred_date, total_price_cents, payment_intent_id, assigned_agent_id")
     .eq("id", (await params).id)
     .single();
 
@@ -63,7 +76,8 @@ export async function POST(req: NextRequest, { params }: Params) {
     return NextResponse.json({ error: "Request is already closed" }, { status: 400 });
   }
 
-  const feeCents = computeCancellationFee(requestRow.preferred_time, requestRow.preferred_date);
+  const feeResult = computeCancellationFee(requestRow.preferred_time, requestRow.preferred_date);
+  const { feeCents, agentShareCents } = feeResult;
   const cancelledAt = new Date().toISOString();
 
   const { error: updateError } = await adminSupabase
@@ -85,6 +99,13 @@ export async function POST(req: NextRequest, { params }: Params) {
     await adminSupabase.from("available_slots").update({ is_booked: false }).eq("slot_start", requestRow.preferred_time);
   }
 
+  // Get the job assignment ID for agent earnings credit
+  const { data: jobAssignment } = await adminSupabase
+    .from("job_assignments")
+    .select("id, agent_id")
+    .eq("request_id", requestRow.id)
+    .single();
+
   // Cancel any job assignment if present
   await adminSupabase
     .from("job_assignments")
@@ -93,6 +114,7 @@ export async function POST(req: NextRequest, { params }: Params) {
 
   let refundAmountCents: number | null = null;
   let refundStatus: string | null = null;
+  let agentEarningsStatus: string | null = null;
 
   if (typeof requestRow.total_price_cents === "number" && requestRow.total_price_cents > 0) {
     refundAmountCents = Math.max(0, requestRow.total_price_cents - feeCents);
@@ -118,9 +140,42 @@ export async function POST(req: NextRequest, { params }: Params) {
     }
   }
 
+  // Credit agent's share of cancellation fee if there's an assigned agent
+  const agentId = jobAssignment?.agent_id ?? requestRow.assigned_agent_id;
+  if (agentId && agentShareCents > 0 && jobAssignment?.id) {
+    try {
+      const { error: earningsError } = await adminSupabase
+        .from("agent_earnings")
+        .insert({
+          agent_id: agentId,
+          assignment_id: jobAssignment.id,
+          amount_cents: agentShareCents,
+          status: "available", // Immediately available since it's a cancellation fee
+          available_at: cancelledAt,
+        });
+
+      if (earningsError) {
+        console.error("Agent earnings error:", earningsError.message);
+        agentEarningsStatus = "failed";
+      } else {
+        agentEarningsStatus = "credited";
+      }
+    } catch (err) {
+      const errorMessage = err instanceof Error ? err.message : "Agent credit failed";
+      console.error("Agent earnings error:", errorMessage);
+      agentEarningsStatus = "failed";
+    }
+  } else if (agentShareCents > 0) {
+    agentEarningsStatus = "no_agent_assigned";
+  } else {
+    agentEarningsStatus = "no_fee";
+  }
+
   return NextResponse.json({
     status: "cancelled",
     fee_cents: feeCents,
+    agent_share_cents: agentShareCents,
+    agent_earnings_status: agentEarningsStatus,
     cancelled_at: cancelledAt,
     refund_amount_cents: refundAmountCents,
     refund_status: refundStatus,
