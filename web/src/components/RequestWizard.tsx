@@ -15,8 +15,6 @@ export type RequestWizardHandle = {
 
 export { services, type ServiceId } from '@/hooks/useRequestWizard';
 
-const DISPLAY_TIME_ZONE = 'America/New_York';
-
 const RequestWizard = forwardRef<RequestWizardHandle>((_props, ref) => {
   const wizard = useRequestWizard();
 
@@ -29,60 +27,6 @@ const RequestWizard = forwardRef<RequestWizardHandle>((_props, ref) => {
   );
 
   useImperativeHandle(ref, () => ({ open: openWizard }), [openWizard]);
-
-  const handleLoadSlots = useCallback(
-    async (selectedDate: string) => {
-      if (!wizard.supabase || !selectedDate) return;
-
-      const dayStartLocal = `${selectedDate}T00:00:00`;
-      const dayEndLocal = `${selectedDate}T23:59:59`;
-
-      const { data, error } = await wizard.supabase
-        .from('available_slots')
-        .select('slot_start, slot_end, is_booked')
-        .gte('slot_start', dayStartLocal)
-        .lte('slot_start', dayEndLocal)
-        .order('slot_start', { ascending: true });
-
-      if (error) {
-        console.error('Error loading slots', error.message);
-        return;
-      }
-
-      if (data && data.length) {
-        const durationMs = new Date(data[0].slot_end).getTime() - new Date(data[0].slot_start).getTime();
-        wizard.setSlotDurationMinutes(Math.max(1, Math.round(durationMs / 60000)));
-      } else {
-        wizard.setSlotDurationMinutes(30);
-      }
-
-      const normalized = (data ?? [])
-        .map((row) => {
-          const start = new Date(row.slot_start);
-          const parts = new Intl.DateTimeFormat('en-US', {
-            timeZone: DISPLAY_TIME_ZONE,
-            hour: '2-digit',
-            minute: '2-digit',
-            hour12: false,
-          }).formatToParts(start);
-          const hour = Number(parts.find((p) => p.type === 'hour')?.value ?? '0');
-          const minute = Number(parts.find((p) => p.type === 'minute')?.value ?? '0');
-          const withinServiceHours = hour >= 9 && (hour < 19 || (hour === 19 && minute === 0));
-          if (!withinServiceHours) return null;
-
-          const time = start.toLocaleTimeString('en-US', {
-            hour: 'numeric',
-            minute: '2-digit',
-            timeZone: DISPLAY_TIME_ZONE,
-          });
-          return { time, available: !row.is_booked, startIso: row.slot_start };
-        })
-        .filter(Boolean) as { time: string; available: boolean; startIso: string }[];
-
-      wizard.setAvailableSlots((prev) => ({ ...prev, [selectedDate]: normalized.length ? normalized : [] }));
-    },
-    [wizard],
-  );
 
   const handleAddItem = useCallback(() => {
     wizard.setItems((prev) => [...prev, wizard.buildCurrentItem()]);
@@ -163,10 +107,6 @@ const RequestWizard = forwardRef<RequestWizardHandle>((_props, ref) => {
               onDateChange={wizard.setDate}
               slot={wizard.slot}
               onSlotChange={wizard.setSlot}
-              availableSlots={wizard.availableSlots}
-              onLoadSlots={handleLoadSlots}
-              slotDurationMinutes={wizard.slotDurationMinutes}
-              requiredSlots={wizard.requiredSlots}
             />
           )}
 
@@ -255,7 +195,7 @@ const RequestWizard = forwardRef<RequestWizardHandle>((_props, ref) => {
                 <button
                   onClick={() => wizard.setStep((prev) => (prev + 1) as Step)}
                   className="flex-1 rounded-lg bg-indigo-700 px-4 py-2.5 text-sm font-semibold text-white shadow-sm hover:bg-indigo-800 disabled:cursor-not-allowed disabled:bg-slate-300 sm:flex-initial"
-                  disabled={wizard.step === 2 && (!wizard.slot || Object.keys(wizard.availableSlots).length === 0)}
+                  disabled={wizard.step === 2 && !wizard.slot}
                 >
                   Continue
                 </button>

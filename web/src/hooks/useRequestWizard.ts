@@ -467,13 +467,11 @@ export function useRequestWizard() {
       .join(' || ');
     const detailsWithDuration = `Service for: ${recipientLabel} | Address: ${addressLine} | ${details}${details ? ' | ' : ''}Estimated minutes: ${requiredMinutes} | Subtotal: ${(totalPriceCents / 100).toLocaleString(undefined, { style: 'currency', currency: 'USD' })}`;
 
-    const selectedSlots = availableSlots[date] ?? [];
-    const selectedIdx = selectedSlots.findIndex((s) => s.startIso === slot?.startIso);
-    const chosenSlots = selectedIdx >= 0 ? selectedSlots.slice(selectedIdx, selectedIdx + requiredSlots) : [];
-    const slotStartIso = chosenSlots.map((s) => s.startIso).filter(Boolean);
+    // Use preferred_time from the slot picker (gig-based flow)
+    const preferredTime = slot?.startIso;
 
-    if (!slotStartIso.length || slotStartIso.length < requiredSlots) {
-      setError('Selected time no longer available. Please pick another slot.');
+    if (!preferredTime) {
+      setError('Please select a preferred time.');
       setSubmitting(false);
       return;
     }
@@ -487,7 +485,7 @@ export function useRequestWizard() {
           user_id: session.user.id,
           service_type: serviceTypeName,
           date,
-          slots: slotStartIso,
+          preferred_time: preferredTime, // Gig-based flow - no slot reservation
           required_minutes: requiredMinutes,
           details: detailsWithDuration || null,
           total_price_cents: totalPriceCents,
@@ -529,8 +527,6 @@ export function useRequestWizard() {
     items,
     buildCurrentItem,
     requiredMinutes,
-    availableSlots,
-    requiredSlots,
     requestId,
     service,
     serviceRecipient,
