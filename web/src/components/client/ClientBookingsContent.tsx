@@ -85,6 +85,42 @@ function computeCancellationFee(preferredTime: string | null, preferredDate: str
   return 0;
 }
 
+function getTimeUntilService(preferredTime: string | null, preferredDate: string | null): string | null {
+  let serviceDate: Date | null = null;
+
+  if (preferredTime) {
+    const d = new Date(preferredTime);
+    if (!Number.isNaN(d.getTime())) serviceDate = d;
+  }
+
+  if (!serviceDate && preferredDate) {
+    const d = new Date(`${preferredDate}T12:00:00`);
+    if (!Number.isNaN(d.getTime())) serviceDate = d;
+  }
+
+  if (!serviceDate) return null;
+
+  const diffMs = serviceDate.getTime() - Date.now();
+  const diffHours = diffMs / (1000 * 60 * 60);
+
+  if (diffHours < 0) {
+    return 'past your appointment time';
+  }
+
+  if (diffHours < 1) {
+    const minutes = Math.round(diffHours * 60);
+    return `${minutes} minute${minutes !== 1 ? 's' : ''} from your appointment`;
+  }
+
+  if (diffHours < 24) {
+    const hours = Math.round(diffHours);
+    return `${hours} hour${hours !== 1 ? 's' : ''} from your appointment`;
+  }
+
+  const days = Math.round(diffHours / 24);
+  return `${days} day${days !== 1 ? 's' : ''} from your appointment`;
+}
+
 type Props = {
   onNewRequest?: (service?: ServiceId) => void;
 };
@@ -263,6 +299,9 @@ export default function ClientBookingsContent({ onNewRequest }: Props) {
     selectedBooking && typeof selectedBooking.total_price_cents === 'number'
       ? Math.max(0, selectedBooking.total_price_cents - selectedFeeCents)
       : null;
+  const selectedTimeUntil = selectedBooking
+    ? getTimeUntilService(selectedBooking.preferred_time, selectedBooking.preferred_date)
+    : null;
 
   if (!session) {
     return (
@@ -370,19 +409,26 @@ export default function ClientBookingsContent({ onNewRequest }: Props) {
             <p className="mt-2 text-sm text-slate-600">
               Are you sure you want to cancel this booking? This action cannot be undone.
             </p>
-            <div className="mt-3 rounded-lg border border-amber-200 bg-amber-50 p-3 text-xs text-amber-800">
-              <p>
-                Cancellation fee: {selectedFeeCents > 0 ? formatPrice(selectedFeeCents) : 'Free'}.
-                {selectedRefundCents !== null && (
-                  <> Refund: {formatPrice(selectedRefundCents)} to your original payment method.</>
-                )}
-              </p>
-              <ul className="mt-2 space-y-1 text-[11px] text-amber-700">
-                <li>• Within 2 hours of service: $40 fee</li>
-                <li>• 2-8 hours before service: $20 fee</li>
-                <li>• 8-24 hours before service: $10 fee</li>
-                <li>• More than 24 hours: free cancellation</li>
-              </ul>
+            <div className={`mt-3 rounded-lg border p-3 text-sm ${selectedFeeCents > 0 ? 'border-amber-200 bg-amber-50 text-amber-800' : 'border-emerald-200 bg-emerald-50 text-emerald-800'}`}>
+              {selectedTimeUntil ? (
+                <p>
+                  You are <strong>{selectedTimeUntil}</strong>.
+                  {selectedFeeCents > 0 ? (
+                    <> Canceling now will incur a <strong>{formatPrice(selectedFeeCents)}</strong> fee on your refund.</>
+                  ) : (
+                    <> Canceling now is <strong>free</strong>.</>
+                  )}
+                </p>
+              ) : (
+                <p>
+                  Cancellation fee: {selectedFeeCents > 0 ? formatPrice(selectedFeeCents) : 'Free'}.
+                </p>
+              )}
+              {selectedRefundCents !== null && (
+                <p className="mt-2">
+                  Refund: <strong>{formatPrice(selectedRefundCents)}</strong> to your original payment method.
+                </p>
+              )}
             </div>
             <div className="mt-4">
               <label className="block text-sm font-medium text-slate-700">

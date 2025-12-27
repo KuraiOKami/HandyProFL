@@ -108,6 +108,42 @@ function computeCancellationFee(preferredTime: string | null, preferredDate: str
   return 0;
 }
 
+function getTimeUntilService(preferredTime: string | null, preferredDate: string | null): { description: string; diffHours: number } | null {
+  let serviceDate: Date | null = null;
+
+  if (preferredTime) {
+    const d = new Date(preferredTime);
+    if (!Number.isNaN(d.getTime())) serviceDate = d;
+  }
+
+  if (!serviceDate && preferredDate) {
+    const d = new Date(`${preferredDate}T12:00:00`);
+    if (!Number.isNaN(d.getTime())) serviceDate = d;
+  }
+
+  if (!serviceDate) return null;
+
+  const diffMs = serviceDate.getTime() - Date.now();
+  const diffHours = diffMs / (1000 * 60 * 60);
+
+  if (diffHours < 0) {
+    return { description: 'past your appointment time', diffHours };
+  }
+
+  if (diffHours < 1) {
+    const minutes = Math.round(diffHours * 60);
+    return { description: `${minutes} minute${minutes !== 1 ? 's' : ''} from your appointment`, diffHours };
+  }
+
+  if (diffHours < 24) {
+    const hours = Math.round(diffHours);
+    return { description: `${hours} hour${hours !== 1 ? 's' : ''} from your appointment`, diffHours };
+  }
+
+  const days = Math.round(diffHours / 24);
+  return { description: `${days} day${days !== 1 ? 's' : ''} from your appointment`, diffHours };
+}
+
 export default function BookingDetailView({ booking, agentProfile, jobAssignment, proofPhotos }: Props) {
   const router = useRouter();
   const supabase = getSupabaseClient();
@@ -126,6 +162,7 @@ export default function BookingDetailView({ booking, agentProfile, jobAssignment
     typeof booking.totalPriceCents === 'number'
       ? Math.max(0, booking.totalPriceCents - cancelFeeCents)
       : null;
+  const timeUntilService = getTimeUntilService(booking.preferredTime, booking.preferredDate);
 
   const statusConfig = STATUS_CONFIG[booking.status || 'pending'] || STATUS_CONFIG.pending;
   const isCancellable = !['completed', 'cancelled', 'in_progress', 'pending_verification'].includes(booking.status || '');
@@ -527,19 +564,26 @@ export default function BookingDetailView({ booking, agentProfile, jobAssignment
             <p className="mt-2 text-sm text-slate-600">
               Are you sure you want to cancel this booking? This action cannot be undone.
             </p>
-            <div className="mt-3 rounded-lg border border-amber-200 bg-amber-50 p-3 text-xs text-amber-800">
-              <p>
-                Cancellation fee: {cancelFeeCents > 0 ? formatPrice(cancelFeeCents) : 'Free'}.
-                {refundCents !== null && (
-                  <> Refund: {formatPrice(refundCents)} to your original payment method.</>
-                )}
-              </p>
-              <ul className="mt-2 space-y-1 text-[11px] text-amber-700">
-                <li>• Within 2 hours of service: $40 fee</li>
-                <li>• 2-8 hours before service: $20 fee</li>
-                <li>• 8-24 hours before service: $10 fee</li>
-                <li>• More than 24 hours: free cancellation</li>
-              </ul>
+            <div className={`mt-3 rounded-lg border p-3 text-sm ${cancelFeeCents > 0 ? 'border-amber-200 bg-amber-50 text-amber-800' : 'border-emerald-200 bg-emerald-50 text-emerald-800'}`}>
+              {timeUntilService ? (
+                <p>
+                  You are <strong>{timeUntilService.description}</strong>.
+                  {cancelFeeCents > 0 ? (
+                    <> Canceling now will incur a <strong>{formatPrice(cancelFeeCents)}</strong> fee on your refund.</>
+                  ) : (
+                    <> Canceling now is <strong>free</strong>.</>
+                  )}
+                </p>
+              ) : (
+                <p>
+                  Cancellation fee: {cancelFeeCents > 0 ? formatPrice(cancelFeeCents) : 'Free'}.
+                </p>
+              )}
+              {refundCents !== null && (
+                <p className="mt-2">
+                  Refund: <strong>{formatPrice(refundCents)}</strong> to your original payment method.
+                </p>
+              )}
             </div>
             <div className="mt-4">
               <label className="block text-sm font-medium text-slate-700">
