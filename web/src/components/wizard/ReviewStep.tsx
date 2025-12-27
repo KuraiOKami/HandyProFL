@@ -5,6 +5,8 @@ import type { RequestItem, PaymentMethod } from '@/hooks/useRequestWizard';
 type ReviewStepProps = {
   items: RequestItem[];
   getPriceForItem: (item: RequestItem) => number;
+  subtotalCents: number;
+  urgencySurchargeCents: number;
   totalPriceCents: number;
   requiredMinutes: number;
   date: string;
@@ -22,6 +24,8 @@ type ReviewStepProps = {
 export default function ReviewStep({
   items,
   getPriceForItem,
+  subtotalCents,
+  urgencySurchargeCents,
   totalPriceCents,
   requiredMinutes,
   date,
@@ -69,6 +73,25 @@ export default function ReviewStep({
         <div className="flex items-center justify-between">
           <span className="text-slate-700">Subtotal</span>
           <span className="font-semibold text-slate-900">
+            {(subtotalCents / 100).toLocaleString(undefined, { style: 'currency', currency: 'USD' })}
+          </span>
+        </div>
+        {urgencySurchargeCents > 0 && (
+          <div className="flex items-center justify-between">
+            <span className="text-slate-700">
+              Urgency fee
+              <span className="ml-1 text-xs text-slate-500">
+                ({urgencySurchargeCents === 5000 ? 'same-day' : urgencySurchargeCents === 3000 ? 'next-day' : '2-day'})
+              </span>
+            </span>
+            <span className="font-semibold text-amber-600">
+              +{(urgencySurchargeCents / 100).toLocaleString(undefined, { style: 'currency', currency: 'USD' })}
+            </span>
+          </div>
+        )}
+        <div className="flex items-center justify-between border-t border-slate-200 pt-2">
+          <span className="font-semibold text-slate-900">Total</span>
+          <span className="font-bold text-slate-900">
             {(totalPriceCents / 100).toLocaleString(undefined, { style: 'currency', currency: 'USD' })}
           </span>
         </div>

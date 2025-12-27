@@ -353,7 +353,31 @@ export function useRequestWizard() {
     };
   }, [items, buildCurrentItem, getPriceBreakdown]);
 
-  const totalPriceCents = priceBreakdown.totalCents;
+  // Urgency surcharge based on how soon the appointment is
+  const URGENCY_SURCHARGE = {
+    sameDay: 5000,  // $50 for same-day
+    nextDay: 3000,  // $30 for next-day
+    twoDay: 1500,   // $15 for 2 days out
+  };
+
+  const daysUntilDate = (dateStr: string | null) => {
+    if (!dateStr) return null;
+    const today = new Date();
+    const target = new Date(dateStr);
+    const diffMs = target.setHours(0, 0, 0, 0) - today.setHours(0, 0, 0, 0);
+    return Math.floor(diffMs / (1000 * 60 * 60 * 24));
+  };
+
+  const urgencySurchargeCents = useMemo(() => {
+    const days = daysUntilDate(date);
+    if (days == null) return 0;
+    if (days <= 0) return URGENCY_SURCHARGE.sameDay;
+    if (days === 1) return URGENCY_SURCHARGE.nextDay;
+    if (days === 2) return URGENCY_SURCHARGE.twoDay;
+    return 0;
+  }, [date]);
+
+  const totalPriceCents = priceBreakdown.totalCents + urgencySurchargeCents;
 
   const totalMinutes = useMemo(() => {
     const allItems = [...items, buildCurrentItem()];
@@ -639,6 +663,8 @@ export function useRequestWizard() {
 
     // Computed values
     totalPriceCents,
+    urgencySurchargeCents,
+    subtotalCents: priceBreakdown.totalCents,
     totalMinutes,
     requiredMinutes,
     requiredSlots,
