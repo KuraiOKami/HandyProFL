@@ -104,10 +104,10 @@ export default function SettingsDashboard() {
     setCancelSaving(true);
     setCancelError(null);
     try {
-      const res = await fetch(`/api/requests/${cancelModal.request.id}/cancel`, {
+      const res = await fetch('/api/requests/cancel', {
         method: "POST",
         headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ reason: cancelReason }),
+        body: JSON.stringify({ id: cancelModal.request.id, reason: cancelReason }),
       });
 
       const data = await res.json().catch(() => ({}));

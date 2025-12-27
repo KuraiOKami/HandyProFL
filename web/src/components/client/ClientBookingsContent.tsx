@@ -276,10 +276,10 @@ export default function ClientBookingsContent({ onNewRequest }: Props) {
 
     setCancelling(true);
     try {
-      const res = await fetch(`/api/requests/${selectedBooking.id}/cancel`, {
+      const res = await fetch('/api/requests/cancel', {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ reason: cancelReason }),
+        body: JSON.stringify({ id: selectedBooking.id, reason: cancelReason }),
       });
 
       const data = await res.json().catch(() => ({}));

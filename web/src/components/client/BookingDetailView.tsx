@@ -238,10 +238,10 @@ export default function BookingDetailView({ booking, agentProfile, jobAssignment
     setError(null);
 
     try {
-      const res = await fetch(`/api/requests/${booking.id}/cancel`, {
+      const res = await fetch('/api/requests/cancel', {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ reason: cancelReason }),
+        body: JSON.stringify({ id: booking.id, reason: cancelReason }),
       });
 
       const data = await res.json().catch(() => ({}));
