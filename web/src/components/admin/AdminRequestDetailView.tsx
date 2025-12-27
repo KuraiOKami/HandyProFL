@@ -168,7 +168,7 @@ export default function AdminRequestDetailView({ request, client, otherRequests,
   const [localRequest, setLocalRequest] = useState<RequestDetail>(request);
   const [localJob, setLocalJob] = useState<JobAssignment | null>(jobAssignment ?? null);
   const [dateInput, setDateInput] = useState(localRequest.preferred_date ?? "");
-  const [timeInput, setTimeInput] = useState(localRequest.preferred_time ?? "");
+  const [timeInput, setTimeInput] = useState(formatTime(localRequest.preferred_time) || "");
   const [durationInput, setDurationInput] = useState(
     localRequest.estimated_minutes != null ? String(localRequest.estimated_minutes) : "",
   );

@@ -5,6 +5,7 @@ import { useRouter } from 'next/navigation';
 import Image from 'next/image';
 import Link from 'next/link';
 import { getSupabaseClient } from '@/lib/supabaseClient';
+import { formatTime } from '@/lib/formatting';
 
 type Booking = {
   id: string;
@@ -155,7 +156,7 @@ export default function BookingDetailView({ booking, agentProfile, jobAssignment
 
   const [showRescheduleModal, setShowRescheduleModal] = useState(false);
   const [newDate, setNewDate] = useState(booking.preferredDate || '');
-  const [newTime, setNewTime] = useState(booking.preferredTime || '');
+  const [newTime, setNewTime] = useState(formatTime(booking.preferredTime) || '');
   const [rescheduling, setRescheduling] = useState(false);
   const cancelFeeCents = computeCancellationFee(booking.preferredTime, booking.preferredDate);
   const refundCents =
@@ -296,7 +297,7 @@ export default function BookingDetailView({ booking, agentProfile, jobAssignment
               </div>
               <div>
                 <p className="text-sm text-slate-500">Preferred Time</p>
-                <p className="font-medium text-slate-900">{booking.preferredTime || 'Flexible'}</p>
+                <p className="font-medium text-slate-900">{formatTime(booking.preferredTime) || 'Flexible'}</p>
               </div>
             </div>
 
@@ -654,7 +655,7 @@ export default function BookingDetailView({ booking, agentProfile, jobAssignment
                 onClick={() => {
                   setShowRescheduleModal(false);
                   setNewDate(booking.preferredDate || '');
-                  setNewTime(booking.preferredTime || '');
+                  setNewTime(formatTime(booking.preferredTime) || '');
                 }}
                 className="flex-1 rounded-lg border border-slate-300 px-4 py-2 text-sm font-medium text-slate-700 hover:bg-slate-50"
               >
