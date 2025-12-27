@@ -8,6 +8,7 @@ type Service = {
   id: string;
   name: string | null;
   category: string | null;
+  general_skill?: string | null;
   icon: string | null;
   base_minutes: number | null;
   price_cents: number | null;
@@ -48,6 +49,7 @@ export default function AdminServicesContent() {
     id: string;
     name: string;
     category: string;
+    general_skill: string;
     icon: string;
     base_minutes: number;
     price_cents: number;
@@ -68,7 +70,7 @@ export default function AdminServicesContent() {
 
     const { data, error: fetchError } = await supabase
       .from('service_catalog')
-      .select('id, name, category, icon, base_minutes, price_cents, is_active, display_order')
+      .select('id, name, category, general_skill, icon, base_minutes, price_cents, is_active, display_order')
       .order('display_order', { ascending: true })
       .order('name', { ascending: true });
 
@@ -107,6 +109,7 @@ export default function AdminServicesContent() {
         id: suggestion.suggested_name.toLowerCase().replace(/[^a-z0-9]+/g, '_').replace(/^_|_$/g, ''),
         name: suggestion.suggested_name,
         category: suggestion.suggested_category || 'general',
+        general_skill: suggestion.suggested_category || 'general',
         icon: '🔧',
         base_minutes: 60,
         price_cents: 9900,
@@ -427,6 +430,18 @@ export default function AdminServicesContent() {
                   />
                 </div>
                 <div>
+                  <label className="block text-sm font-medium text-slate-700">General Skill</label>
+                  <input
+                    type="text"
+                    value={approveData.general_skill}
+                    onChange={(e) => setApproveData({ ...approveData, general_skill: e.target.value })}
+                    className="mt-1 w-full rounded-lg border border-slate-300 px-3 py-2 text-sm focus:border-indigo-500 focus:outline-none focus:ring-1 focus:ring-indigo-500"
+                  />
+                </div>
+              </div>
+
+              <div className="grid grid-cols-2 gap-4">
+                <div>
                   <label className="block text-sm font-medium text-slate-700">Icon</label>
                   <input
                     type="text"
@@ -435,9 +450,6 @@ export default function AdminServicesContent() {
                     className="mt-1 w-full rounded-lg border border-slate-300 px-3 py-2 text-sm focus:border-indigo-500 focus:outline-none focus:ring-1 focus:ring-indigo-500"
                   />
                 </div>
-              </div>
-
-              <div className="grid grid-cols-2 gap-4">
                 <div>
                   <label className="block text-sm font-medium text-slate-700">Base Minutes</label>
                   <input

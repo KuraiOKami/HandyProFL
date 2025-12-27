@@ -6,6 +6,7 @@ type Service = {
   id: string;
   name: string | null;
   category: string | null;
+  general_skill?: string | null;
   icon: string | null;
   base_minutes: number | null;
   price_cents?: number | null;
@@ -21,6 +22,7 @@ export default function AdminServicesTable({ initial }: { initial: Service[] }) 
     id: '',
     name: '',
     category: 'general',
+    general_skill: 'general',
     icon: '🔧',
     base_minutes: 60,
     price_cents: null,
@@ -72,6 +74,7 @@ export default function AdminServicesTable({ initial }: { initial: Service[] }) 
       id: '',
       name: '',
       category: 'general',
+      general_skill: 'general',
       icon: '🔧',
       base_minutes: 60,
       price_cents: null,
@@ -160,6 +163,16 @@ export default function AdminServicesTable({ initial }: { initial: Service[] }) 
                 placeholder="e.g., outdoor"
                 value={newService.category ?? ''}
                 onChange={(e) => setNewService((p) => ({ ...p, category: e.target.value }))}
+                className="mt-1 w-full rounded-lg border border-slate-300 px-3 py-2 text-sm focus:border-indigo-500 focus:outline-none focus:ring-1 focus:ring-indigo-500"
+              />
+            </div>
+            <div>
+              <label className="block text-sm font-medium text-slate-700">General Skill</label>
+              <input
+                type="text"
+                placeholder="e.g., plumbing"
+                value={newService.general_skill ?? ''}
+                onChange={(e) => setNewService((p) => ({ ...p, general_skill: e.target.value }))}
                 className="mt-1 w-full rounded-lg border border-slate-300 px-3 py-2 text-sm focus:border-indigo-500 focus:outline-none focus:ring-1 focus:ring-indigo-500"
               />
             </div>
@@ -264,6 +277,18 @@ export default function AdminServicesTable({ initial }: { initial: Service[] }) 
                       )}
                     </div>
                     <p className="text-xs font-mono text-slate-400">{svc.id}</p>
+                    <input
+                      type="text"
+                      defaultValue={svc.general_skill ?? ''}
+                      onBlur={(e) => {
+                        if (e.target.value !== svc.general_skill) {
+                          updateService(svc.id, { general_skill: e.target.value });
+                        }
+                      }}
+                      disabled={savingId === svc.id}
+                      placeholder="General skill"
+                      className="mt-2 w-full max-w-xs rounded border border-slate-200 px-2 py-1 text-xs text-slate-600 focus:border-indigo-500 focus:outline-none"
+                    />
                   </div>
 
                   {/* Minutes */}

@@ -1071,6 +1071,7 @@ CREATE TABLE IF NOT EXISTS service_catalog (
   id TEXT PRIMARY KEY,  -- e.g., 'tv_mount', 'plumbing'
   name TEXT NOT NULL,
   category TEXT NOT NULL DEFAULT 'general',
+  general_skill TEXT NOT NULL DEFAULT 'general',
   description TEXT,
   icon TEXT DEFAULT '🔧',
   base_minutes INTEGER DEFAULT 60,
@@ -1092,6 +1093,7 @@ ALTER TABLE service_catalog
   ADD COLUMN IF NOT EXISTS icon TEXT DEFAULT '🔧',
   ADD COLUMN IF NOT EXISTS is_active BOOLEAN DEFAULT true,
   ADD COLUMN IF NOT EXISTS display_order INTEGER DEFAULT 0,
+  ADD COLUMN IF NOT EXISTS general_skill TEXT DEFAULT 'general',
   ADD COLUMN IF NOT EXISTS suggested_by UUID REFERENCES profiles(id) ON DELETE SET NULL,
   ADD COLUMN IF NOT EXISTS suggested_at TIMESTAMPTZ,
   ADD COLUMN IF NOT EXISTS approved_by UUID REFERENCES profiles(id) ON DELETE SET NULL,
@@ -1100,21 +1102,22 @@ ALTER TABLE service_catalog
   ADD COLUMN IF NOT EXISTS updated_at TIMESTAMPTZ DEFAULT NOW();
 
 -- Seed default services if empty
-INSERT INTO service_catalog (id, name, category, description, icon, base_minutes, price_cents, display_order, is_active)
+INSERT INTO service_catalog (id, name, category, general_skill, description, icon, base_minutes, price_cents, display_order, is_active)
 VALUES
-  ('tv_mount', 'TV Mounting', 'Installation', 'Mount TV, hide cables, secure to studs/brick', '📺', 60, 9900, 1, true),
-  ('assembly', 'Furniture Assembly', 'Assembly', 'Beds, dressers, desks, patio sets, and more', '🪑', 60, 7900, 2, true),
-  ('electrical', 'Electrical Work', 'Repairs', 'Outlets, switches, fixtures, ceiling fans', '💡', 60, 8900, 3, true),
-  ('plumbing', 'Plumbing', 'Repairs', 'Faucets, toilets, garbage disposals, minor repairs', '🔧', 60, 9900, 4, true),
-  ('smart_home', 'Smart Home Setup', 'Installation', 'Thermostats, doorbells, cameras, smart locks', '🏠', 45, 6900, 5, true),
-  ('tech', 'Tech Support', 'Technology', 'WiFi setup, device configuration, troubleshooting', '💻', 30, 4900, 6, true),
-  ('doors_hardware', 'Doors & Hardware', 'Installation', 'Door handles, locks, hinges, weather stripping', '🚪', 45, 5900, 7, true),
-  ('exterior', 'Exterior Work', 'Outdoor', 'Pressure washing, gutter cleaning, minor repairs', '🏡', 90, 12900, 8, true),
-  ('repairs', 'General Repairs', 'Repairs', 'Drywall, painting touch-ups, caulking, misc fixes', '🔨', 60, 7900, 9, true),
-  ('punch', 'Punch List', 'General', 'Multiple small tasks bundled together', '📋', 120, 14900, 10, true)
+  ('tv_mount', 'TV Mounting', 'Installation', 'tv_mount', 'Mount TV, hide cables, secure to studs/brick', '📺', 60, 9900, 1, true),
+  ('assembly', 'Furniture Assembly', 'Assembly', 'assembly', 'Beds, dressers, desks, patio sets, and more', '🪑', 60, 7900, 2, true),
+  ('electrical', 'Electrical Work', 'Repairs', 'electrical', 'Outlets, switches, fixtures, ceiling fans', '💡', 60, 8900, 3, true),
+  ('plumbing', 'Plumbing', 'Repairs', 'plumbing', 'Faucets, toilets, garbage disposals, minor repairs', '🔧', 60, 9900, 4, true),
+  ('smart_home', 'Smart Home Setup', 'Installation', 'smart_home', 'Thermostats, doorbells, cameras, smart locks', '🏠', 45, 6900, 5, true),
+  ('tech', 'Tech Support', 'Technology', 'tech', 'WiFi setup, device configuration, troubleshooting', '💻', 30, 4900, 6, true),
+  ('doors_hardware', 'Doors & Hardware', 'Installation', 'doors_hardware', 'Door handles, locks, hinges, weather stripping', '🚪', 45, 5900, 7, true),
+  ('exterior', 'Exterior Work', 'Outdoor', 'exterior', 'Pressure washing, gutter cleaning, minor repairs', '🏡', 90, 12900, 8, true),
+  ('repairs', 'General Repairs', 'Repairs', 'repairs', 'Drywall, painting touch-ups, caulking, misc fixes', '🔨', 60, 7900, 9, true),
+  ('punch', 'Punch List', 'General', 'general', 'Multiple small tasks bundled together', '📋', 120, 14900, 10, true)
 ON CONFLICT (id) DO UPDATE SET
   name = EXCLUDED.name,
   category = EXCLUDED.category,
+  general_skill = EXCLUDED.general_skill,
   description = EXCLUDED.description,
   icon = EXCLUDED.icon,
   base_minutes = EXCLUDED.base_minutes,

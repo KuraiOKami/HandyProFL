@@ -140,6 +140,7 @@ export async function POST(req: NextRequest) {
         id: serviceId,
         name: service_data?.name || suggestion.suggested_name,
         category: service_data?.category || suggestion.suggested_category || "general",
+        general_skill: service_data?.general_skill || service_data?.category || suggestion.suggested_category || "general",
         description: service_data?.description || suggestion.description || null,
         icon: service_data?.icon || "🔧",
         base_minutes: service_data?.base_minutes || 60,

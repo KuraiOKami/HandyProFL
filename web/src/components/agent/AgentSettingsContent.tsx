@@ -1,6 +1,6 @@
 'use client';
 
-import { useEffect, useRef, useState } from 'react';
+import { useEffect, useMemo, useRef, useState } from 'react';
 import { useThemePreference } from '@/hooks/useThemePreference';
 import { loadConnectAndInitialize } from '@stripe/connect-js';
 import WalletSettings from '@/components/WalletSettings';
@@ -28,9 +28,28 @@ type ServiceCatalogItem = {
   id: string;
   name: string;
   category: string;
+  general_skill?: string | null;
   description: string;
   icon: string;
 };
+
+const GENERAL_SKILL_META: Record<string, { label: string; icon: string }> = {
+  assembly: { label: 'Furniture Assembly', icon: '🪑' },
+  tv_mount: { label: 'TV Mounting', icon: '📺' },
+  electrical: { label: 'Electrical & Lighting', icon: '💡' },
+  smart_home: { label: 'Smart Home', icon: '🏠' },
+  plumbing: { label: 'Plumbing', icon: '🔧' },
+  doors_hardware: { label: 'Doors & Hardware', icon: '🚪' },
+  repairs: { label: 'Repairs & Patching', icon: '🔨' },
+  exterior: { label: 'Exterior Work', icon: '🏡' },
+  tech: { label: 'Tech & Networking', icon: '📡' },
+  general: { label: 'General Handyman', icon: '🧰' },
+};
+
+const formatSkillLabel = (value: string) =>
+  value
+    .replace(/_/g, ' ')
+    .replace(/\b\w/g, (c) => c.toUpperCase());
 
 export default function AgentSettingsContent() {
   const [profile, setProfile] = useState<AgentProfile | null>(null);
@@ -71,6 +90,21 @@ export default function AgentSettingsContent() {
   const [submittingSuggestion, setSubmittingSuggestion] = useState(false);
   const [suggestionError, setSuggestionError] = useState<string | null>(null);
   const [suggestionSuccess, setSuggestionSuccess] = useState(false);
+
+  const groupedSkills = useMemo(() => {
+    return serviceCatalog.reduce<Record<string, ServiceCatalogItem[]>>((acc, service) => {
+      const key = (service.general_skill || service.category || 'general').toLowerCase();
+      if (!acc[key]) acc[key] = [];
+      acc[key].push(service);
+      return acc;
+    }, {});
+  }, [serviceCatalog]);
+
+  const skillGroups = useMemo(
+    () =>
+      Object.entries(groupedSkills).sort(([a], [b]) => a.localeCompare(b)),
+    [groupedSkills]
+  );
 
   useEffect(() => {
     loadProfile();
@@ -211,10 +245,16 @@ export default function AgentSettingsContent() {
     }
   };
 
-  const toggleSkill = (skillId: string) => {
-    setSkills((prev) =>
-      prev.includes(skillId) ? prev.filter((s) => s !== skillId) : [...prev, skillId]
-    );
+  const toggleSkillGroup = (serviceIds: string[]) => {
+    setSkills((prev) => {
+      const allSelected = serviceIds.every((id) => prev.includes(id));
+      if (allSelected) {
+        return prev.filter((id) => !serviceIds.includes(id));
+      }
+      const next = new Set(prev);
+      serviceIds.forEach((id) => next.add(id));
+      return Array.from(next);
+    });
   };
 
   const handleGetLocation = () => {
@@ -480,24 +520,46 @@ export default function AgentSettingsContent() {
       {/* Skills */}
       <div className="rounded-xl border border-slate-200 bg-white p-5 shadow-sm">
         <h3 className="text-lg font-semibold text-slate-900">Skills & Services</h3>
-        <p className="text-sm text-slate-500">Select the services you can provide</p>
+        <p className="text-sm text-slate-500">Select the skill groups you can provide</p>
 
         <div className="mt-4 grid gap-2 sm:grid-cols-2 lg:grid-cols-3">
-          {serviceCatalog.map((service) => (
-            <button
-              key={service.id}
-              type="button"
-              onClick={() => toggleSkill(service.id)}
-              className={`rounded-lg border px-4 py-3 text-left text-sm font-medium transition ${
-                skills.includes(service.id)
-                  ? 'border-emerald-500 bg-emerald-50 text-emerald-700'
-                  : 'border-slate-200 text-slate-700 hover:border-slate-300 hover:bg-slate-50'
-              }`}
-            >
-              <span className="mr-2">{service.icon}</span>
-              {skills.includes(service.id) ? '✓ ' : ''}{service.name}
-            </button>
-          ))}
+          {skillGroups.map(([skillKey, services]) => {
+            const serviceIds = services.map((service) => service.id);
+            const selectedCount = serviceIds.filter((id) => skills.includes(id)).length;
+            const isSelected = selectedCount === serviceIds.length && serviceIds.length > 0;
+            const isPartial = selectedCount > 0 && !isSelected;
+            const meta = GENERAL_SKILL_META[skillKey] || {
+              label: formatSkillLabel(skillKey),
+              icon: services[0]?.icon || '🧰',
+            };
+
+            return (
+              <button
+                key={skillKey}
+                type="button"
+                onClick={() => toggleSkillGroup(serviceIds)}
+                className={`rounded-lg border px-4 py-3 text-left text-sm font-medium transition ${
+                  isSelected
+                    ? 'border-emerald-500 bg-emerald-50 text-emerald-700'
+                    : isPartial
+                      ? 'border-amber-200 bg-amber-50 text-amber-800'
+                      : 'border-slate-200 text-slate-700 hover:border-slate-300 hover:bg-slate-50'
+                }`}
+              >
+                <div className="flex items-center gap-3">
+                  <span className="text-lg">{meta.icon}</span>
+                  <div className="min-w-0 flex-1">
+                    <p className="text-sm font-medium text-slate-900">{meta.label}</p>
+                    <p className="text-xs text-slate-500">
+                      {selectedCount}/{serviceIds.length} services selected
+                    </p>
+                  </div>
+                  {isSelected && <span className="text-xs font-semibold">✓</span>}
+                  {isPartial && <span className="text-xs font-semibold">Partial</span>}
+                </div>
+              </button>
+            );
+          })}
         </div>
 
         {serviceCatalog.length === 0 && (
