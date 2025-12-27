@@ -83,13 +83,21 @@ async function getApprovedAgentSession() {
   const adminSupabase = createServiceRoleClient() ?? supabase;
   const { data: agentProfile } = await adminSupabase
     .from("agent_profiles")
-    .select("status, skills, service_area_miles, tier")
+    .select("status, service_area_miles, tier")
     .eq("id", session.user.id)
     .single();
 
   if (agentProfile?.status !== "approved") {
     return { error: errorResponse("auth.forbidden", "Agent approval required to view gigs", 403) };
   }
+
+  // Get agent's skills from normalized agent_skills table
+  const { data: agentSkillsData } = await adminSupabase
+    .from("agent_skills")
+    .select("service_id")
+    .eq("agent_id", session.user.id);
+
+  const agentSkills = agentSkillsData?.map((s) => s.service_id) || [];
 
   // Get agent's location from profiles table
   const { data: agentUserProfile } = await adminSupabase
@@ -102,7 +110,7 @@ async function getApprovedAgentSession() {
     supabase,
     session,
     adminSupabase,
-    agentSkills: (agentProfile.skills as string[]) || [],
+    agentSkills,
     serviceAreaMiles: agentProfile.service_area_miles || 25,
     agentTier: (agentProfile.tier as string) || "bronze",
     agentLocation: {

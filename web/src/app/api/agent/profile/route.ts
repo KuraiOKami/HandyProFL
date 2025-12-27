@@ -56,11 +56,22 @@ export async function GET() {
     return NextResponse.json({ error: agentError.message }, { status: 500 });
   }
 
+  // Get skills from agent_skills table (new normalized structure)
+  const { data: agentSkills } = await adminSupabase
+    .from("agent_skills")
+    .select("service_id, proficiency_level, years_experience, certified")
+    .eq("agent_id", session.user.id);
+
+  // Convert to array of service IDs for backward compatibility
+  const skills = agentSkills?.map((s) => s.service_id) || [];
+
   return NextResponse.json({
     profile: {
       id: session.user.id,
       ...profile,
       ...agentProfile,
+      skills, // Override with normalized skills
+      agent_skills: agentSkills || [], // Full skill details
     },
   });
 }
@@ -98,11 +109,10 @@ export async function PUT(req: NextRequest) {
     }
   }
 
-  // Update agent profile
-  if (bio !== undefined || skills !== undefined || service_area_miles !== undefined || auto_booking_enabled !== undefined) {
+  // Update agent profile (excluding skills - handled separately)
+  if (bio !== undefined || service_area_miles !== undefined || auto_booking_enabled !== undefined) {
     const agentUpdate: Record<string, unknown> = {};
     if (bio !== undefined) agentUpdate.bio = bio;
-    if (skills !== undefined) agentUpdate.skills = skills;
     if (service_area_miles !== undefined) agentUpdate.service_area_miles = service_area_miles;
     if (auto_booking_enabled !== undefined) agentUpdate.auto_booking_enabled = auto_booking_enabled;
 
@@ -114,6 +124,37 @@ export async function PUT(req: NextRequest) {
     if (agentError) {
       return NextResponse.json({ error: agentError.message }, { status: 500 });
     }
+  }
+
+  // Update skills using agent_skills join table
+  if (skills !== undefined && Array.isArray(skills)) {
+    // Delete existing skills
+    await adminSupabase
+      .from("agent_skills")
+      .delete()
+      .eq("agent_id", session.user.id);
+
+    // Insert new skills
+    if (skills.length > 0) {
+      const skillRows = skills.map((serviceId: string) => ({
+        agent_id: session.user.id,
+        service_id: serviceId,
+      }));
+
+      const { error: skillsError } = await adminSupabase
+        .from("agent_skills")
+        .insert(skillRows);
+
+      if (skillsError) {
+        return NextResponse.json({ error: skillsError.message }, { status: 500 });
+      }
+    }
+
+    // Also update the legacy skills array for backward compatibility
+    await adminSupabase
+      .from("agent_profiles")
+      .update({ skills })
+      .eq("id", session.user.id);
   }
 
   return NextResponse.json({ ok: true });

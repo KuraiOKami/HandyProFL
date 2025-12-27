@@ -1060,3 +1060,229 @@ SET tier = calculate_agent_tier(
 COMMENT ON FUNCTION calculate_agent_tier IS 'Calculate tier based on total jobs and rating';
 COMMENT ON FUNCTION get_tier_payout_percentage IS 'Get labor payout percentage for a tier';
 COMMENT ON FUNCTION update_agent_tier IS 'Auto-update agent tier when stats change';
+
+-- ============================================
+-- SERVICE CATALOG SYSTEM
+-- Robust service management with proper relationships
+-- ============================================
+
+-- Ensure service_catalog exists with proper structure
+CREATE TABLE IF NOT EXISTS service_catalog (
+  id TEXT PRIMARY KEY,  -- e.g., 'tv_mount', 'plumbing'
+  name TEXT NOT NULL,
+  category TEXT NOT NULL DEFAULT 'general',
+  description TEXT,
+  icon TEXT DEFAULT '🔧',
+  base_minutes INTEGER DEFAULT 60,
+  price_cents INTEGER DEFAULT 0,
+  is_active BOOLEAN DEFAULT true,
+  display_order INTEGER DEFAULT 0,
+  -- For agent-suggested services
+  suggested_by UUID REFERENCES profiles(id) ON DELETE SET NULL,
+  suggested_at TIMESTAMPTZ,
+  approved_by UUID REFERENCES profiles(id) ON DELETE SET NULL,
+  approved_at TIMESTAMPTZ,
+  -- Timestamps
+  created_at TIMESTAMPTZ DEFAULT NOW(),
+  updated_at TIMESTAMPTZ DEFAULT NOW()
+);
+
+-- Add new columns if table already exists
+ALTER TABLE service_catalog
+  ADD COLUMN IF NOT EXISTS icon TEXT DEFAULT '🔧',
+  ADD COLUMN IF NOT EXISTS is_active BOOLEAN DEFAULT true,
+  ADD COLUMN IF NOT EXISTS display_order INTEGER DEFAULT 0,
+  ADD COLUMN IF NOT EXISTS suggested_by UUID REFERENCES profiles(id) ON DELETE SET NULL,
+  ADD COLUMN IF NOT EXISTS suggested_at TIMESTAMPTZ,
+  ADD COLUMN IF NOT EXISTS approved_by UUID REFERENCES profiles(id) ON DELETE SET NULL,
+  ADD COLUMN IF NOT EXISTS approved_at TIMESTAMPTZ,
+  ADD COLUMN IF NOT EXISTS created_at TIMESTAMPTZ DEFAULT NOW(),
+  ADD COLUMN IF NOT EXISTS updated_at TIMESTAMPTZ DEFAULT NOW();
+
+-- Seed default services if empty
+INSERT INTO service_catalog (id, name, category, description, icon, base_minutes, price_cents, display_order, is_active)
+VALUES
+  ('tv_mount', 'TV Mounting', 'Installation', 'Mount TV, hide cables, secure to studs/brick', '📺', 60, 9900, 1, true),
+  ('assembly', 'Furniture Assembly', 'Assembly', 'Beds, dressers, desks, patio sets, and more', '🪑', 60, 7900, 2, true),
+  ('electrical', 'Electrical Work', 'Repairs', 'Outlets, switches, fixtures, ceiling fans', '💡', 60, 8900, 3, true),
+  ('plumbing', 'Plumbing', 'Repairs', 'Faucets, toilets, garbage disposals, minor repairs', '🔧', 60, 9900, 4, true),
+  ('smart_home', 'Smart Home Setup', 'Installation', 'Thermostats, doorbells, cameras, smart locks', '🏠', 45, 6900, 5, true),
+  ('tech', 'Tech Support', 'Technology', 'WiFi setup, device configuration, troubleshooting', '💻', 30, 4900, 6, true),
+  ('doors_hardware', 'Doors & Hardware', 'Installation', 'Door handles, locks, hinges, weather stripping', '🚪', 45, 5900, 7, true),
+  ('exterior', 'Exterior Work', 'Outdoor', 'Pressure washing, gutter cleaning, minor repairs', '🏡', 90, 12900, 8, true),
+  ('repairs', 'General Repairs', 'Repairs', 'Drywall, painting touch-ups, caulking, misc fixes', '🔨', 60, 7900, 9, true),
+  ('punch', 'Punch List', 'General', 'Multiple small tasks bundled together', '📋', 120, 14900, 10, true)
+ON CONFLICT (id) DO UPDATE SET
+  name = EXCLUDED.name,
+  category = EXCLUDED.category,
+  description = EXCLUDED.description,
+  icon = EXCLUDED.icon,
+  base_minutes = EXCLUDED.base_minutes,
+  display_order = EXCLUDED.display_order,
+  is_active = COALESCE(service_catalog.is_active, EXCLUDED.is_active);
+
+-- Create agent_skills join table (replaces skills array in agent_profiles)
+CREATE TABLE IF NOT EXISTS agent_skills (
+  id UUID PRIMARY KEY DEFAULT gen_random_uuid(),
+  agent_id UUID NOT NULL REFERENCES agent_profiles(id) ON DELETE CASCADE,
+  service_id TEXT NOT NULL REFERENCES service_catalog(id) ON DELETE CASCADE,
+  proficiency_level TEXT DEFAULT 'standard' CHECK (proficiency_level IN ('learning', 'standard', 'expert')),
+  years_experience INTEGER DEFAULT 0,
+  certified BOOLEAN DEFAULT false,
+  certification_details TEXT,
+  created_at TIMESTAMPTZ DEFAULT NOW(),
+  UNIQUE(agent_id, service_id)
+);
+
+-- Index for fast lookups
+CREATE INDEX IF NOT EXISTS idx_agent_skills_agent ON agent_skills(agent_id);
+CREATE INDEX IF NOT EXISTS idx_agent_skills_service ON agent_skills(service_id);
+
+-- Migrate existing skills from agent_profiles.skills array to agent_skills table
+-- This handles the JSON array format ["tv_mount", "plumbing", ...]
+DO $$
+DECLARE
+  agent_rec RECORD;
+  skill_id TEXT;
+BEGIN
+  FOR agent_rec IN
+    SELECT id, skills FROM agent_profiles WHERE skills IS NOT NULL AND skills != '[]'::jsonb
+  LOOP
+    FOR skill_id IN SELECT jsonb_array_elements_text(agent_rec.skills)
+    LOOP
+      INSERT INTO agent_skills (agent_id, service_id)
+      VALUES (agent_rec.id, skill_id)
+      ON CONFLICT (agent_id, service_id) DO NOTHING;
+    END LOOP;
+  END LOOP;
+END $$;
+
+-- Fix service_type values in service_requests to use IDs
+UPDATE service_requests SET service_type = 'tv_mount' WHERE service_type ILIKE '%tv%mount%' OR service_type = 'TV Mounting';
+UPDATE service_requests SET service_type = 'assembly' WHERE service_type ILIKE '%assembl%' OR service_type = 'Furniture Assembly';
+UPDATE service_requests SET service_type = 'electrical' WHERE service_type ILIKE '%electric%';
+UPDATE service_requests SET service_type = 'plumbing' WHERE service_type ILIKE '%plumb%';
+UPDATE service_requests SET service_type = 'smart_home' WHERE service_type ILIKE '%smart%';
+UPDATE service_requests SET service_type = 'tech' WHERE service_type ILIKE '%tech%';
+UPDATE service_requests SET service_type = 'doors_hardware' WHERE service_type ILIKE '%door%' OR service_type ILIKE '%hardware%';
+UPDATE service_requests SET service_type = 'exterior' WHERE service_type ILIKE '%exterior%';
+UPDATE service_requests SET service_type = 'repairs' WHERE service_type ILIKE '%repair%';
+UPDATE service_requests SET service_type = 'punch' WHERE service_type ILIKE '%punch%';
+
+-- Add FK constraint on service_requests.service_type
+-- First ensure all values are valid
+ALTER TABLE service_requests
+  DROP CONSTRAINT IF EXISTS fk_service_type;
+
+-- Add the FK (will fail if there are orphaned values - clean those first)
+DO $$
+BEGIN
+  ALTER TABLE service_requests
+    ADD CONSTRAINT fk_service_type
+    FOREIGN KEY (service_type) REFERENCES service_catalog(id);
+EXCEPTION
+  WHEN foreign_key_violation THEN
+    RAISE NOTICE 'FK constraint failed - orphaned service_type values exist. Run cleanup first.';
+END $$;
+
+-- RLS Policies for service_catalog
+ALTER TABLE service_catalog ENABLE ROW LEVEL SECURITY;
+
+-- Everyone can read active services
+CREATE POLICY "Anyone can view active services"
+  ON service_catalog FOR SELECT
+  USING (is_active = true OR EXISTS (
+    SELECT 1 FROM profiles WHERE id = auth.uid() AND role = 'admin'
+  ));
+
+-- Only admins can modify services
+CREATE POLICY "Admins can manage services"
+  ON service_catalog FOR ALL
+  USING (EXISTS (
+    SELECT 1 FROM profiles WHERE id = auth.uid() AND role = 'admin'
+  ));
+
+-- RLS Policies for agent_skills
+ALTER TABLE agent_skills ENABLE ROW LEVEL SECURITY;
+
+-- Agents can manage their own skills
+CREATE POLICY "Agents can view their own skills"
+  ON agent_skills FOR SELECT
+  USING (agent_id = auth.uid() OR EXISTS (
+    SELECT 1 FROM profiles WHERE id = auth.uid() AND role = 'admin'
+  ));
+
+CREATE POLICY "Agents can manage their own skills"
+  ON agent_skills FOR ALL
+  USING (agent_id = auth.uid());
+
+-- Admins can manage all skills
+CREATE POLICY "Admins can manage all skills"
+  ON agent_skills FOR ALL
+  USING (EXISTS (
+    SELECT 1 FROM profiles WHERE id = auth.uid() AND role = 'admin'
+  ));
+
+-- Create a view for agent skills with service details
+CREATE OR REPLACE VIEW agent_skills_view AS
+SELECT
+  ask.id,
+  ask.agent_id,
+  ask.service_id,
+  ask.proficiency_level,
+  ask.years_experience,
+  ask.certified,
+  sc.name AS service_name,
+  sc.category AS service_category,
+  sc.icon AS service_icon,
+  sc.is_active AS service_active
+FROM agent_skills ask
+JOIN service_catalog sc ON sc.id = ask.service_id
+WHERE sc.is_active = true;
+
+-- Function to get agent's services as array (for backward compatibility)
+CREATE OR REPLACE FUNCTION get_agent_skills_array(p_agent_id UUID)
+RETURNS TEXT[] AS $$
+  SELECT COALESCE(array_agg(service_id), ARRAY[]::TEXT[])
+  FROM agent_skills
+  WHERE agent_id = p_agent_id;
+$$ LANGUAGE sql STABLE;
+
+-- Table for service suggestions from agents
+CREATE TABLE IF NOT EXISTS service_suggestions (
+  id UUID PRIMARY KEY DEFAULT gen_random_uuid(),
+  agent_id UUID NOT NULL REFERENCES agent_profiles(id) ON DELETE CASCADE,
+  suggested_name TEXT NOT NULL,
+  suggested_category TEXT,
+  description TEXT,
+  why_needed TEXT,
+  status TEXT DEFAULT 'pending' CHECK (status IN ('pending', 'approved', 'rejected', 'duplicate')),
+  reviewed_by UUID REFERENCES profiles(id) ON DELETE SET NULL,
+  reviewed_at TIMESTAMPTZ,
+  review_notes TEXT,
+  created_service_id TEXT REFERENCES service_catalog(id) ON DELETE SET NULL,
+  created_at TIMESTAMPTZ DEFAULT NOW()
+);
+
+ALTER TABLE service_suggestions ENABLE ROW LEVEL SECURITY;
+
+CREATE POLICY "Agents can suggest services"
+  ON service_suggestions FOR INSERT
+  WITH CHECK (agent_id = auth.uid());
+
+CREATE POLICY "Agents can view their suggestions"
+  ON service_suggestions FOR SELECT
+  USING (agent_id = auth.uid() OR EXISTS (
+    SELECT 1 FROM profiles WHERE id = auth.uid() AND role = 'admin'
+  ));
+
+CREATE POLICY "Admins can manage suggestions"
+  ON service_suggestions FOR ALL
+  USING (EXISTS (
+    SELECT 1 FROM profiles WHERE id = auth.uid() AND role = 'admin'
+  ));
+
+COMMENT ON TABLE service_catalog IS 'Master list of all available services';
+COMMENT ON TABLE agent_skills IS 'Agent service capabilities with proficiency levels';
+COMMENT ON TABLE service_suggestions IS 'Agent-submitted service suggestions for admin review';
+COMMENT ON FUNCTION get_agent_skills_array IS 'Get agent skills as array for backward compatibility';

@@ -11,8 +11,9 @@ export async function GET() {
 
   const { data, error } = await client
     .from('service_catalog')
-    .select('id, name, category, description, base_minutes, price_cents')
-    .order('category', { ascending: true })
+    .select('id, name, category, description, icon, base_minutes, price_cents, is_active, display_order')
+    .eq('is_active', true)
+    .order('display_order', { ascending: true })
     .order('name', { ascending: true });
 
   if (error) {

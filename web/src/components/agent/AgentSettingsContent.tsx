@@ -24,17 +24,13 @@ type AgentProfile = {
   auto_booking_enabled: boolean;
 };
 
-const SKILL_OPTIONS = [
-  { id: 'assembly', label: 'Furniture Assembly' },
-  { id: 'tv_mount', label: 'TV Mounting' },
-  { id: 'electrical', label: 'Electrical & Lighting' },
-  { id: 'smart_home', label: 'Smart Home' },
-  { id: 'plumbing', label: 'Plumbing' },
-  { id: 'doors_hardware', label: 'Doors & Hardware' },
-  { id: 'repairs', label: 'Repairs & Patching' },
-  { id: 'exterior', label: 'Exterior Work' },
-  { id: 'tech', label: 'Tech & Networking' },
-];
+type ServiceCatalogItem = {
+  id: string;
+  name: string;
+  category: string;
+  description: string;
+  icon: string;
+};
 
 export default function AgentSettingsContent() {
   const [profile, setProfile] = useState<AgentProfile | null>(null);
@@ -49,6 +45,9 @@ export default function AgentSettingsContent() {
   const { theme, setTheme } = useThemePreference();
   const mountedComponentRef = useRef<(HTMLElement & { unmount?: () => void }) | null>(null);
   const embedContainerRef = useRef<HTMLDivElement | null>(null);
+
+  // Service catalog state
+  const [serviceCatalog, setServiceCatalog] = useState<ServiceCatalogItem[]>([]);
 
   // Form state
   const [firstName, setFirstName] = useState('');
@@ -65,7 +64,20 @@ export default function AgentSettingsContent() {
 
   useEffect(() => {
     loadProfile();
+    loadServiceCatalog();
   }, []);
+
+  const loadServiceCatalog = async () => {
+    try {
+      const res = await fetch('/api/catalog/services');
+      const data = await res.json();
+      if (res.ok && data.services) {
+        setServiceCatalog(data.services);
+      }
+    } catch (err) {
+      console.error('Failed to load service catalog:', err);
+    }
+  };
 
   useEffect(() => {
     loadPayoutStatus();
@@ -416,21 +428,26 @@ export default function AgentSettingsContent() {
         <p className="text-sm text-slate-500">Select the services you can provide</p>
 
         <div className="mt-4 grid gap-2 sm:grid-cols-2 lg:grid-cols-3">
-          {SKILL_OPTIONS.map((skill) => (
+          {serviceCatalog.map((service) => (
             <button
-              key={skill.id}
+              key={service.id}
               type="button"
-              onClick={() => toggleSkill(skill.id)}
+              onClick={() => toggleSkill(service.id)}
               className={`rounded-lg border px-4 py-3 text-left text-sm font-medium transition ${
-                skills.includes(skill.id)
+                skills.includes(service.id)
                   ? 'border-emerald-500 bg-emerald-50 text-emerald-700'
                   : 'border-slate-200 text-slate-700 hover:border-slate-300 hover:bg-slate-50'
               }`}
             >
-              {skills.includes(skill.id) ? '✓ ' : ''}{skill.label}
+              <span className="mr-2">{service.icon}</span>
+              {skills.includes(service.id) ? '✓ ' : ''}{service.name}
             </button>
           ))}
         </div>
+
+        {serviceCatalog.length === 0 && (
+          <p className="mt-4 text-sm text-slate-500">Loading services...</p>
+        )}
       </div>
 
       {/* Service Area & Location */}
