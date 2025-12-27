@@ -81,7 +81,12 @@ function parseBookingDate(value: string) {
 
 function formatDate(dateStr: string | null): string {
   if (!dateStr) return 'Not scheduled';
-  const date = parseBookingDate(dateStr);
+  // If it's an ISO timestamp (contains 'T'), parse directly to get correct timezone
+  // Otherwise it's a plain date string like "2025-12-27"
+  const date = dateStr.includes('T')
+    ? new Date(dateStr)
+    : new Date(`${dateStr}T12:00:00`);
+  if (Number.isNaN(date.getTime())) return 'Not scheduled';
   return new Intl.DateTimeFormat('en-US', {
     weekday: 'long',
     month: 'long',
@@ -89,6 +94,18 @@ function formatDate(dateStr: string | null): string {
     year: 'numeric',
     timeZone: DISPLAY_TIME_ZONE,
   }).format(date);
+}
+
+/**
+ * Gets the best date string to display, preferring preferredTime (ISO timestamp)
+ * over preferredDate (plain date string) since the ISO timestamp has proper timezone info.
+ */
+function getDisplayDate(preferredTime: string | null, preferredDate: string | null): string | null {
+  // Prefer preferredTime since it's an ISO timestamp with timezone info
+  if (preferredTime && preferredTime.includes('T')) {
+    return preferredTime;
+  }
+  return preferredDate;
 }
 
 function formatShortDate(dateStr: string | null): string {
@@ -355,7 +372,7 @@ export default function BookingDetailView({ booking, agentProfile, jobAssignment
             <div className="grid gap-4 sm:grid-cols-2">
               <div>
                 <p className="text-sm text-slate-500">Scheduled Date</p>
-                <p className="font-medium text-slate-900">{formatDate(booking.preferredDate)}</p>
+                <p className="font-medium text-slate-900">{formatDate(getDisplayDate(booking.preferredTime, booking.preferredDate))}</p>
               </div>
               <div>
                 <p className="text-sm text-slate-500">Preferred Time</p>

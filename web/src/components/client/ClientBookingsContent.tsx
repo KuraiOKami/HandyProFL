@@ -58,7 +58,11 @@ function parseBookingDate(value: string) {
 
 function formatDate(dateStr: string | null): string {
   if (!dateStr) return 'Not scheduled';
-  const date = parseBookingDate(dateStr);
+  // If it's an ISO timestamp (contains 'T'), parse directly to get correct timezone
+  const date = dateStr.includes('T')
+    ? new Date(dateStr)
+    : new Date(`${dateStr}T12:00:00`);
+  if (Number.isNaN(date.getTime())) return 'Not scheduled';
   return new Intl.DateTimeFormat('en-US', {
     weekday: 'short',
     month: 'short',
@@ -66,6 +70,17 @@ function formatDate(dateStr: string | null): string {
     year: 'numeric',
     timeZone: DISPLAY_TIME_ZONE,
   }).format(date);
+}
+
+/**
+ * Gets the best date string to display, preferring preferred_time (ISO timestamp)
+ * over preferred_date (plain date string) since the ISO timestamp has proper timezone info.
+ */
+function getDisplayDate(preferredTime: string | null, preferredDate: string | null): string | null {
+  if (preferredTime && preferredTime.includes('T')) {
+    return preferredTime;
+  }
+  return preferredDate;
 }
 
 function formatShortDate(dateStr: string | null): string {
@@ -569,7 +584,7 @@ function BookingCard({ booking, onCancel }: BookingCardProps) {
       <div className="mt-4 grid gap-3 text-sm sm:grid-cols-2">
         <div>
           <p className="text-slate-500">Scheduled Date</p>
-          <p className="font-medium text-slate-900">{formatDate(booking.preferred_date)}</p>
+          <p className="font-medium text-slate-900">{formatDate(getDisplayDate(booking.preferred_time, booking.preferred_date))}</p>
           {booking.preferred_time && (
             <p className="text-slate-600">{formatTime(booking.preferred_time)}</p>
           )}
