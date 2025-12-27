@@ -87,6 +87,27 @@ function formatPrice(cents: number | null): string {
   return `$${(cents / 100).toFixed(2)}`;
 }
 
+function computeCancellationFee(preferredTime: string | null, preferredDate: string | null) {
+  let serviceDate: Date | null = null;
+
+  if (preferredTime) {
+    const d = new Date(preferredTime);
+    if (!Number.isNaN(d.getTime())) serviceDate = d;
+  }
+
+  if (!serviceDate && preferredDate) {
+    const d = new Date(`${preferredDate}T12:00:00`);
+    if (!Number.isNaN(d.getTime())) serviceDate = d;
+  }
+
+  if (!serviceDate) return 0;
+  const diffHours = (serviceDate.getTime() - Date.now()) / (1000 * 60 * 60);
+  if (diffHours <= 2) return 4000;
+  if (diffHours <= 8) return 2000;
+  if (diffHours <= 24) return 1000;
+  return 0;
+}
+
 export default function BookingDetailView({ booking, agentProfile, jobAssignment, proofPhotos }: Props) {
   const router = useRouter();
   const supabase = getSupabaseClient();
@@ -100,6 +121,11 @@ export default function BookingDetailView({ booking, agentProfile, jobAssignment
   const [newDate, setNewDate] = useState(booking.preferredDate || '');
   const [newTime, setNewTime] = useState(booking.preferredTime || '');
   const [rescheduling, setRescheduling] = useState(false);
+  const cancelFeeCents = computeCancellationFee(booking.preferredTime, booking.preferredDate);
+  const refundCents =
+    typeof booking.totalPriceCents === 'number'
+      ? Math.max(0, booking.totalPriceCents - cancelFeeCents)
+      : null;
 
   const statusConfig = STATUS_CONFIG[booking.status || 'pending'] || STATUS_CONFIG.pending;
   const isCancellable = !['completed', 'cancelled', 'in_progress', 'pending_verification'].includes(booking.status || '');
@@ -112,16 +138,16 @@ export default function BookingDetailView({ booking, agentProfile, jobAssignment
     setError(null);
 
     try {
-      const { error: updateError } = await supabase
-        .from('service_requests')
-        .update({
-          status: 'cancelled',
-          cancelled_at: new Date().toISOString(),
-          cancellation_reason: cancelReason || 'Cancelled by customer',
-        })
-        .eq('id', booking.id);
+      const res = await fetch(`/api/requests/${booking.id}/cancel`, {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ reason: cancelReason }),
+      });
 
-      if (updateError) throw updateError;
+      const data = await res.json().catch(() => ({}));
+      if (!res.ok) {
+        throw new Error(data.error || 'Failed to cancel booking');
+      }
 
       router.refresh();
       setShowCancelModal(false);
@@ -459,6 +485,14 @@ export default function BookingDetailView({ booking, agentProfile, jobAssignment
             {booking.cancellationReason && (
               <p className="mt-2 text-slate-700">{booking.cancellationReason}</p>
             )}
+            {typeof booking.cancellationFeeCents === 'number' && (
+              <p className="mt-2 text-sm text-rose-600">
+                Fee: {booking.cancellationFeeCents > 0 ? formatPrice(booking.cancellationFeeCents) : 'No fee'}
+                {typeof booking.totalPriceCents === 'number' && (
+                  <> · Refund: {formatPrice(Math.max(0, booking.totalPriceCents - booking.cancellationFeeCents))}</>
+                )}
+              </p>
+            )}
           </div>
         )}
 
@@ -493,6 +527,20 @@ export default function BookingDetailView({ booking, agentProfile, jobAssignment
             <p className="mt-2 text-sm text-slate-600">
               Are you sure you want to cancel this booking? This action cannot be undone.
             </p>
+            <div className="mt-3 rounded-lg border border-amber-200 bg-amber-50 p-3 text-xs text-amber-800">
+              <p>
+                Cancellation fee: {cancelFeeCents > 0 ? formatPrice(cancelFeeCents) : 'Free'}.
+                {refundCents !== null && (
+                  <> Refund: {formatPrice(refundCents)} to your original payment method.</>
+                )}
+              </p>
+              <ul className="mt-2 space-y-1 text-[11px] text-amber-700">
+                <li>• Within 2 hours of service: $40 fee</li>
+                <li>• 2-8 hours before service: $20 fee</li>
+                <li>• 8-24 hours before service: $10 fee</li>
+                <li>• More than 24 hours: free cancellation</li>
+              </ul>
+            </div>
             <div className="mt-4">
               <label className="block text-sm font-medium text-slate-700">
                 Reason for cancellation (optional)

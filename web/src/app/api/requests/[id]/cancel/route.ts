@@ -1,5 +1,6 @@
 import { NextRequest, NextResponse } from "next/server";
 import { createClient, createServiceRoleClient } from "@/utils/supabase/server";
+import { stripe } from "@/lib/stripe";
 
 type Params = { params: Promise<{ id: string }> };
 
@@ -42,7 +43,7 @@ export async function POST(req: NextRequest, { params }: Params) {
 
   const { data: requestRow, error: requestError } = await adminSupabase
     .from("service_requests")
-    .select("id, user_id, status, preferred_time, preferred_date")
+    .select("id, user_id, status, preferred_time, preferred_date, total_price_cents, payment_intent_id")
     .eq("id", (await params).id)
     .single();
 
@@ -90,9 +91,38 @@ export async function POST(req: NextRequest, { params }: Params) {
     .update({ status: "cancelled", cancellation_reason: reason ?? "Cancelled by user" })
     .eq("request_id", requestRow.id);
 
+  let refundAmountCents: number | null = null;
+  let refundStatus: string | null = null;
+
+  if (typeof requestRow.total_price_cents === "number" && requestRow.total_price_cents > 0) {
+    refundAmountCents = Math.max(0, requestRow.total_price_cents - feeCents);
+  }
+
+  if (!stripe) {
+    refundStatus = "not_configured";
+  } else if (!requestRow.payment_intent_id) {
+    refundStatus = "missing_payment_intent";
+  } else if (!refundAmountCents || refundAmountCents <= 0) {
+    refundStatus = "skipped_fee";
+  } else {
+    try {
+      const refund = await stripe.refunds.create({
+        payment_intent: requestRow.payment_intent_id,
+        amount: refundAmountCents,
+      });
+      refundStatus = refund.status || "succeeded";
+    } catch (err) {
+      const errorMessage = err instanceof Error ? err.message : "Refund failed";
+      console.error("Refund error:", errorMessage);
+      refundStatus = "failed";
+    }
+  }
+
   return NextResponse.json({
     status: "cancelled",
     fee_cents: feeCents,
     cancelled_at: cancelledAt,
+    refund_amount_cents: refundAmountCents,
+    refund_status: refundStatus,
   });
 }

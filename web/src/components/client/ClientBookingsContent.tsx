@@ -19,6 +19,7 @@ type Booking = {
   assigned_agent_id: string | null;
   cancelled_at: string | null;
   cancellation_reason: string | null;
+  cancellation_fee_cents?: number | null;
   agent_profile: {
     id: string;
     first_name: string | null;
@@ -63,6 +64,27 @@ function formatPrice(cents: number | null): string {
   return `$${(cents / 100).toFixed(2)}`;
 }
 
+function computeCancellationFee(preferredTime: string | null, preferredDate: string | null) {
+  let serviceDate: Date | null = null;
+
+  if (preferredTime) {
+    const d = new Date(preferredTime);
+    if (!Number.isNaN(d.getTime())) serviceDate = d;
+  }
+
+  if (!serviceDate && preferredDate) {
+    const d = new Date(`${preferredDate}T12:00:00`);
+    if (!Number.isNaN(d.getTime())) serviceDate = d;
+  }
+
+  if (!serviceDate) return 0;
+  const diffHours = (serviceDate.getTime() - Date.now()) / (1000 * 60 * 60);
+  if (diffHours <= 2) return 4000;
+  if (diffHours <= 8) return 2000;
+  if (diffHours <= 24) return 1000;
+  return 0;
+}
+
 type Props = {
   onNewRequest?: (service?: ServiceId) => void;
 };
@@ -101,7 +123,8 @@ export default function ClientBookingsContent({ onNewRequest }: Props) {
             total_price_cents,
             assigned_agent_id,
             cancelled_at,
-            cancellation_reason
+            cancellation_reason,
+            cancellation_fee_cents
           `)
           .eq('user_id', session.user.id)
           .order('created_at', { ascending: false });
@@ -183,23 +206,32 @@ export default function ClientBookingsContent({ onNewRequest }: Props) {
 
     setCancelling(true);
     try {
-      const { error: updateError } = await supabase
-        .from('service_requests')
-        .update({
-          status: 'cancelled',
-          cancelled_at: new Date().toISOString(),
-          cancellation_reason: cancelReason || 'Cancelled by customer',
-        })
-        .eq('id', selectedBooking.id)
-        .eq('user_id', session.user.id);
+      const res = await fetch(`/api/requests/${selectedBooking.id}/cancel`, {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ reason: cancelReason }),
+      });
 
-      if (updateError) throw updateError;
+      const data = await res.json().catch(() => ({}));
+      if (!res.ok) {
+        throw new Error(data.error || 'Failed to cancel booking');
+      }
 
-      // Update local state
+      const feeCents = typeof data.fee_cents === 'number'
+        ? data.fee_cents
+        : computeCancellationFee(selectedBooking.preferred_time, selectedBooking.preferred_date);
+      const cancelledAt = data.cancelled_at || new Date().toISOString();
+
       setBookings((prev) =>
         prev.map((b) =>
           b.id === selectedBooking.id
-            ? { ...b, status: 'cancelled', cancelled_at: new Date().toISOString(), cancellation_reason: cancelReason }
+            ? {
+                ...b,
+                status: 'cancelled',
+                cancelled_at: cancelledAt,
+                cancellation_reason: cancelReason || b.cancellation_reason || null,
+                cancellation_fee_cents: feeCents,
+              }
             : b
         )
       );
@@ -224,6 +256,13 @@ export default function ClientBookingsContent({ onNewRequest }: Props) {
 
   const activeCount = bookings.filter((b) => !['completed', 'cancelled'].includes(b.status || '')).length;
   const completedCount = bookings.filter((b) => b.status === 'completed').length;
+  const selectedFeeCents = selectedBooking
+    ? computeCancellationFee(selectedBooking.preferred_time, selectedBooking.preferred_date)
+    : 0;
+  const selectedRefundCents =
+    selectedBooking && typeof selectedBooking.total_price_cents === 'number'
+      ? Math.max(0, selectedBooking.total_price_cents - selectedFeeCents)
+      : null;
 
   if (!session) {
     return (
@@ -331,6 +370,20 @@ export default function ClientBookingsContent({ onNewRequest }: Props) {
             <p className="mt-2 text-sm text-slate-600">
               Are you sure you want to cancel this booking? This action cannot be undone.
             </p>
+            <div className="mt-3 rounded-lg border border-amber-200 bg-amber-50 p-3 text-xs text-amber-800">
+              <p>
+                Cancellation fee: {selectedFeeCents > 0 ? formatPrice(selectedFeeCents) : 'Free'}.
+                {selectedRefundCents !== null && (
+                  <> Refund: {formatPrice(selectedRefundCents)} to your original payment method.</>
+                )}
+              </p>
+              <ul className="mt-2 space-y-1 text-[11px] text-amber-700">
+                <li>• Within 2 hours of service: $40 fee</li>
+                <li>• 2-8 hours before service: $20 fee</li>
+                <li>• 8-24 hours before service: $10 fee</li>
+                <li>• More than 24 hours: free cancellation</li>
+              </ul>
+            </div>
             <div className="mt-4">
               <label className="block text-sm font-medium text-slate-700">
                 Reason for cancellation (optional)
@@ -472,6 +525,14 @@ function BookingCard({ booking, onCancel }: BookingCardProps) {
           <p className="font-medium text-rose-700">Cancelled on {formatDate(booking.cancelled_at)}</p>
           {booking.cancellation_reason && (
             <p className="mt-1 text-rose-600">{booking.cancellation_reason}</p>
+          )}
+          {typeof booking.cancellation_fee_cents === 'number' && (
+            <p className="mt-1 text-rose-600">
+              Fee: {booking.cancellation_fee_cents > 0 ? formatPrice(booking.cancellation_fee_cents) : 'No fee'}
+              {typeof booking.total_price_cents === 'number' && (
+                <> · Refund: {formatPrice(Math.max(0, booking.total_price_cents - booking.cancellation_fee_cents))}</>
+              )}
+            </p>
           )}
         </div>
       )}

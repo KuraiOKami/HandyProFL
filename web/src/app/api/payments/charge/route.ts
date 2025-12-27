@@ -8,14 +8,15 @@ async function requireUser() {
   if (!supabase) return { error: 'Supabase not configured' as const };
   const { data, error } = await supabase.auth.getUser();
   if (error || !data.user) return { error: 'Unauthorized' as const };
-  return { user: data.user };
+  return { user: data.user, supabase };
 }
 
 export async function POST(req: NextRequest) {
   if (!stripe) return NextResponse.json({ error: 'Stripe not configured' }, { status: 500 });
 
-  const { user, error } = await requireUser();
-  if (error || !user) return NextResponse.json({ error: error ?? 'Unauthorized' }, { status: 401 });
+  const auth = await requireUser();
+  if ('error' in auth) return NextResponse.json({ error: auth.error ?? 'Unauthorized' }, { status: 401 });
+  const { user, supabase } = auth;
 
   const body = await req.json().catch(() => null);
   if (!body) return NextResponse.json({ error: 'Invalid JSON' }, { status: 400 });
@@ -60,6 +61,18 @@ export async function POST(req: NextRequest) {
         },
         { status: 402 },
       );
+    }
+
+    if (request_id) {
+      const { error: updateError } = await supabase
+        .from('service_requests')
+        .update({ payment_intent_id: intent.id })
+        .eq('id', request_id)
+        .eq('user_id', user.id);
+
+      if (updateError) {
+        console.warn('Failed to store payment_intent_id:', updateError.message);
+      }
     }
 
     return NextResponse.json({ payment_intent_id: intent.id, status: intent.status });

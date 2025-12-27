@@ -536,6 +536,9 @@ ALTER TABLE service_requests
   ADD COLUMN IF NOT EXISTS labor_price_cents INTEGER,
   ADD COLUMN IF NOT EXISTS materials_cost_cents INTEGER;
 
+ALTER TABLE service_requests
+  ADD COLUMN IF NOT EXISTS payment_intent_id TEXT;
+
 -- Add extended tracking for job lifecycle
 ALTER TABLE job_assignments
   ADD COLUMN IF NOT EXISTS checked_out_at TIMESTAMPTZ,
