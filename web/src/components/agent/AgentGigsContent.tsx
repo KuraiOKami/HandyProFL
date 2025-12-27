@@ -14,10 +14,20 @@ type AvailableGig = {
   state: string;
   agent_payout_cents: number;
   has_location?: boolean;
+  client_rating: number | null;
+  client_rating_count: number;
+  distance_miles: number | null;
+};
+
+type GigsFilters = {
+  skills: string[];
+  service_area_miles: number;
+  has_location: boolean;
 };
 
 export default function AgentGigsContent() {
   const [gigs, setGigs] = useState<AvailableGig[]>([]);
+  const [filters, setFilters] = useState<GigsFilters | null>(null);
   const [loading, setLoading] = useState(true);
   const [accepting, setAccepting] = useState<string | null>(null);
   const [error, setError] = useState<string | null>(null);
@@ -41,6 +51,7 @@ export default function AgentGigsContent() {
       }
 
       setGigs(data.gigs || []);
+      setFilters(data.filters || null);
     } catch (err) {
       setError(err instanceof Error ? err.message : 'Failed to load gigs');
     } finally {
@@ -128,11 +139,19 @@ export default function AgentGigsContent() {
 
   return (
     <div className="space-y-4">
+      {/* Filter info banner */}
+      {filters && !filters.has_location && (
+        <div className="rounded-lg border border-amber-200 bg-amber-50 px-4 py-3 text-sm text-amber-800">
+          <strong>Tip:</strong> Set your location in Settings to see distances and filter gigs by your service area.
+        </div>
+      )}
+
       {/* Header with filters */}
       <div className="flex flex-col gap-3">
         <div className="flex items-center justify-between">
           <p className="text-sm text-slate-600">
             {filteredGigs.length} {filteredGigs.length === 1 ? 'gig' : 'gigs'} available
+            {filters?.has_location && ` within ${filters.service_area_miles} mi`}
           </p>
           <button
             onClick={loadGigs}
@@ -194,7 +213,15 @@ export default function AgentGigsContent() {
                   </div>
                   <div className="text-right">
                     <p className="text-lg font-bold text-emerald-600">{formatCurrency(gig.agent_payout_cents)}</p>
-                    <p className="text-xs text-slate-500">your earnings</p>
+                    {gig.client_rating ? (
+                      <div className="flex items-center justify-end gap-1 text-xs">
+                        <span className="text-amber-500">★</span>
+                        <span className="text-slate-600">{gig.client_rating.toFixed(1)}</span>
+                        <span className="text-slate-400">({gig.client_rating_count})</span>
+                      </div>
+                    ) : (
+                      <p className="text-xs text-slate-400">New client</p>
+                    )}
                   </div>
                 </div>
               </div>
@@ -220,6 +247,12 @@ export default function AgentGigsContent() {
                     <span>⏱️</span>
                     <span>Est. {formatDuration(gig.estimated_minutes)}</span>
                   </div>
+                  {gig.distance_miles !== null && (
+                    <div className="flex items-center gap-2 text-slate-600">
+                      <span>📍</span>
+                      <span>{gig.distance_miles} mi away</span>
+                    </div>
+                  )}
                 </div>
 
                 {gig.details && (
@@ -316,6 +349,12 @@ export default function AgentGigsContent() {
                     <span className="text-lg">⏱️</span>
                     <p className="text-slate-600">Estimated {formatDuration(selectedGig.estimated_minutes)}</p>
                   </div>
+                  {selectedGig.distance_miles !== null && (
+                    <div className="flex items-center gap-3 text-sm">
+                      <span className="text-lg">📍</span>
+                      <p className="text-slate-600">{selectedGig.distance_miles} miles from you</p>
+                    </div>
+                  )}
                 </div>
               </div>
 
@@ -332,6 +371,35 @@ export default function AgentGigsContent() {
                       Full address available after accepting
                     </p>
                   </div>
+                </div>
+              </div>
+
+              {/* Client Rating */}
+              <div>
+                <h3 className="mb-2 text-sm font-semibold text-slate-900">Client</h3>
+                <div className="flex items-center gap-3 text-sm">
+                  <span className="text-lg">👤</span>
+                  {selectedGig.client_rating ? (
+                    <div>
+                      <div className="flex items-center gap-1">
+                        {[1, 2, 3, 4, 5].map((star) => (
+                          <span
+                            key={star}
+                            className={`text-lg ${star <= Math.round(selectedGig.client_rating!) ? 'text-amber-400' : 'text-slate-300'}`}
+                          >
+                            ★
+                          </span>
+                        ))}
+                        <span className="ml-1 font-medium text-slate-900">{selectedGig.client_rating.toFixed(1)}</span>
+                      </div>
+                      <p className="text-xs text-slate-500">{selectedGig.client_rating_count} {selectedGig.client_rating_count === 1 ? 'review' : 'reviews'} from agents</p>
+                    </div>
+                  ) : (
+                    <div>
+                      <p className="font-medium text-slate-900">New Client</p>
+                      <p className="text-xs text-slate-500">No agent reviews yet</p>
+                    </div>
+                  )}
                 </div>
               </div>
 

@@ -693,3 +693,278 @@ CREATE POLICY "Admins can update all service requests"
       AND profiles.role = 'admin'
     )
   );
+
+-- ============================================
+-- EARNINGS TYPE MIGRATION
+-- Add type column to agent_earnings to distinguish between
+-- job earnings and cancellation fees
+-- ============================================
+
+-- Add type column to agent_earnings
+ALTER TABLE agent_earnings
+  ADD COLUMN IF NOT EXISTS type TEXT DEFAULT 'job_earning';
+
+-- Update type based on amount (negative = agent cancel fee, for historical data)
+UPDATE agent_earnings SET type = 'agent_cancel_fee' WHERE amount_cents < 0 AND type = 'job_earning';
+
+-- Add comment for the column
+COMMENT ON COLUMN agent_earnings.type IS 'Type of earning: job_earning, client_cancel_fee, agent_cancel_fee';
+
+-- Remove the UNIQUE constraint on assignment_id to allow multiple earnings per job
+-- (e.g., a job earning AND a cancellation fee adjustment)
+ALTER TABLE agent_earnings DROP CONSTRAINT IF EXISTS agent_earnings_assignment_id_key;
+
+-- ============================================
+-- BIDIRECTIONAL RATING SYSTEM
+-- Clients can rate agents after job completion
+-- Agents can rate clients after job completion
+-- ============================================
+
+-- Ratings table for both client-to-agent and agent-to-client ratings
+CREATE TABLE IF NOT EXISTS ratings (
+  id UUID PRIMARY KEY DEFAULT gen_random_uuid(),
+  job_assignment_id UUID NOT NULL REFERENCES job_assignments(id) ON DELETE CASCADE,
+  rater_id UUID NOT NULL REFERENCES auth.users(id),
+  ratee_id UUID NOT NULL REFERENCES auth.users(id),
+  rater_type TEXT NOT NULL CHECK (rater_type IN ('client', 'agent')),
+  rating INTEGER NOT NULL CHECK (rating >= 1 AND rating <= 5),
+  review TEXT,
+  created_at TIMESTAMPTZ DEFAULT NOW(),
+  updated_at TIMESTAMPTZ DEFAULT NOW(),
+  UNIQUE(job_assignment_id, rater_type) -- One rating per role per job
+);
+
+-- Enable RLS
+ALTER TABLE ratings ENABLE ROW LEVEL SECURITY;
+
+-- Users can view their own ratings (as rater or ratee)
+CREATE POLICY "Users can view own ratings"
+  ON ratings FOR SELECT
+  TO authenticated
+  USING (rater_id = auth.uid() OR ratee_id = auth.uid());
+
+-- Users can create ratings where they are the rater
+CREATE POLICY "Users can create own ratings"
+  ON ratings FOR INSERT
+  TO authenticated
+  WITH CHECK (rater_id = auth.uid());
+
+-- Admins can view all ratings
+CREATE POLICY "Admins can view all ratings"
+  ON ratings FOR SELECT
+  TO authenticated
+  USING (
+    EXISTS (
+      SELECT 1 FROM profiles
+      WHERE profiles.id = auth.uid()
+      AND profiles.role = 'admin'
+    )
+  );
+
+-- Index for faster lookups
+CREATE INDEX IF NOT EXISTS idx_ratings_ratee ON ratings(ratee_id);
+CREATE INDEX IF NOT EXISTS idx_ratings_rater ON ratings(rater_id);
+CREATE INDEX IF NOT EXISTS idx_ratings_job ON ratings(job_assignment_id);
+
+-- Trigger to update updated_at
+CREATE TRIGGER update_ratings_updated_at
+  BEFORE UPDATE ON ratings
+  FOR EACH ROW
+  EXECUTE FUNCTION update_updated_at_column();
+
+-- Grant permissions
+GRANT ALL ON ratings TO authenticated;
+
+-- Add rating columns to profiles for caching average ratings
+ALTER TABLE profiles
+  ADD COLUMN IF NOT EXISTS client_rating DECIMAL(3,2) DEFAULT NULL,
+  ADD COLUMN IF NOT EXISTS client_rating_count INTEGER DEFAULT 0;
+
+-- Add rating columns to agent_profiles for caching average ratings
+ALTER TABLE agent_profiles
+  ADD COLUMN IF NOT EXISTS agent_rating DECIMAL(3,2) DEFAULT NULL,
+  ADD COLUMN IF NOT EXISTS agent_rating_count INTEGER DEFAULT 0;
+
+-- Function to update client rating after new rating is added
+CREATE OR REPLACE FUNCTION update_client_rating()
+RETURNS TRIGGER AS $$
+BEGIN
+  IF NEW.rater_type = 'agent' THEN
+    UPDATE profiles
+    SET
+      client_rating = (
+        SELECT ROUND(AVG(rating)::numeric, 2)
+        FROM ratings
+        WHERE ratee_id = NEW.ratee_id AND rater_type = 'agent'
+      ),
+      client_rating_count = (
+        SELECT COUNT(*)
+        FROM ratings
+        WHERE ratee_id = NEW.ratee_id AND rater_type = 'agent'
+      )
+    WHERE id = NEW.ratee_id;
+  END IF;
+  RETURN NEW;
+END;
+$$ LANGUAGE plpgsql;
+
+-- Function to update agent rating after new rating is added
+CREATE OR REPLACE FUNCTION update_agent_rating()
+RETURNS TRIGGER AS $$
+BEGIN
+  IF NEW.rater_type = 'client' THEN
+    UPDATE agent_profiles
+    SET
+      agent_rating = (
+        SELECT ROUND(AVG(rating)::numeric, 2)
+        FROM ratings
+        WHERE ratee_id = NEW.ratee_id AND rater_type = 'client'
+      ),
+      agent_rating_count = (
+        SELECT COUNT(*)
+        FROM ratings
+        WHERE ratee_id = NEW.ratee_id AND rater_type = 'client'
+      )
+    WHERE id = NEW.ratee_id;
+  END IF;
+  RETURN NEW;
+END;
+$$ LANGUAGE plpgsql;
+
+-- Triggers to update cached ratings
+CREATE TRIGGER update_client_rating_trigger
+  AFTER INSERT OR UPDATE ON ratings
+  FOR EACH ROW
+  EXECUTE FUNCTION update_client_rating();
+
+CREATE TRIGGER update_agent_rating_trigger
+  AFTER INSERT OR UPDATE ON ratings
+  FOR EACH ROW
+  EXECUTE FUNCTION update_agent_rating();
+
+COMMENT ON TABLE ratings IS 'Bidirectional ratings between clients and agents after job completion';
+
+-- ============================================
+-- AGENT LOCATION AND DISTANCE FILTERING
+-- Add agent location coordinates for distance-based gig filtering
+-- ============================================
+
+-- Add location coordinates to profiles table for agents
+ALTER TABLE profiles
+  ADD COLUMN IF NOT EXISTS location_latitude DECIMAL(10,8) DEFAULT NULL,
+  ADD COLUMN IF NOT EXISTS location_longitude DECIMAL(11,8) DEFAULT NULL;
+
+COMMENT ON COLUMN profiles.location_latitude IS 'Agent home/base latitude for distance filtering';
+COMMENT ON COLUMN profiles.location_longitude IS 'Agent home/base longitude for distance filtering';
+
+-- Create a function to calculate distance between two points (Haversine formula)
+-- Returns distance in miles
+CREATE OR REPLACE FUNCTION haversine_distance_miles(
+  lat1 DECIMAL,
+  lon1 DECIMAL,
+  lat2 DECIMAL,
+  lon2 DECIMAL
+) RETURNS DECIMAL AS $$
+DECLARE
+  R DECIMAL := 3959; -- Earth's radius in miles
+  dlat DECIMAL;
+  dlon DECIMAL;
+  a DECIMAL;
+  c DECIMAL;
+BEGIN
+  IF lat1 IS NULL OR lon1 IS NULL OR lat2 IS NULL OR lon2 IS NULL THEN
+    RETURN NULL;
+  END IF;
+
+  dlat := radians(lat2 - lat1);
+  dlon := radians(lon2 - lon1);
+  a := sin(dlat/2) * sin(dlat/2) + cos(radians(lat1)) * cos(radians(lat2)) * sin(dlon/2) * sin(dlon/2);
+  c := 2 * atan2(sqrt(a), sqrt(1-a));
+
+  RETURN R * c;
+END;
+$$ LANGUAGE plpgsql IMMUTABLE;
+
+COMMENT ON FUNCTION haversine_distance_miles IS 'Calculate distance in miles between two lat/lng points using Haversine formula';
+
+-- ============================================
+-- AUTO-BOOKING AND REFERRAL SYSTEM
+-- Priority-based automatic job assignment
+-- ============================================
+
+-- Add auto-booking enabled flag to agent_profiles
+ALTER TABLE agent_profiles
+  ADD COLUMN IF NOT EXISTS auto_booking_enabled BOOLEAN DEFAULT false;
+
+COMMENT ON COLUMN agent_profiles.auto_booking_enabled IS 'When enabled, agent can receive auto-assigned jobs based on priority';
+
+-- Add referral tracking to profiles (who referred the client)
+ALTER TABLE profiles
+  ADD COLUMN IF NOT EXISTS referred_by_agent_id UUID REFERENCES auth.users(id) DEFAULT NULL;
+
+COMMENT ON COLUMN profiles.referred_by_agent_id IS 'The agent who referred this client (for priority matching)';
+
+-- Also track referral on individual service requests (client may have different referrers)
+ALTER TABLE service_requests
+  ADD COLUMN IF NOT EXISTS preferred_agent_id UUID REFERENCES auth.users(id) DEFAULT NULL,
+  ADD COLUMN IF NOT EXISTS auto_assignment_status TEXT DEFAULT 'pending' CHECK (auto_assignment_status IN ('pending', 'offered', 'accepted', 'expired', 'manual'));
+
+COMMENT ON COLUMN service_requests.preferred_agent_id IS 'Preferred agent for this job (e.g., referee or previously used)';
+COMMENT ON COLUMN service_requests.auto_assignment_status IS 'Status of automatic assignment process';
+
+-- Table to track auto-assignment offers to agents
+CREATE TABLE IF NOT EXISTS auto_assignment_offers (
+  id UUID PRIMARY KEY DEFAULT gen_random_uuid(),
+  request_id UUID NOT NULL REFERENCES service_requests(id) ON DELETE CASCADE,
+  agent_id UUID NOT NULL REFERENCES auth.users(id),
+  priority_level INTEGER NOT NULL, -- 1=referee, 2=high-rated, 3=first-come
+  priority_reason TEXT, -- 'referee', 'highest_rated', 'first_come'
+  status TEXT DEFAULT 'pending' CHECK (status IN ('pending', 'accepted', 'declined', 'expired')),
+  offered_at TIMESTAMPTZ DEFAULT NOW(),
+  expires_at TIMESTAMPTZ, -- When the offer expires
+  responded_at TIMESTAMPTZ,
+  created_at TIMESTAMPTZ DEFAULT NOW(),
+  UNIQUE(request_id, agent_id) -- One offer per agent per request
+);
+
+-- Enable RLS
+ALTER TABLE auto_assignment_offers ENABLE ROW LEVEL SECURITY;
+
+-- Agents can view their own offers
+CREATE POLICY "Agents can view own offers"
+  ON auto_assignment_offers FOR SELECT
+  TO authenticated
+  USING (agent_id = auth.uid());
+
+-- Agents can update their own offers (accept/decline)
+CREATE POLICY "Agents can update own offers"
+  ON auto_assignment_offers FOR UPDATE
+  TO authenticated
+  USING (agent_id = auth.uid());
+
+-- Admins can view all offers
+CREATE POLICY "Admins can view all offers"
+  ON auto_assignment_offers FOR ALL
+  TO authenticated
+  USING (
+    EXISTS (
+      SELECT 1 FROM profiles
+      WHERE profiles.id = auth.uid()
+      AND profiles.role = 'admin'
+    )
+  );
+
+-- Indexes for performance
+CREATE INDEX IF NOT EXISTS idx_auto_offers_agent ON auto_assignment_offers(agent_id);
+CREATE INDEX IF NOT EXISTS idx_auto_offers_request ON auto_assignment_offers(request_id);
+CREATE INDEX IF NOT EXISTS idx_auto_offers_status ON auto_assignment_offers(status);
+
+-- Trigger to update timestamps
+CREATE TRIGGER update_auto_offers_updated_at
+  BEFORE UPDATE ON auto_assignment_offers
+  FOR EACH ROW
+  EXECUTE FUNCTION update_updated_at_column();
+
+GRANT ALL ON auto_assignment_offers TO authenticated;
+
+COMMENT ON TABLE auto_assignment_offers IS 'Tracks auto-assignment offers sent to agents based on priority';

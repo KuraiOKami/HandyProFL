@@ -205,11 +205,68 @@ export default function BookingDetailView({ booking, agentProfile, jobAssignment
   const [nowMs, setNowMs] = useState<number | null>(null);
   const [todayDate, setTodayDate] = useState('');
 
+  // Rating state
+  const [hasRated, setHasRated] = useState(false);
+  const [existingRating, setExistingRating] = useState<{ rating: number; review: string | null } | null>(null);
+  const [showRatingModal, setShowRatingModal] = useState(false);
+  const [rating, setRating] = useState(0);
+  const [hoverRating, setHoverRating] = useState(0);
+  const [review, setReview] = useState('');
+  const [submittingRating, setSubmittingRating] = useState(false);
+
   useEffect(() => {
     const now = Date.now();
     setNowMs(now);
     setTodayDate(new Intl.DateTimeFormat('en-CA', { timeZone: DISPLAY_TIME_ZONE }).format(new Date(now)));
   }, []);
+
+  // Check if job has been rated
+  useEffect(() => {
+    const checkRating = async () => {
+      if (booking.status !== 'complete' && booking.status !== 'completed') return;
+
+      try {
+        const res = await fetch(`/api/requests/${booking.id}/rate`);
+        const data = await res.json();
+        if (data.hasRated) {
+          setHasRated(true);
+          setExistingRating(data.rating);
+        }
+      } catch (err) {
+        console.error('Failed to check rating status:', err);
+      }
+    };
+
+    checkRating();
+  }, [booking.id, booking.status]);
+
+  const handleSubmitRating = async () => {
+    if (rating === 0) return;
+
+    setSubmittingRating(true);
+    setError(null);
+
+    try {
+      const res = await fetch(`/api/requests/${booking.id}/rate`, {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ rating, review: review.trim() || null }),
+      });
+
+      const data = await res.json();
+      if (!res.ok) {
+        throw new Error(data.error || 'Failed to submit rating');
+      }
+
+      setHasRated(true);
+      setExistingRating({ rating, review: review.trim() || null });
+      setShowRatingModal(false);
+    } catch (err) {
+      setError(err instanceof Error ? err.message : 'Failed to submit rating');
+    } finally {
+      setSubmittingRating(false);
+    }
+  };
 
   const cancelFeeCents = nowMs !== null
     ? computeCancellationFee(booking.preferredTime, booking.preferredDate, nowMs)
@@ -550,6 +607,45 @@ export default function BookingDetailView({ booking, agentProfile, jobAssignment
           </div>
         )}
 
+        {/* Rate Your Agent Section */}
+        {(booking.status === 'complete' || booking.status === 'completed') && agentProfile && (
+          <div className="mt-6 rounded-xl border border-slate-200 bg-white p-6">
+            <h3 className="text-lg font-semibold text-slate-900">Rate Your Experience</h3>
+
+            {hasRated && existingRating ? (
+              <div className="mt-4">
+                <div className="flex items-center gap-1">
+                  {[1, 2, 3, 4, 5].map((star) => (
+                    <span
+                      key={star}
+                      className={`text-2xl ${star <= existingRating.rating ? 'text-amber-400' : 'text-slate-300'}`}
+                    >
+                      ★
+                    </span>
+                  ))}
+                  <span className="ml-2 text-sm text-slate-600">Your rating</span>
+                </div>
+                {existingRating.review && (
+                  <p className="mt-2 text-sm text-slate-600 italic">&ldquo;{existingRating.review}&rdquo;</p>
+                )}
+                <p className="mt-2 text-sm text-emerald-600">Thank you for your feedback!</p>
+              </div>
+            ) : (
+              <div className="mt-4">
+                <p className="text-sm text-slate-600">
+                  How was your experience with {agentProfile.first_name || 'your agent'}?
+                </p>
+                <button
+                  onClick={() => setShowRatingModal(true)}
+                  className="mt-3 rounded-lg bg-amber-500 px-6 py-2.5 text-sm font-semibold text-white hover:bg-amber-600"
+                >
+                  Leave a Review
+                </button>
+              </div>
+            )}
+          </div>
+        )}
+
         {/* Proof of Work Photos */}
         {proofPhotos.length > 0 && (
           <div className="mt-6 rounded-xl border border-slate-200 bg-white p-6">
@@ -691,6 +787,78 @@ export default function BookingDetailView({ booking, agentProfile, jobAssignment
                 className="flex-1 rounded-lg bg-rose-600 px-4 py-2 text-sm font-semibold text-white hover:bg-rose-700 disabled:opacity-50"
               >
                 {cancelling ? 'Cancelling...' : 'Cancel Booking'}
+              </button>
+            </div>
+          </div>
+        </div>
+      )}
+
+      {/* Rating Modal */}
+      {showRatingModal && (
+        <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/50 p-4">
+          <div className="w-full max-w-md rounded-xl bg-white p-6 shadow-xl">
+            <h3 className="text-lg font-semibold text-slate-900">Rate Your Agent</h3>
+            <p className="mt-2 text-sm text-slate-600">
+              How would you rate your experience with {agentProfile?.first_name || 'your agent'}?
+            </p>
+
+            {/* Star Rating */}
+            <div className="mt-6 flex justify-center gap-2">
+              {[1, 2, 3, 4, 5].map((star) => (
+                <button
+                  key={star}
+                  type="button"
+                  onClick={() => setRating(star)}
+                  onMouseEnter={() => setHoverRating(star)}
+                  onMouseLeave={() => setHoverRating(0)}
+                  className="text-4xl transition-transform hover:scale-110 focus:outline-none"
+                >
+                  <span className={star <= (hoverRating || rating) ? 'text-amber-400' : 'text-slate-300'}>
+                    ★
+                  </span>
+                </button>
+              ))}
+            </div>
+            <p className="mt-2 text-center text-sm text-slate-500">
+              {rating === 1 && 'Poor'}
+              {rating === 2 && 'Fair'}
+              {rating === 3 && 'Good'}
+              {rating === 4 && 'Very Good'}
+              {rating === 5 && 'Excellent'}
+              {rating === 0 && 'Select a rating'}
+            </p>
+
+            {/* Review Text */}
+            <div className="mt-4">
+              <label className="block text-sm font-medium text-slate-700">
+                Write a review (optional)
+              </label>
+              <textarea
+                value={review}
+                onChange={(e) => setReview(e.target.value)}
+                rows={3}
+                className="mt-1 w-full rounded-lg border border-slate-300 px-3 py-2 text-sm focus:border-amber-500 focus:outline-none focus:ring-1 focus:ring-amber-500"
+                placeholder="Share your experience..."
+              />
+            </div>
+
+            <div className="mt-6 flex gap-3">
+              <button
+                onClick={() => {
+                  setShowRatingModal(false);
+                  setRating(0);
+                  setReview('');
+                }}
+                className="flex-1 rounded-lg border border-slate-300 px-4 py-2 text-sm font-medium text-slate-700 hover:bg-slate-50"
+              >
+                Cancel
+              </button>
+              <button
+                onClick={handleSubmitRating}
+                disabled={submittingRating || rating === 0}
+                className="flex-1 rounded-lg bg-amber-500 px-4 py-2 text-sm font-semibold text-white hover:bg-amber-600 disabled:opacity-50"
+              >
+                {submittingRating ? 'Submitting...' : 'Submit Review'}
               </button>
             </div>
           </div>

@@ -38,7 +38,7 @@ export async function GET() {
   // Get profile and agent profile together
   const { data: profile, error: profileError } = await adminSupabase
     .from("profiles")
-    .select("first_name, last_name, email, phone")
+    .select("first_name, last_name, email, phone, location_latitude, location_longitude")
     .eq("id", session.user.id)
     .single();
 
@@ -75,16 +75,18 @@ export async function PUT(req: NextRequest) {
     return NextResponse.json({ error: "Invalid request body" }, { status: 400 });
   }
 
-  const { first_name, last_name, phone, bio, skills, service_area_miles } = body;
+  const { first_name, last_name, phone, bio, skills, service_area_miles, location_latitude, location_longitude, auto_booking_enabled } = body;
 
   const adminSupabase = createServiceRoleClient() ?? supabase;
 
   // Update main profile
-  if (first_name !== undefined || last_name !== undefined || phone !== undefined) {
+  if (first_name !== undefined || last_name !== undefined || phone !== undefined || location_latitude !== undefined || location_longitude !== undefined) {
     const profileUpdate: Record<string, unknown> = {};
     if (first_name !== undefined) profileUpdate.first_name = first_name;
     if (last_name !== undefined) profileUpdate.last_name = last_name;
     if (phone !== undefined) profileUpdate.phone = phone;
+    if (location_latitude !== undefined) profileUpdate.location_latitude = location_latitude;
+    if (location_longitude !== undefined) profileUpdate.location_longitude = location_longitude;
 
     const { error: profileError } = await adminSupabase
       .from("profiles")
@@ -97,11 +99,12 @@ export async function PUT(req: NextRequest) {
   }
 
   // Update agent profile
-  if (bio !== undefined || skills !== undefined || service_area_miles !== undefined) {
+  if (bio !== undefined || skills !== undefined || service_area_miles !== undefined || auto_booking_enabled !== undefined) {
     const agentUpdate: Record<string, unknown> = {};
     if (bio !== undefined) agentUpdate.bio = bio;
     if (skills !== undefined) agentUpdate.skills = skills;
     if (service_area_miles !== undefined) agentUpdate.service_area_miles = service_area_miles;
+    if (auto_booking_enabled !== undefined) agentUpdate.auto_booking_enabled = auto_booking_enabled;
 
     const { error: agentError } = await adminSupabase
       .from("agent_profiles")

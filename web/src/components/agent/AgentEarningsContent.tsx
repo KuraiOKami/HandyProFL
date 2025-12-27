@@ -16,6 +16,7 @@ type Earning = {
   assignment_id: string;
   amount_cents: number;
   status: string;
+  type: 'job_earning' | 'client_cancel_fee' | 'agent_cancel_fee';
   available_at: string;
   service_type: string;
   completed_at: string;
@@ -117,6 +118,29 @@ export default function AgentEarningsContent() {
 
   const formatServiceType = (type: string) => {
     return type.replace(/_/g, ' ').replace(/\b\w/g, (c) => c.toUpperCase());
+  };
+
+  const getEarningLabel = (earning: Earning) => {
+    switch (earning.type) {
+      case 'client_cancel_fee':
+        return 'Client Cancellation Fee';
+      case 'agent_cancel_fee':
+        return 'Cancellation Penalty';
+      case 'job_earning':
+      default:
+        return formatServiceType(earning.service_type);
+    }
+  };
+
+  const getEarningTypeBadge = (type: Earning['type']) => {
+    switch (type) {
+      case 'client_cancel_fee':
+        return <span className="rounded-full bg-purple-100 px-2 py-0.5 text-xs font-medium text-purple-700">Cancel Fee</span>;
+      case 'agent_cancel_fee':
+        return <span className="rounded-full bg-rose-100 px-2 py-0.5 text-xs font-medium text-rose-700">Penalty</span>;
+      default:
+        return null;
+    }
   };
 
   const getStatusBadge = (status: string) => {
@@ -275,7 +299,10 @@ export default function AgentEarningsContent() {
               {earnings.map((earning) => (
                 <div key={earning.id} className="flex items-center justify-between px-5 py-4">
                   <div>
-                    <p className="font-medium text-slate-900">{formatServiceType(earning.service_type)}</p>
+                    <div className="flex items-center gap-2">
+                      <p className="font-medium text-slate-900">{getEarningLabel(earning)}</p>
+                      {getEarningTypeBadge(earning.type)}
+                    </div>
                     <p className="text-sm text-slate-500">
                       {new Date(earning.completed_at).toLocaleDateString('en-US', {
                         month: 'short',
@@ -286,7 +313,9 @@ export default function AgentEarningsContent() {
                   </div>
                   <div className="flex items-center gap-3">
                     {getStatusBadge(earning.status)}
-                    <p className="text-lg font-semibold text-emerald-600">+{formatCurrency(earning.amount_cents)}</p>
+                    <p className={`text-lg font-semibold ${earning.amount_cents >= 0 ? 'text-emerald-600' : 'text-rose-600'}`}>
+                      {earning.amount_cents >= 0 ? '+' : ''}{formatCurrency(earning.amount_cents)}
+                    </p>
                   </div>
                 </div>
               ))}

@@ -138,6 +138,7 @@ export async function POST(
       assignment_id: jobId,
       amount_cents: -feeCents,
       status: "available",
+      type: "agent_cancel_fee",
       available_at: nowIso,
     });
   }

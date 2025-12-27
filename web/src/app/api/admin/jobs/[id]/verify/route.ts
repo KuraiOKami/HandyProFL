@@ -106,6 +106,7 @@ export async function POST(
               .update({
                 amount_cents: payoutCents,
                 status: "available",
+                type: "job_earning",
                 available_at: availableAt,
                 paid_out_at: null,
                 payout_id: null,
@@ -116,6 +117,7 @@ export async function POST(
               assignment_id: jobId,
               amount_cents: payoutCents,
               status: "available",
+              type: "job_earning",
               available_at: availableAt,
               paid_out_at: null,
               payout_id: null,

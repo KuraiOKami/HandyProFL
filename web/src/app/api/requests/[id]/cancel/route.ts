@@ -184,6 +184,7 @@ export async function POST(req: NextRequest, { params }: Params) {
           assignment_id: jobAssignment.id,
           amount_cents: agentShareCents,
           status: "available", // Immediately available since it's a cancellation fee
+          type: "client_cancel_fee",
           available_at: cancelledAt,
         });
 

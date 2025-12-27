@@ -19,6 +19,9 @@ type AgentProfile = {
   stripe_account_id: string | null;
   stripe_account_status: string;
   stripe_payouts_enabled: boolean;
+  location_latitude: number | null;
+  location_longitude: number | null;
+  auto_booking_enabled: boolean;
 };
 
 const SKILL_OPTIONS = [
@@ -54,6 +57,11 @@ export default function AgentSettingsContent() {
   const [bio, setBio] = useState('');
   const [skills, setSkills] = useState<string[]>([]);
   const [serviceArea, setServiceArea] = useState(25);
+  const [locationLatitude, setLocationLatitude] = useState<number | null>(null);
+  const [locationLongitude, setLocationLongitude] = useState<number | null>(null);
+  const [gettingLocation, setGettingLocation] = useState(false);
+  const [locationError, setLocationError] = useState<string | null>(null);
+  const [autoBookingEnabled, setAutoBookingEnabled] = useState(false);
 
   useEffect(() => {
     loadProfile();
@@ -89,6 +97,9 @@ export default function AgentSettingsContent() {
       setBio(p.bio || '');
       setSkills(p.skills || []);
       setServiceArea(p.service_area_miles || 25);
+      setLocationLatitude(p.location_latitude || null);
+      setLocationLongitude(p.location_longitude || null);
+      setAutoBookingEnabled(p.auto_booking_enabled || false);
     } catch (err) {
       setError(err instanceof Error ? err.message : 'Failed to load profile');
     } finally {
@@ -112,6 +123,9 @@ export default function AgentSettingsContent() {
           bio,
           skills,
           service_area_miles: serviceArea,
+          location_latitude: locationLatitude,
+          location_longitude: locationLongitude,
+          auto_booking_enabled: autoBookingEnabled,
         }),
       });
 
@@ -134,6 +148,46 @@ export default function AgentSettingsContent() {
     setSkills((prev) =>
       prev.includes(skillId) ? prev.filter((s) => s !== skillId) : [...prev, skillId]
     );
+  };
+
+  const handleGetLocation = () => {
+    if (!navigator.geolocation) {
+      setLocationError('Geolocation is not supported by your browser');
+      return;
+    }
+
+    setGettingLocation(true);
+    setLocationError(null);
+
+    navigator.geolocation.getCurrentPosition(
+      (position) => {
+        setLocationLatitude(position.coords.latitude);
+        setLocationLongitude(position.coords.longitude);
+        setGettingLocation(false);
+      },
+      (error) => {
+        setGettingLocation(false);
+        switch (error.code) {
+          case error.PERMISSION_DENIED:
+            setLocationError('Location permission denied. Please enable location access.');
+            break;
+          case error.POSITION_UNAVAILABLE:
+            setLocationError('Location information is unavailable.');
+            break;
+          case error.TIMEOUT:
+            setLocationError('Location request timed out.');
+            break;
+          default:
+            setLocationError('An unknown error occurred.');
+        }
+      },
+      { enableHighAccuracy: true, timeout: 10000, maximumAge: 0 }
+    );
+  };
+
+  const clearLocation = () => {
+    setLocationLatitude(null);
+    setLocationLongitude(null);
   };
 
   const loadPayoutStatus = async () => {
@@ -379,11 +433,53 @@ export default function AgentSettingsContent() {
         </div>
       </div>
 
-      {/* Service Area */}
+      {/* Service Area & Location */}
       <div className="rounded-xl border border-slate-200 bg-white p-5 shadow-sm">
-        <h3 className="text-lg font-semibold text-slate-900">Service Area</h3>
-        <p className="text-sm text-slate-500">How far are you willing to travel for jobs?</p>
+        <h3 className="text-lg font-semibold text-slate-900">Service Area & Location</h3>
+        <p className="text-sm text-slate-500">Set your home location and how far you&apos;re willing to travel</p>
 
+        {/* Home Location */}
+        <div className="mt-4 rounded-lg border border-slate-200 bg-slate-50 p-4">
+          <div className="flex items-center justify-between">
+            <div>
+              <h4 className="text-sm font-medium text-slate-900">Your Location</h4>
+              {locationLatitude && locationLongitude ? (
+                <p className="text-sm text-emerald-600">
+                  Location set ({locationLatitude.toFixed(4)}, {locationLongitude.toFixed(4)})
+                </p>
+              ) : (
+                <p className="text-sm text-slate-500">No location set - gigs won&apos;t be filtered by distance</p>
+              )}
+            </div>
+            <div className="flex gap-2">
+              <button
+                type="button"
+                onClick={handleGetLocation}
+                disabled={gettingLocation}
+                className="rounded-lg bg-emerald-600 px-3 py-2 text-sm font-semibold text-white hover:bg-emerald-700 disabled:bg-emerald-400"
+              >
+                {gettingLocation ? 'Getting...' : locationLatitude ? 'Update Location' : 'Use Current Location'}
+              </button>
+              {locationLatitude && (
+                <button
+                  type="button"
+                  onClick={clearLocation}
+                  className="rounded-lg border border-slate-300 px-3 py-2 text-sm font-medium text-slate-700 hover:bg-slate-100"
+                >
+                  Clear
+                </button>
+              )}
+            </div>
+          </div>
+          {locationError && (
+            <p className="mt-2 text-sm text-rose-600">{locationError}</p>
+          )}
+          <p className="mt-2 text-xs text-slate-500">
+            Your location is used to calculate distances to jobs. We only show gigs within your service radius.
+          </p>
+        </div>
+
+        {/* Service Radius */}
         <div className="mt-4">
           <label className="block text-sm font-medium text-slate-700">
             Service Radius: {serviceArea} miles
@@ -401,6 +497,44 @@ export default function AgentSettingsContent() {
             <span>5 miles</span>
             <span>50 miles</span>
           </div>
+        </div>
+
+        {/* Auto-Booking */}
+        <div className="mt-6 rounded-lg border border-slate-200 bg-slate-50 p-4">
+          <div className="flex items-center justify-between">
+            <div>
+              <h4 className="text-sm font-medium text-slate-900">Auto-Booking</h4>
+              <p className="text-sm text-slate-500">Automatically receive job offers based on your skills and area</p>
+            </div>
+            <button
+              type="button"
+              onClick={() => setAutoBookingEnabled(!autoBookingEnabled)}
+              className={`relative inline-flex h-6 w-11 shrink-0 cursor-pointer rounded-full border-2 border-transparent transition-colors duration-200 ease-in-out focus:outline-none focus:ring-2 focus:ring-emerald-500 focus:ring-offset-2 ${
+                autoBookingEnabled ? 'bg-emerald-600' : 'bg-slate-200'
+              }`}
+            >
+              <span
+                className={`pointer-events-none inline-block h-5 w-5 transform rounded-full bg-white shadow ring-0 transition duration-200 ease-in-out ${
+                  autoBookingEnabled ? 'translate-x-5' : 'translate-x-0'
+                }`}
+              />
+            </button>
+          </div>
+          {autoBookingEnabled && (
+            <div className="mt-3 rounded-lg bg-emerald-50 border border-emerald-200 px-3 py-2 text-sm text-emerald-700">
+              <strong>Auto-booking is ON.</strong> You&apos;ll receive priority job offers based on:
+              <ul className="mt-1 list-disc list-inside text-xs">
+                <li>Your referred clients (highest priority)</li>
+                <li>Your rating and proximity to the job</li>
+                <li>Your selected skills</li>
+              </ul>
+            </div>
+          )}
+          {!locationLatitude && autoBookingEnabled && (
+            <p className="mt-2 text-xs text-amber-600">
+              Set your location above for best results with auto-booking.
+            </p>
+          )}
         </div>
       </div>
 

@@ -95,6 +95,15 @@ export default function JobDetailPage() {
     additionalNotes: '',
   });
 
+  // Client rating state
+  const [hasRatedClient, setHasRatedClient] = useState(false);
+  const [existingClientRating, setExistingClientRating] = useState<{ rating: number; review: string | null } | null>(null);
+  const [showClientRatingModal, setShowClientRatingModal] = useState(false);
+  const [clientRating, setClientRating] = useState(0);
+  const [clientHoverRating, setClientHoverRating] = useState(0);
+  const [clientReview, setClientReview] = useState('');
+  const [submittingClientRating, setSubmittingClientRating] = useState(false);
+
   const loadJob = useCallback(async () => {
     try {
       const res = await fetch(`/api/agent/jobs/${jobId}`);
@@ -116,6 +125,54 @@ export default function JobDetailPage() {
   useEffect(() => {
     loadJob();
   }, [loadJob]);
+
+  // Check if agent has rated the client
+  useEffect(() => {
+    const checkClientRating = async () => {
+      if (!job || job.status !== 'completed') return;
+
+      try {
+        const res = await fetch(`/api/agent/jobs/${jobId}/rate`);
+        const data = await res.json();
+        if (data.hasRated) {
+          setHasRatedClient(true);
+          setExistingClientRating(data.rating);
+        }
+      } catch (err) {
+        console.error('Failed to check client rating status:', err);
+      }
+    };
+
+    checkClientRating();
+  }, [job, jobId]);
+
+  const handleSubmitClientRating = async () => {
+    if (clientRating === 0) return;
+
+    setSubmittingClientRating(true);
+    setError(null);
+
+    try {
+      const res = await fetch(`/api/agent/jobs/${jobId}/rate`, {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ rating: clientRating, review: clientReview.trim() || null }),
+      });
+
+      const data = await res.json();
+      if (!res.ok) {
+        throw new Error(data.error || 'Failed to submit rating');
+      }
+
+      setHasRatedClient(true);
+      setExistingClientRating({ rating: clientRating, review: clientReview.trim() || null });
+      setShowClientRatingModal(false);
+    } catch (err) {
+      setError(err instanceof Error ? err.message : 'Failed to submit rating');
+    } finally {
+      setSubmittingClientRating(false);
+    }
+  };
 
   const getCurrentPosition = (): Promise<GeolocationPosition> => {
     return new Promise((resolve, reject) => {
@@ -646,6 +703,48 @@ export default function JobDetailPage() {
           </div>
         )}
 
+        {/* Rate Client Section */}
+        {isCompleted && (
+          <div className="mt-6 rounded-xl border border-slate-200 bg-white shadow-sm">
+            <div className="border-b border-slate-100 px-5 py-4">
+              <h2 className="font-semibold text-slate-900">Rate the Client</h2>
+            </div>
+            <div className="p-5">
+              {hasRatedClient && existingClientRating ? (
+                <div>
+                  <div className="flex items-center gap-1">
+                    {[1, 2, 3, 4, 5].map((star) => (
+                      <span
+                        key={star}
+                        className={`text-2xl ${star <= existingClientRating.rating ? 'text-amber-400' : 'text-slate-300'}`}
+                      >
+                        ★
+                      </span>
+                    ))}
+                    <span className="ml-2 text-sm text-slate-600">Your rating</span>
+                  </div>
+                  {existingClientRating.review && (
+                    <p className="mt-2 text-sm text-slate-600 italic">&ldquo;{existingClientRating.review}&rdquo;</p>
+                  )}
+                  <p className="mt-2 text-sm text-emerald-600">Thank you for your feedback!</p>
+                </div>
+              ) : (
+                <div>
+                  <p className="text-sm text-slate-600">
+                    How was your experience with {job.customer_name}? Help other agents know what to expect.
+                  </p>
+                  <button
+                    onClick={() => setShowClientRatingModal(true)}
+                    className="mt-3 rounded-lg bg-amber-500 px-6 py-2.5 text-sm font-semibold text-white hover:bg-amber-600"
+                  >
+                    Rate Client
+                  </button>
+                </div>
+              )}
+            </div>
+          </div>
+        )}
+
         {job.status === 'cancelled' && (
           <div className="mt-6 rounded-xl border border-rose-200 bg-rose-50 p-5 text-center">
             <div className="mb-2 text-4xl">🚫</div>
@@ -781,6 +880,78 @@ export default function JobDetailPage() {
           </div>
         )}
       </div>
+
+      {/* Client Rating Modal */}
+      {showClientRatingModal && (
+        <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/50 px-4">
+          <div className="w-full max-w-md rounded-xl bg-white p-6 shadow-xl">
+            <h3 className="text-lg font-semibold text-slate-900">Rate the Client</h3>
+            <p className="mt-2 text-sm text-slate-600">
+              How was your experience with {job?.customer_name || 'the client'}?
+            </p>
+
+            {/* Star Rating */}
+            <div className="mt-6 flex justify-center gap-2">
+              {[1, 2, 3, 4, 5].map((star) => (
+                <button
+                  key={star}
+                  type="button"
+                  onClick={() => setClientRating(star)}
+                  onMouseEnter={() => setClientHoverRating(star)}
+                  onMouseLeave={() => setClientHoverRating(0)}
+                  className="text-4xl transition-transform hover:scale-110 focus:outline-none"
+                >
+                  <span className={star <= (clientHoverRating || clientRating) ? 'text-amber-400' : 'text-slate-300'}>
+                    ★
+                  </span>
+                </button>
+              ))}
+            </div>
+            <p className="mt-2 text-center text-sm text-slate-500">
+              {clientRating === 1 && 'Poor'}
+              {clientRating === 2 && 'Fair'}
+              {clientRating === 3 && 'Good'}
+              {clientRating === 4 && 'Very Good'}
+              {clientRating === 5 && 'Excellent'}
+              {clientRating === 0 && 'Select a rating'}
+            </p>
+
+            {/* Review Text */}
+            <div className="mt-4">
+              <label className="block text-sm font-medium text-slate-700">
+                Notes for other agents (optional)
+              </label>
+              <textarea
+                value={clientReview}
+                onChange={(e) => setClientReview(e.target.value)}
+                rows={3}
+                className="mt-1 w-full rounded-lg border border-slate-300 px-3 py-2 text-sm focus:border-amber-500 focus:outline-none focus:ring-1 focus:ring-amber-500"
+                placeholder="Share your experience working with this client..."
+              />
+            </div>
+
+            <div className="mt-6 flex gap-3">
+              <button
+                onClick={() => {
+                  setShowClientRatingModal(false);
+                  setClientRating(0);
+                  setClientReview('');
+                }}
+                className="flex-1 rounded-lg border border-slate-300 px-4 py-2 text-sm font-medium text-slate-700 hover:bg-slate-50"
+              >
+                Cancel
+              </button>
+              <button
+                onClick={handleSubmitClientRating}
+                disabled={submittingClientRating || clientRating === 0}
+                className="flex-1 rounded-lg bg-amber-500 px-4 py-2 text-sm font-semibold text-white hover:bg-amber-600 disabled:opacity-50"
+              >
+                {submittingClientRating ? 'Submitting...' : 'Submit Rating'}
+              </button>
+            </div>
+          </div>
+        </div>
+      )}
 
       {/* Cancel Modal */}
       {cancelModalOpen && (

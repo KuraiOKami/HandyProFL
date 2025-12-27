@@ -44,6 +44,7 @@ export async function GET() {
       assignment_id,
       amount_cents,
       status,
+      type,
       available_at,
       created_at,
       job_assignments (
@@ -119,6 +120,7 @@ export async function GET() {
       assignment_id: e.assignment_id,
       amount_cents: e.amount_cents,
       status: e.status,
+      type: e.type || "job_earning",
       available_at: e.available_at,
       service_type: ja?.service_requests?.service_type || "unknown",
       completed_at: ja?.completed_at || e.created_at,
