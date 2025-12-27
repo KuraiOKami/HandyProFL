@@ -5,6 +5,8 @@ import type { RequestItem, PaymentMethod } from '@/hooks/useRequestWizard';
 type ReviewStepProps = {
   items: RequestItem[];
   getPriceForItem: (item: RequestItem) => number;
+  subtotalCents: number;
+  urgencyFeeCents: number;
   totalPriceCents: number;
   requiredMinutes: number;
   date: string;
@@ -19,9 +21,18 @@ type ReviewStepProps = {
   isLoggedIn: boolean;
 };
 
+function getUrgencyLabel(feeCents: number): string {
+  if (feeCents === 5000) return 'same-day';
+  if (feeCents === 3000) return 'next-day';
+  if (feeCents === 2000) return '2-day';
+  return '';
+}
+
 export default function ReviewStep({
   items,
   getPriceForItem,
+  subtotalCents,
+  urgencyFeeCents,
   totalPriceCents,
   requiredMinutes,
   date,
@@ -69,6 +80,25 @@ export default function ReviewStep({
         <div className="flex items-center justify-between">
           <span className="text-slate-700">Subtotal</span>
           <span className="font-semibold text-slate-900">
+            {(subtotalCents / 100).toLocaleString(undefined, { style: 'currency', currency: 'USD' })}
+          </span>
+        </div>
+        {urgencyFeeCents > 0 && (
+          <div className="flex items-center justify-between">
+            <span className="text-slate-700">
+              Urgency fee
+              <span className="ml-1 text-xs text-slate-500">
+                ({getUrgencyLabel(urgencyFeeCents)})
+              </span>
+            </span>
+            <span className="font-semibold text-amber-600">
+              +{(urgencyFeeCents / 100).toLocaleString(undefined, { style: 'currency', currency: 'USD' })}
+            </span>
+          </div>
+        )}
+        <div className="flex items-center justify-between border-t border-slate-200 pt-2">
+          <span className="font-semibold text-slate-900">Total</span>
+          <span className="font-bold text-slate-900">
             {(totalPriceCents / 100).toLocaleString(undefined, { style: 'currency', currency: 'USD' })}
           </span>
         </div>

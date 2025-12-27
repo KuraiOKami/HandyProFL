@@ -126,6 +126,8 @@ const RequestWizard = forwardRef<RequestWizardHandle>((_props, ref) => {
             <ReviewStep
               items={itemsForReview}
               getPriceForItem={wizard.getPriceForItem}
+              subtotalCents={wizard.subtotalCents}
+              urgencyFeeCents={wizard.urgencyFeeCents}
               totalPriceCents={wizard.totalPriceCents}
               requiredMinutes={wizard.requiredMinutes}
               date={wizard.date}

@@ -1,6 +1,7 @@
 import { useCallback, useEffect, useMemo, useState } from 'react';
 import { getSupabaseClient } from '@/lib/supabaseClient';
 import { useSupabaseSession } from '@/hooks/useSupabaseSession';
+import { getUrgencyFee } from '@/components/wizard/SchedulingPicker';
 
 export type Step = 1 | 2 | 3 | 4 | 5;
 export type ServiceId = 'tv_mount' | 'assembly' | 'electrical' | 'punch';
@@ -349,11 +350,13 @@ export function useRequestWizard() {
     return {
       laborCents: breakdowns.reduce((sum, b) => sum + b.laborPrice, 0),
       materialsCents: breakdowns.reduce((sum, b) => sum + b.materialsCost, 0),
-      totalCents: breakdowns.reduce((sum, b) => sum + b.total, 0),
+      subtotalCents: breakdowns.reduce((sum, b) => sum + b.total, 0),
     };
   }, [items, buildCurrentItem, getPriceBreakdown]);
 
-  const totalPriceCents = priceBreakdown.totalCents;
+  const urgencyFeeCents = useMemo(() => getUrgencyFee(date), [date]);
+  const subtotalCents = priceBreakdown.subtotalCents;
+  const totalPriceCents = subtotalCents + urgencyFeeCents;
 
   const totalMinutes = useMemo(() => {
     const allItems = [...items, buildCurrentItem()];
@@ -611,6 +614,8 @@ export function useRequestWizard() {
     resetItemFields,
 
     // Computed values
+    subtotalCents,
+    urgencyFeeCents,
     totalPriceCents,
     totalMinutes,
     requiredMinutes,

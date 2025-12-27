@@ -1,5 +1,35 @@
 import { useMemo } from 'react';
 
+// Urgency fee tiers in cents
+export const URGENCY_FEES = {
+  sameDay: 5000, // $50
+  nextDay: 3000, // $30
+  twoDays: 2000, // $20
+} as const;
+
+export function getUrgencyFee(selectedDate: string): number {
+  if (!selectedDate) return 0;
+
+  const today = new Date();
+  today.setHours(0, 0, 0, 0);
+
+  const selected = new Date(selectedDate + 'T00:00:00');
+  const diffMs = selected.getTime() - today.getTime();
+  const diffDays = Math.floor(diffMs / (1000 * 60 * 60 * 24));
+
+  if (diffDays === 0) return URGENCY_FEES.sameDay;
+  if (diffDays === 1) return URGENCY_FEES.nextDay;
+  if (diffDays === 2) return URGENCY_FEES.twoDays;
+  return 0;
+}
+
+export function getUrgencyLabel(daysFromToday: number): string | null {
+  if (daysFromToday === 0) return `Same day +$${URGENCY_FEES.sameDay / 100}`;
+  if (daysFromToday === 1) return `Next day +$${URGENCY_FEES.nextDay / 100}`;
+  if (daysFromToday === 2) return `2-day +$${URGENCY_FEES.twoDays / 100}`;
+  return null;
+}
+
 type SchedulingPickerProps = {
   date: string;
   onDateChange: (date: string) => void;
@@ -13,13 +43,13 @@ type SchedulingPickerProps = {
 };
 
 function nextDays(days = 14) {
-  const out: { label: string; value: string }[] = [];
+  const out: { label: string; value: string; daysFromToday: number }[] = [];
   const formatter = new Intl.DateTimeFormat('en-US', { weekday: 'short', month: 'short', day: 'numeric' });
   for (let i = 0; i < days; i++) {
     const d = new Date();
     d.setDate(d.getDate() + i);
     const value = d.toISOString().slice(0, 10);
-    out.push({ label: formatter.format(d), value });
+    out.push({ label: formatter.format(d), value, daysFromToday: i });
   }
   return out;
 }
@@ -65,19 +95,25 @@ export default function SchedulingPicker({
       <div className="rounded-xl border border-slate-200 p-4">
         <p className="text-sm font-semibold text-slate-900 mb-3">Preferred Date</p>
         <div className="grid grid-cols-3 gap-2 sm:grid-cols-4 md:grid-cols-5">
-          {dates.map((d) => (
-            <button
-              key={d.value}
-              onClick={() => onDateChange(d.value)}
-              className={`rounded-lg border px-3 py-2 text-left text-sm ${
-                date === d.value
-                  ? 'border-indigo-600 bg-indigo-50 text-indigo-800'
-                  : 'border-slate-200 hover:border-indigo-200'
-              }`}
-            >
-              {d.label}
-            </button>
-          ))}
+          {dates.map((d) => {
+            const urgencyLabel = getUrgencyLabel(d.daysFromToday);
+            return (
+              <button
+                key={d.value}
+                onClick={() => onDateChange(d.value)}
+                className={`rounded-lg border px-3 py-2 text-left text-sm ${
+                  date === d.value
+                    ? 'border-indigo-600 bg-indigo-50 text-indigo-800'
+                    : 'border-slate-200 hover:border-indigo-200'
+                }`}
+              >
+                <span className="block">{d.label}</span>
+                {urgencyLabel && (
+                  <span className="block text-xs font-medium text-amber-600">{urgencyLabel}</span>
+                )}
+              </button>
+            );
+          })}
         </div>
       </div>
 
