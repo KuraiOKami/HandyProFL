@@ -94,9 +94,25 @@ export async function POST(req: NextRequest, { params }: Params) {
     return NextResponse.json({ error: updateError.message }, { status: 500 });
   }
 
-  // If there was a reserved slot, release it
+  // Release all booked slots for this request
   if (requestRow.preferred_time) {
-    await adminSupabase.from("available_slots").update({ is_booked: false }).eq("slot_start", requestRow.preferred_time);
+    // Get the estimated duration to calculate how many slots to release
+    const { data: requestDetails } = await adminSupabase
+      .from("service_requests")
+      .select("estimated_minutes")
+      .eq("id", requestRow.id)
+      .single();
+
+    const estimatedMinutes = requestDetails?.estimated_minutes ?? 60;
+    const startTime = new Date(requestRow.preferred_time);
+    const endTime = new Date(startTime.getTime() + estimatedMinutes * 60 * 1000);
+
+    // Release all slots within the booking window
+    await adminSupabase
+      .from("available_slots")
+      .update({ is_booked: false })
+      .gte("slot_start", requestRow.preferred_time)
+      .lt("slot_start", endTime.toISOString());
   }
 
   // Get the job assignment ID for agent earnings credit
