@@ -35,7 +35,10 @@ export async function POST(req: NextRequest) {
   if (!session) return NextResponse.json({ error: "Unauthorized" }, { status: 401 });
 
   const body = await req.json().catch(() => null);
-  const requestId = (body?.id as string | undefined)?.trim();
+  const requestId =
+    (body?.id as string | undefined)?.trim() ||
+    req.nextUrl.searchParams.get("id")?.trim() ||
+    null;
   const reason = (body?.reason as string | undefined)?.trim() || null;
 
   if (!requestId) {

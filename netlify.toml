@@ -10,3 +10,8 @@
 
 [[plugins]]
   package = "@netlify/plugin-nextjs"
+
+[[redirects]]
+  from = "/api/requests/:id/cancel"
+  to = "/api/requests/cancel?id=:id"
+  status = 307
