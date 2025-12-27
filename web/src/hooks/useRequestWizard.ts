@@ -425,13 +425,6 @@ export function useRequestWizard() {
       ? 'Using profile address'
       : [serviceAddress.street, serviceAddress.city, serviceAddress.state, serviceAddress.postalCode].filter(Boolean).join(', ');
 
-    // Determine service type - if catalog items are selected, use their names
-    const currentItem = buildCurrentItem();
-    const hasCatalogItems = currentItem.catalogItems && currentItem.catalogItems.length > 0;
-    const serviceTypeName = hasCatalogItems
-      ? currentItem.catalogItems.map(ci => ci.name).join(', ')
-      : services[service].name;
-
     const details = itemsToSave
       .map((item, idx) => {
         const mountTypeLabel = item.mountType === 'static' ? 'Static mount (+$30)'
@@ -486,7 +479,7 @@ export function useRequestWizard() {
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({
           user_id: session.user.id,
-          service_type: serviceTypeName,
+          service_type: service, // Use service ID (e.g., "tv_mount") not display name
           date,
           preferred_time: preferredTime, // Gig-based flow - no slot reservation
           required_minutes: requiredMinutes,
