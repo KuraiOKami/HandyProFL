@@ -91,6 +91,33 @@ function formatDate(dateStr: string | null): string {
   }).format(date);
 }
 
+function formatShortDate(dateStr: string | null): string {
+  if (!dateStr) return 'N/A';
+  const date = new Date(dateStr);
+  if (Number.isNaN(date.getTime())) return 'N/A';
+  return new Intl.DateTimeFormat('en-US', {
+    month: 'short',
+    day: 'numeric',
+    year: 'numeric',
+    timeZone: DISPLAY_TIME_ZONE,
+  }).format(date);
+}
+
+function formatDateTime(dateStr: string | null): string {
+  if (!dateStr) return 'N/A';
+  const date = new Date(dateStr);
+  if (Number.isNaN(date.getTime())) return 'N/A';
+  return new Intl.DateTimeFormat('en-US', {
+    month: 'short',
+    day: 'numeric',
+    year: 'numeric',
+    hour: 'numeric',
+    minute: '2-digit',
+    hour12: true,
+    timeZone: DISPLAY_TIME_ZONE,
+  }).format(date);
+}
+
 function formatPrice(cents: number | null): string {
   if (cents === null || cents === undefined) return '—';
   return `$${(cents / 100).toFixed(2)}`;
@@ -175,9 +202,12 @@ export default function BookingDetailView({ booking, agentProfile, jobAssignment
   const [newTime, setNewTime] = useState(formatTime(booking.preferredTime) || '');
   const [rescheduling, setRescheduling] = useState(false);
   const [nowMs, setNowMs] = useState<number | null>(null);
+  const [todayDate, setTodayDate] = useState('');
 
   useEffect(() => {
-    setNowMs(Date.now());
+    const now = Date.now();
+    setNowMs(now);
+    setTodayDate(new Intl.DateTimeFormat('en-CA', { timeZone: DISPLAY_TIME_ZONE }).format(new Date(now)));
   }, []);
 
   const cancelFeeCents = nowMs !== null
@@ -190,6 +220,12 @@ export default function BookingDetailView({ booking, agentProfile, jobAssignment
   const timeUntilService = nowMs !== null
     ? getTimeUntilService(booking.preferredTime, booking.preferredDate, nowMs)
     : null;
+  const cancelFeeStyle =
+    cancelFeeCents === null
+      ? 'border-slate-200 bg-slate-50 text-slate-700'
+      : cancelFeeCents > 0
+        ? 'border-amber-200 bg-amber-50 text-amber-800'
+        : 'border-emerald-200 bg-emerald-50 text-emerald-800';
 
   const statusConfig = STATUS_CONFIG[booking.status || 'pending'] || STATUS_CONFIG.pending;
   const isCancellable = !['completed', 'cancelled', 'in_progress', 'pending_verification'].includes(booking.status || '');
@@ -311,7 +347,7 @@ export default function BookingDetailView({ booking, agentProfile, jobAssignment
                   {booking.serviceType?.replace(/_/g, ' ').replace(/\b\w/g, (l) => l.toUpperCase()) || 'Service Request'}
                 </p>
                 <p className="text-sm text-slate-500">
-                  Booked on {booking.createdAt ? new Date(booking.createdAt).toLocaleDateString() : 'N/A'}
+                  Booked on {formatShortDate(booking.createdAt)}
                 </p>
               </div>
             </div>
@@ -470,7 +506,7 @@ export default function BookingDetailView({ booking, agentProfile, jobAssignment
                       <p className="font-medium text-slate-900">Work Started</p>
                       {jobAssignment.started_at ? (
                         <p className="text-sm text-slate-500">
-                          {new Date(jobAssignment.started_at).toLocaleString()}
+                          {formatDateTime(jobAssignment.started_at)}
                         </p>
                       ) : (
                         <p className="text-sm text-slate-400">Waiting for agent to check in</p>
@@ -494,7 +530,7 @@ export default function BookingDetailView({ booking, agentProfile, jobAssignment
                       <p className="font-medium text-slate-900">Work Completed</p>
                       {jobAssignment.completed_at ? (
                         <p className="text-sm text-slate-500">
-                          {new Date(jobAssignment.completed_at).toLocaleString()}
+                          {formatDateTime(jobAssignment.completed_at)}
                         </p>
                       ) : (
                         <p className="text-sm text-slate-400">In progress...</p>
@@ -591,13 +627,7 @@ export default function BookingDetailView({ booking, agentProfile, jobAssignment
             <p className="mt-2 text-sm text-slate-600">
               Are you sure you want to cancel this booking? This action cannot be undone.
             </p>
-            <div className={`mt-3 rounded-lg border p-3 text-sm ${
-              cancelFeeCents === null
-                ? 'border-slate-200 bg-slate-50 text-slate-700'
-                : cancelFeeCents > 0
-                  ? 'border-amber-200 bg-amber-50 text-amber-800'
-                  : 'border-emerald-200 bg-emerald-50 text-emerald-800'
-            }`}>
+            <div className={`mt-3 rounded-lg border p-3 text-sm ${cancelFeeStyle}`}>
               {timeUntilService ? (
                 <p>
                   You are <strong>{timeUntilService.description}</strong>.
@@ -675,7 +705,7 @@ export default function BookingDetailView({ booking, agentProfile, jobAssignment
                   type="date"
                   value={newDate}
                   onChange={(e) => setNewDate(e.target.value)}
-                  min={new Date().toISOString().split('T')[0]}
+                  min={todayDate || undefined}
                   className="mt-1 w-full rounded-lg border border-slate-300 px-3 py-2 focus:border-indigo-500 focus:outline-none focus:ring-1 focus:ring-indigo-500"
                 />
               </div>

@@ -68,6 +68,18 @@ function formatDate(dateStr: string | null): string {
   }).format(date);
 }
 
+function formatShortDate(dateStr: string | null): string {
+  if (!dateStr) return 'recently';
+  const date = new Date(dateStr);
+  if (Number.isNaN(date.getTime())) return 'recently';
+  return new Intl.DateTimeFormat('en-US', {
+    month: 'short',
+    day: 'numeric',
+    year: 'numeric',
+    timeZone: DISPLAY_TIME_ZONE,
+  }).format(date);
+}
+
 function formatPrice(cents: number | null): string {
   if (cents === null || cents === undefined) return 'Quote pending';
   return `$${(cents / 100).toFixed(2)}`;
@@ -544,7 +556,7 @@ function BookingCard({ booking, onCancel }: BookingCardProps) {
               {booking.service_type?.replace(/_/g, ' ').replace(/\b\w/g, (l) => l.toUpperCase()) || 'Service Request'}
             </h3>
             <p className="text-sm text-slate-500">
-              Booked {booking.created_at ? new Date(booking.created_at).toLocaleDateString() : 'recently'}
+              Booked {formatShortDate(booking.created_at)}
             </p>
           </div>
         </div>
