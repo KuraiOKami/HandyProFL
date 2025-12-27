@@ -204,19 +204,24 @@ const RequestWizard = forwardRef<RequestWizardHandle>((_props, ref) => {
             <div className="grid gap-4 rounded-xl border border-green-200 bg-green-50 p-5 text-center">
               <div className="flex flex-col items-center gap-2">
                 <span className="text-4xl">✅</span>
-                <p className="text-lg font-semibold text-green-800">Booking Confirmed!</p>
-                <p className="text-sm text-green-700">Your handyman visit has been scheduled.</p>
+                <p className="text-lg font-semibold text-green-800">Request Submitted!</p>
+                <p className="text-sm text-green-700">Your request is now visible to our handymen.</p>
               </div>
               <div className="rounded-lg border border-green-300 bg-white p-4">
-                <p className="text-xs uppercase tracking-wide text-slate-500">Confirmation Number</p>
+                <p className="text-xs uppercase tracking-wide text-slate-500">Reference Number</p>
                 <p className="mt-1 font-mono text-xl font-bold text-slate-900">{wizard.status}</p>
               </div>
               <div className="grid gap-1 text-sm text-green-800">
-                <p><strong>Date:</strong> {wizard.date}</p>
-                <p><strong>Time:</strong> {wizard.slot?.time}</p>
-                <p><strong>Total:</strong> {(wizard.totalPriceCents / 100).toLocaleString(undefined, { style: 'currency', currency: 'USD' })}</p>
+                <p><strong>Preferred Date:</strong> {wizard.date}</p>
+                <p><strong>Preferred Time:</strong> {wizard.slot?.time}</p>
+                <p><strong>Estimated Total:</strong> {(wizard.totalPriceCents / 100).toLocaleString(undefined, { style: 'currency', currency: 'USD' })}</p>
               </div>
-              <p className="text-xs text-slate-500">We&apos;ll send you a reminder before your appointment.</p>
+              <div className="rounded-lg border border-amber-200 bg-amber-50 p-3">
+                <p className="text-xs text-amber-800">
+                  <strong>Next step:</strong> A handyman will accept your request. Your card will be charged once confirmed.
+                  You can cancel for free until then.
+                </p>
+              </div>
               <button
                 onClick={() => wizard.setOpen(false)}
                 className="inline-flex w-full items-center justify-center rounded-lg bg-indigo-700 px-4 py-3 text-sm font-semibold text-white shadow-sm hover:bg-indigo-800"

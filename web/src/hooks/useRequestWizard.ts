@@ -490,9 +490,10 @@ export function useRequestWizard() {
           slots: slotStartIso,
           required_minutes: requiredMinutes,
           details: detailsWithDuration || null,
-          total_price_cents: totalPriceCents, // Full price charged to customer
-          labor_price_cents: priceBreakdown.laborCents, // Labor portion (70% to agent)
-          materials_cost_cents: priceBreakdown.materialsCents, // Materials (100% to agent)
+          total_price_cents: totalPriceCents,
+          labor_price_cents: priceBreakdown.laborCents,
+          materials_cost_cents: priceBreakdown.materialsCents,
+          payment_method_id: selectedPaymentMethodId, // Stored for charging when agent accepts
         }),
       });
 
@@ -506,31 +507,7 @@ export function useRequestWizard() {
       setRequestId(newRequestId);
     }
 
-    // Always charge the card
-    const chargeRes = await fetch('/api/payments/charge', {
-      method: 'POST',
-      headers: { 'Content-Type': 'application/json' },
-      body: JSON.stringify({
-        amount_cents: totalPriceCents,
-        currency: 'usd',
-        payment_method_id: selectedPaymentMethodId,
-        request_id: newRequestId,
-      }),
-    });
-    const chargeBody = await chargeRes.json().catch(() => ({}));
-    const chargeStatus = (chargeBody.status as string | undefined) ?? null;
-    if (!chargeRes.ok || chargeStatus !== 'succeeded') {
-      setStatus('Request submitted, but your card was not charged.');
-      setError(
-        chargeBody.error ||
-          (chargeStatus
-            ? `Card charge incomplete (status: ${chargeStatus}). We will confirm payment manually.`
-            : 'Card charge failed. We will confirm payment manually.'),
-      );
-      setSubmitting(false);
-      setStep(5);
-      return;
-    }
+    // Card will be charged when an agent accepts the job
     // Generate a friendly confirmation number from request ID (last 8 chars, uppercase)
     const confirmationNumber = newRequestId
       ? `HPF-${newRequestId.slice(-8).toUpperCase()}`
