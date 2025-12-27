@@ -16,10 +16,6 @@ type Booking = {
   status: string | null;
   created_at: string | null;
   total_price_cents: number | null;
-  street: string | null;
-  city: string | null;
-  state: string | null;
-  postal_code: string | null;
   assigned_agent_id: string | null;
   cancelled_at: string | null;
   cancellation_reason: string | null;
@@ -103,10 +99,6 @@ export default function ClientBookingsContent({ onNewRequest }: Props) {
             status,
             created_at,
             total_price_cents,
-            street,
-            city,
-            state,
-            postal_code,
             assigned_agent_id,
             cancelled_at,
             cancellation_reason
@@ -430,15 +422,6 @@ function BookingCard({ booking, onCancel }: BookingCardProps) {
         </div>
       </div>
 
-      {/* Location */}
-      {(booking.street || booking.city) && (
-        <div className="mt-3 text-sm">
-          <p className="text-slate-500">Location</p>
-          <p className="text-slate-900">
-            {[booking.street, booking.city, booking.state, booking.postal_code].filter(Boolean).join(', ')}
-          </p>
-        </div>
-      )}
 
       {/* Notes */}
       {booking.details && (
