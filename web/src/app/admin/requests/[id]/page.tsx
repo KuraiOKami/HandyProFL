@@ -8,6 +8,7 @@ import AdminRequestDetailView, {
   JobAssignment,
   AgentCheckin,
   ProofOfWork,
+  SurveyData,
 } from "@/components/admin/AdminRequestDetailView";
 import { createClient, createServiceRoleClient } from "@/utils/supabase/server";
 
@@ -53,7 +54,7 @@ export default async function AdminRequestDetailPage({ params }: PageProps) {
   } = await adminSupabase
     .from("service_requests")
     .select(
-      "id, user_id, service_type, preferred_date, preferred_time, details, status, estimated_minutes, created_at",
+      "id, user_id, service_type, preferred_date, preferred_time, details, status, estimated_minutes, created_at, cancelled_at, cancellation_reason, cancellation_fee_cents",
     )
     .eq("id", id)
     .maybeSingle();
@@ -108,6 +109,7 @@ export default async function AdminRequestDetailPage({ params }: PageProps) {
   let agentProfile: { first_name: string | null; last_name: string | null; email: string | null; phone: string | null } | null = null;
   let checkins: AgentCheckin[] = [];
   let proofs: ProofOfWork[] = [];
+  let surveyData: SurveyData | null = null;
 
   const { data: jobData } = await adminSupabase
     .from("job_assignments")
@@ -128,13 +130,19 @@ export default async function AdminRequestDetailPage({ params }: PageProps) {
       agentProfile = agent;
     }
 
-    // Fetch check-ins
+    // Fetch check-ins (including survey_data from checkout)
     const { data: checkinData } = await adminSupabase
       .from("agent_checkins")
-      .select("id, type, created_at, latitude, longitude, location_verified")
+      .select("id, type, created_at, latitude, longitude, location_verified, survey_data")
       .eq("assignment_id", jobData.id)
       .order("created_at", { ascending: true });
     checkins = checkinData ?? [];
+
+    // Extract survey data from checkout record
+    const checkoutRecord = checkinData?.find(c => c.type === "checkout" && c.survey_data);
+    if (checkoutRecord?.survey_data) {
+      surveyData = checkoutRecord.survey_data as SurveyData;
+    }
 
     // Fetch proof of work photos
     const { data: proofData } = await adminSupabase
@@ -154,6 +162,7 @@ export default async function AdminRequestDetailPage({ params }: PageProps) {
       agentProfile={agentProfile}
       checkins={checkins}
       proofs={proofs}
+      surveyData={surveyData}
     />
   );
 }

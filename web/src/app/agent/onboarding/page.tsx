@@ -1,9 +1,11 @@
 'use client';
 
-import { useEffect, useMemo, useState } from 'react';
+import { useEffect, useMemo, useState, useRef } from 'react';
 import type { Session } from '@supabase/supabase-js';
 import { useRouter } from 'next/navigation';
+import Image from 'next/image';
 import { getSupabaseClient } from '@/lib/supabaseClient';
+import { US_STATES } from '@/lib/usStates';
 
 const SKILL_OPTIONS = [
   { id: 'assembly', label: 'Furniture Assembly', icon: '🪑' },
@@ -17,7 +19,7 @@ const SKILL_OPTIONS = [
   { id: 'tech', label: 'Tech & Networking', icon: '📡' },
 ];
 
-type Step = 'account' | 'personal' | 'skills' | 'review';
+type Step = 'account' | 'personal' | 'verification' | 'skills' | 'review';
 
 export default function AgentOnboardingPage() {
   const router = useRouter();
@@ -48,8 +50,18 @@ export default function AgentOnboardingPage() {
   const [serviceArea, setServiceArea] = useState(25);
   const [agreeToTerms, setAgreeToTerms] = useState(false);
 
+  // Selfie upload state (kept for profile photo)
+  const [selfieUrl, setSelfieUrl] = useState<string | null>(null);
+  const [selfiePreview, setSelfiePreview] = useState<string | null>(null);
+  const [uploadingSelfie, setUploadingSelfie] = useState(false);
+  const selfieInputRef = useRef<HTMLInputElement>(null);
+
+  // Identity verification state
+  const [identityStatus, setIdentityStatus] = useState<'not_started' | 'pending' | 'verified' | 'canceled'>('not_started');
+  const [identityLoading, setIdentityLoading] = useState(false);
+
   const steps = useMemo<Step[]>(() => {
-    return session ? ['personal', 'skills', 'review'] : ['account', 'personal', 'skills', 'review'];
+    return session ? ['personal', 'verification', 'skills', 'review'] : ['account', 'personal', 'verification', 'skills', 'review'];
   }, [session]);
 
   const currentStep = steps[stepIndex] ?? steps[0];
@@ -94,6 +106,105 @@ export default function AgentOnboardingPage() {
     );
   };
 
+  // Check verification status on mount and when returning from Stripe
+  useEffect(() => {
+    const checkVerificationStatus = async () => {
+      if (!session) return;
+
+      try {
+        const res = await fetch('/api/agent/identity/create-session');
+        const data = await res.json();
+        if (data.status) {
+          setIdentityStatus(data.status);
+        }
+      } catch (err) {
+        console.error('Failed to check verification status:', err);
+      }
+    };
+
+    checkVerificationStatus();
+
+    // Check if returning from Stripe verification
+    const urlParams = new URLSearchParams(window.location.search);
+    if (urlParams.get('verification') === 'complete') {
+      checkVerificationStatus();
+      // Clean up URL
+      window.history.replaceState({}, '', '/agent/onboarding');
+    }
+  }, [session]);
+
+  const startIdentityVerification = async () => {
+    if (!session) {
+      setError('Please sign in first to verify your identity.');
+      return;
+    }
+
+    setIdentityLoading(true);
+    setError(null);
+
+    try {
+      const res = await fetch('/api/agent/identity/create-session', {
+        method: 'POST',
+      });
+
+      const data = await res.json();
+
+      if (!res.ok) {
+        throw new Error(data.error || 'Failed to start verification');
+      }
+
+      // Redirect to Stripe Identity verification
+      if (data.url) {
+        window.location.href = data.url;
+      }
+    } catch (err) {
+      setError(err instanceof Error ? err.message : 'Failed to start verification');
+    } finally {
+      setIdentityLoading(false);
+    }
+  };
+
+  const handleSelfieUpload = async (file: File) => {
+    if (!supabase || !session) {
+      setError('Please sign in first to upload your photo.');
+      return;
+    }
+
+    setUploadingSelfie(true);
+    setError(null);
+
+    try {
+      // Create a preview
+      const previewUrl = URL.createObjectURL(file);
+      setSelfiePreview(previewUrl);
+
+      // Upload to Supabase Storage
+      const fileName = `agent-selfies/${session.user.id}_${Date.now()}.jpg`;
+      const { error: uploadError } = await supabase.storage
+        .from('agent-verification')
+        .upload(fileName, file, {
+          contentType: file.type,
+          upsert: true,
+        });
+
+      if (uploadError) {
+        throw new Error(uploadError.message);
+      }
+
+      // Get public URL
+      const { data: urlData } = supabase.storage
+        .from('agent-verification')
+        .getPublicUrl(fileName);
+
+      setSelfieUrl(urlData.publicUrl);
+    } catch (err) {
+      setError(err instanceof Error ? err.message : 'Failed to upload photo');
+      setSelfiePreview(null);
+    } finally {
+      setUploadingSelfie(false);
+    }
+  };
+
   const handleAccountSubmit = async () => {
     if (session) {
       setStepIndex(0);
@@ -119,9 +230,14 @@ export default function AgentOnboardingPage() {
     setError(null);
 
     try {
+      const redirectUrl = `${window.location.origin}/auth/callback`;
       const action =
         authMode === 'signup'
-          ? supabase.auth.signUp({ email: email.trim(), password })
+          ? supabase.auth.signUp({
+              email: email.trim(),
+              password,
+              options: { emailRedirectTo: redirectUrl },
+            })
           : supabase.auth.signInWithPassword({ email: email.trim(), password });
 
       const { error: authError, data } = await action;
@@ -194,6 +310,7 @@ export default function AgentOnboardingPage() {
           bio,
           skills,
           service_area_miles: serviceArea,
+          selfie_url: selfieUrl,
         }),
       });
 
@@ -219,6 +336,8 @@ export default function AgentOnboardingPage() {
         );
       case 'personal':
         return Boolean(firstName.trim() && lastName.trim() && phone.trim());
+      case 'verification':
+        return identityStatus === 'verified'; // ID verification required
       case 'skills':
         return skills.length > 0;
       case 'review':
@@ -379,14 +498,18 @@ export default function AgentOnboardingPage() {
             </div>
             <div>
               <label className="block text-sm font-medium text-slate-700">State</label>
-              <input
-                type="text"
+              <select
                 value={stateCode}
                 onChange={(e) => setStateCode(e.target.value)}
                 className="mt-1 w-full rounded-lg border border-slate-300 px-3 py-2.5 text-sm focus:border-emerald-500 focus:outline-none focus:ring-1 focus:ring-emerald-500"
-                placeholder="FL"
-                maxLength={2}
-              />
+              >
+                <option value="">Select state</option>
+                {US_STATES.map((s) => (
+                  <option key={s.code} value={s.code}>
+                    {s.code} - {s.name}
+                  </option>
+                ))}
+              </select>
             </div>
           </div>
 
@@ -411,6 +534,143 @@ export default function AgentOnboardingPage() {
                 placeholder="Tell us about your trade, certifications, and tools."
               />
             </div>
+          </div>
+        </div>
+      );
+    }
+
+    if (currentStep === 'verification') {
+      return (
+        <div className="space-y-4">
+          <div>
+            <h2 className="text-xl font-semibold text-slate-900">Identity Verification</h2>
+            <p className="mt-1 text-sm text-slate-500">
+              We need to verify your identity with a government-issued ID. This helps protect both you and our clients.
+            </p>
+          </div>
+
+          {/* ID Verification Section */}
+          <div className="rounded-lg border border-slate-200 bg-slate-50 p-6">
+            {identityStatus === 'verified' ? (
+              <div className="flex flex-col items-center gap-4">
+                <div className="flex h-20 w-20 items-center justify-center rounded-full bg-emerald-100 text-4xl">
+                  ✅
+                </div>
+                <div className="text-center">
+                  <p className="text-lg font-semibold text-emerald-700">Identity Verified</p>
+                  <p className="mt-1 text-sm text-slate-600">
+                    Your identity has been successfully verified.
+                  </p>
+                </div>
+              </div>
+            ) : identityStatus === 'pending' ? (
+              <div className="flex flex-col items-center gap-4">
+                <div className="flex h-20 w-20 items-center justify-center rounded-full bg-amber-100 text-4xl">
+                  ⏳
+                </div>
+                <div className="text-center">
+                  <p className="text-lg font-semibold text-amber-700">Verification In Progress</p>
+                  <p className="mt-1 text-sm text-slate-600">
+                    Your verification is being processed. This usually takes a few minutes.
+                  </p>
+                </div>
+                <button
+                  type="button"
+                  onClick={startIdentityVerification}
+                  disabled={identityLoading}
+                  className="rounded-lg border border-slate-300 px-4 py-2 text-sm font-medium text-slate-700 hover:bg-slate-50 disabled:opacity-50"
+                >
+                  Check again or restart
+                </button>
+              </div>
+            ) : (
+              <div className="flex flex-col items-center gap-4">
+                <div className="flex h-20 w-20 items-center justify-center rounded-full bg-slate-200 text-4xl">
+                  🪪
+                </div>
+                <div className="text-center">
+                  <p className="text-lg font-semibold text-slate-900">Verify Your Identity</p>
+                  <p className="mt-1 text-sm text-slate-600">
+                    You&apos;ll need a government-issued ID (driver&apos;s license, passport, or ID card).
+                  </p>
+                </div>
+                <button
+                  type="button"
+                  onClick={startIdentityVerification}
+                  disabled={identityLoading}
+                  className="rounded-lg bg-emerald-600 px-6 py-3 text-sm font-semibold text-white hover:bg-emerald-700 disabled:opacity-50"
+                >
+                  {identityLoading ? 'Starting verification...' : 'Start ID Verification'}
+                </button>
+              </div>
+            )}
+          </div>
+
+          {/* Profile Photo Section (optional, still nice to have) */}
+          <div className="rounded-lg border border-slate-200 bg-white p-4">
+            <h3 className="text-sm font-semibold text-slate-900">Profile Photo (Optional)</h3>
+            <p className="mt-1 text-xs text-slate-500">Add a friendly photo for your profile.</p>
+            <div className="mt-3 flex items-center gap-4">
+              <input
+                ref={selfieInputRef}
+                type="file"
+                accept="image/*"
+                capture="user"
+                className="hidden"
+                onChange={(e) => {
+                  const file = e.target.files?.[0];
+                  if (file) handleSelfieUpload(file);
+                }}
+              />
+              {selfiePreview ? (
+                <>
+                  <div className="relative h-16 w-16 overflow-hidden rounded-full border-2 border-emerald-500">
+                    <Image
+                      src={selfiePreview}
+                      alt="Your photo"
+                      fill
+                      className="object-cover"
+                      unoptimized
+                    />
+                  </div>
+                  <button
+                    type="button"
+                    onClick={() => selfieInputRef.current?.click()}
+                    disabled={uploadingSelfie}
+                    className="text-sm font-medium text-indigo-600 hover:text-indigo-700 disabled:opacity-50"
+                  >
+                    Change photo
+                  </button>
+                </>
+              ) : (
+                <button
+                  type="button"
+                  onClick={() => selfieInputRef.current?.click()}
+                  disabled={uploadingSelfie}
+                  className="rounded-lg border border-slate-300 px-4 py-2 text-sm font-medium text-slate-700 hover:bg-slate-50 disabled:opacity-50"
+                >
+                  {uploadingSelfie ? 'Uploading...' : 'Add Photo'}
+                </button>
+              )}
+            </div>
+          </div>
+
+          <div className="rounded-lg border border-amber-200 bg-amber-50 p-4">
+            <h3 className="text-sm font-semibold text-amber-800">Why we verify identity</h3>
+            <ul className="mt-2 space-y-1 text-sm text-amber-700">
+              <li className="flex items-start gap-2">
+                <span className="mt-0.5">•</span>
+                <span>Ensure safety for clients allowing you into their homes</span>
+              </li>
+              <li className="flex items-start gap-2">
+                <span className="mt-0.5">•</span>
+                <span>Protect you from identity fraud</span>
+              </li>
+              <li className="flex items-start gap-2">
+                <span className="mt-0.5">•</span>
+                <span>Create a safer experience for everyone</span>
+              </li>
+            </ul>
           </div>
         </div>
       );
@@ -521,6 +781,26 @@ export default function AgentOnboardingPage() {
               <p className="text-sm text-slate-600">{bio}</p>
             </div>
           )}
+
+          <div className="border-t border-slate-200 pt-3">
+            <p className="text-sm font-semibold text-slate-900">Verification Photo</p>
+            {selfiePreview ? (
+              <div className="mt-2 flex items-center gap-3">
+                <div className="relative h-16 w-16 overflow-hidden rounded-full border-2 border-emerald-500">
+                  <Image
+                    src={selfiePreview}
+                    alt="Your selfie"
+                    fill
+                    className="object-cover"
+                    unoptimized
+                  />
+                </div>
+                <span className="text-sm text-emerald-600">Photo uploaded</span>
+              </div>
+            ) : (
+              <p className="mt-1 text-sm text-rose-600">No photo uploaded</p>
+            )}
+          </div>
         </div>
 
         <div className="rounded-lg border border-slate-200 p-4">
@@ -570,8 +850,8 @@ export default function AgentOnboardingPage() {
   }
 
   return (
-    <div className="fixed inset-0 flex items-center justify-center bg-slate-50 p-4">
-      <div className="w-full max-w-3xl rounded-2xl border border-slate-200 bg-white shadow-xl">
+    <div className="fixed inset-0 overflow-y-auto bg-slate-50 p-4">
+      <div className="mx-auto my-4 w-full max-w-3xl rounded-2xl border border-slate-200 bg-white shadow-xl sm:my-8">
         {/* Header */}
         <div className="border-b border-slate-200 px-6 py-4">
           <div className="flex items-center justify-between gap-3">

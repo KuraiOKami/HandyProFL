@@ -16,6 +16,31 @@ export type PaymentMethod = {
 
 export type MountType = 'none' | 'static' | 'full_motion';
 
+export type ServiceRecipient = 'myself' | 'family' | 'friend' | 'tenant' | 'business' | 'other';
+
+export const SERVICE_RECIPIENTS: { value: ServiceRecipient; label: string; description: string }[] = [
+  { value: 'myself', label: 'Myself', description: 'Service at my home address' },
+  { value: 'family', label: 'Family Member', description: 'Service for a family member' },
+  { value: 'friend', label: 'Friend', description: 'Service for a friend' },
+  { value: 'tenant', label: 'Tenant', description: 'Service for a rental property tenant' },
+  { value: 'business', label: 'Business', description: 'Service for a commercial location' },
+  { value: 'other', label: 'Other', description: 'Another recipient' },
+];
+
+export type ServiceAddress = {
+  street: string;
+  city: string;
+  state: string;
+  postalCode: string;
+};
+
+export type CatalogItem = {
+  id: string;
+  name: string;
+  priceCents: number;
+  baseMinutes: number;
+};
+
 export type RequestItem = {
   service: ServiceId;
   tvSize: string;
@@ -24,6 +49,10 @@ export type RequestItem = {
   mountType: MountType;
   assemblyType: string;
   assemblyOther: string;
+  electricalType: string;
+  electricalOther: string;
+  punchTasks: string[];
+  catalogItems: CatalogItem[]; // Items selected from service catalog search
   extraItems: string[];
   notes: string;
   photoNames: string[];
@@ -47,6 +76,7 @@ export const services: Record<
       wallTypes?: string[];
       hasMount?: boolean;
       assemblyTypes?: string[];
+      electricalTypes?: string[];
     };
   }
 > = {
@@ -72,10 +102,13 @@ export const services: Record<
     name: 'Light/Fan Swap',
     description: 'Replace fixtures, fans, dimmers, or switches.',
     icon: '💡',
+    options: {
+      electricalTypes: ['Ceiling Fan', 'Indoor Light Fixture', 'Outdoor Light', 'Dimmer Switch', 'Light Switch', 'Outlet', 'Other'],
+    },
   },
   punch: {
     name: 'General Handyman (Hourly)',
-    description: 'Mixed small jobs, billed hourly with materials as needed.',
+    description: 'Mixed small jobs, billed hourly. 2hr minimum.',
     icon: '📋',
   },
 };
@@ -118,6 +151,16 @@ export function useRequestWizard() {
   const [open, setOpen] = useState(false);
   const [step, setStep] = useState<Step>(1);
 
+  // Service recipient and address
+  const [serviceRecipient, setServiceRecipient] = useState<ServiceRecipient>('myself');
+  const [serviceAddress, setServiceAddress] = useState<ServiceAddress>({
+    street: '',
+    city: '',
+    state: 'FL',
+    postalCode: '',
+  });
+  const [useProfileAddress, setUseProfileAddress] = useState(true);
+
   // Service selection state
   const [service, setService] = useState<ServiceId>('tv_mount');
   const [tvSize, setTvSize] = useState('55"');
@@ -126,6 +169,11 @@ export function useRequestWizard() {
   const [mountType, setMountType] = useState<MountType>('none');
   const [assemblyType, setAssemblyType] = useState('Chair');
   const [assemblyOther, setAssemblyOther] = useState('');
+  const [electricalType, setElectricalType] = useState('Ceiling Fan');
+  const [electricalOther, setElectricalOther] = useState('');
+  const [punchTasks, setPunchTasks] = useState<string[]>([]);
+  const [newPunchTask, setNewPunchTask] = useState('');
+  const [catalogItems, setCatalogItems] = useState<CatalogItem[]>([]);
 
   // Details state
   const [notes, setNotes] = useState('');
@@ -160,6 +208,9 @@ export function useRequestWizard() {
 
   const reset = useCallback((nextService: ServiceId = 'tv_mount') => {
     setStep(1);
+    setServiceRecipient('myself');
+    setServiceAddress({ street: '', city: '', state: 'FL', postalCode: '' });
+    setUseProfileAddress(true);
     setService(nextService);
     setTvSize('55"');
     setWallType('Drywall');
@@ -167,6 +218,11 @@ export function useRequestWizard() {
     setMountType('none');
     setAssemblyType('Chair');
     setAssemblyOther('');
+    setElectricalType('Ceiling Fan');
+    setElectricalOther('');
+    setPunchTasks([]);
+    setNewPunchTask('');
+    setCatalogItems([]);
     setNotes('');
     setExtraItems([]);
     setNewItem('');
@@ -190,6 +246,11 @@ export function useRequestWizard() {
     setMountType('none');
     setAssemblyType('Chair');
     setAssemblyOther('');
+    setElectricalType('Ceiling Fan');
+    setElectricalOther('');
+    setPunchTasks([]);
+    setNewPunchTask('');
+    setCatalogItems([]);
     setNotes('');
     setExtraItems([]);
     setNewItem('');
@@ -206,11 +267,15 @@ export function useRequestWizard() {
       mountType: hasMount === 'no' ? mountType : 'none',
       assemblyType,
       assemblyOther,
+      electricalType,
+      electricalOther,
+      punchTasks,
+      catalogItems,
       extraItems,
       notes,
       photoNames,
     }),
-    [service, tvSize, wallType, hasMount, mountType, assemblyType, assemblyOther, extraItems, notes, photoNames],
+    [service, tvSize, wallType, hasMount, mountType, assemblyType, assemblyOther, electricalType, electricalOther, punchTasks, catalogItems, extraItems, notes, photoNames],
   );
 
   // Load service catalog durations and prices
@@ -236,6 +301,10 @@ export function useRequestWizard() {
 
   const getMinutesForItem = useCallback(
     (item: RequestItem) => {
+      // If item has catalog items, sum their minutes
+      if (item.catalogItems && item.catalogItems.length > 0) {
+        return item.catalogItems.reduce((sum, ci) => sum + ci.baseMinutes, 0);
+      }
       const id = getServiceId(item);
       return (
         serviceDurations[id] ??
@@ -251,23 +320,40 @@ export function useRequestWizard() {
     [serviceDurations],
   );
 
-  const getPriceForItem = useCallback(
+  const getPriceBreakdown = useCallback(
     (item: RequestItem) => {
+      // If item has catalog items, sum their prices
+      if (item.catalogItems && item.catalogItems.length > 0) {
+        const catalogTotal = item.catalogItems.reduce((sum, ci) => sum + ci.priceCents, 0);
+        return { laborPrice: catalogTotal, materialsCost: 0, total: catalogTotal };
+      }
       const id = getServiceId(item);
-      const basePrice = servicePrices[id] ?? 0;
-      // Add mount upcharge if user needs a mount
-      const mountUpcharge = item.service === 'tv_mount' && item.hasMount === 'no'
+      const laborPrice = servicePrices[id] ?? 0;
+      // Mount cost is pass-through (100% reimbursed to agent, not commissioned)
+      const materialsCost = item.service === 'tv_mount' && item.hasMount === 'no'
         ? MOUNT_UPCHARGES[item.mountType]
         : 0;
-      return basePrice + mountUpcharge;
+      return { laborPrice, materialsCost, total: laborPrice + materialsCost };
     },
     [servicePrices],
   );
 
-  const totalPriceCents = useMemo(() => {
+  const getPriceForItem = useCallback(
+    (item: RequestItem) => getPriceBreakdown(item).total,
+    [getPriceBreakdown],
+  );
+
+  const priceBreakdown = useMemo(() => {
     const allItems = [...items, buildCurrentItem()];
-    return allItems.map(getPriceForItem).reduce((sum, n) => sum + n, 0);
-  }, [items, buildCurrentItem, getPriceForItem]);
+    const breakdowns = allItems.map(getPriceBreakdown);
+    return {
+      laborCents: breakdowns.reduce((sum, b) => sum + b.laborPrice, 0),
+      materialsCents: breakdowns.reduce((sum, b) => sum + b.materialsCost, 0),
+      totalCents: breakdowns.reduce((sum, b) => sum + b.total, 0),
+    };
+  }, [items, buildCurrentItem, getPriceBreakdown]);
+
+  const totalPriceCents = priceBreakdown.totalCents;
 
   const totalMinutes = useMemo(() => {
     const allItems = [...items, buildCurrentItem()];
@@ -330,21 +416,46 @@ export function useRequestWizard() {
 
     const itemsToSave: RequestItem[] = [...items, buildCurrentItem()];
 
+    // Build service address info
+    const recipientLabel = SERVICE_RECIPIENTS.find(r => r.value === serviceRecipient)?.label ?? 'Myself';
+    const addressLine = useProfileAddress
+      ? 'Using profile address'
+      : [serviceAddress.street, serviceAddress.city, serviceAddress.state, serviceAddress.postalCode].filter(Boolean).join(', ');
+
+    // Determine service type - if catalog items are selected, use their names
+    const currentItem = buildCurrentItem();
+    const hasCatalogItems = currentItem.catalogItems && currentItem.catalogItems.length > 0;
+    const serviceTypeName = hasCatalogItems
+      ? currentItem.catalogItems.map(ci => ci.name).join(', ')
+      : services[service].name;
+
     const details = itemsToSave
       .map((item, idx) => {
         const mountTypeLabel = item.mountType === 'static' ? 'Static mount (+$30)'
           : item.mountType === 'full_motion' ? 'Full motion mount (+$70)'
           : null;
+
+        // Use catalog item names if present, otherwise use service name
+        const itemServiceName = item.catalogItems && item.catalogItems.length > 0
+          ? item.catalogItems.map(ci => ci.name).join(', ')
+          : services[item.service].name;
+
         const parts = [
-          `Item ${idx + 1}: ${services[item.service].name}`,
-          item.service === 'tv_mount' ? `TV size: ${item.tvSize}` : null,
-          item.service === 'tv_mount' ? `Wall: ${item.wallType}` : null,
-          item.service === 'tv_mount' ? `Mount provided: ${item.hasMount === 'yes' ? 'Yes' : 'No'}` : null,
-          item.service === 'tv_mount' && item.hasMount === 'no' && mountTypeLabel ? `Mount type: ${mountTypeLabel}` : null,
-          item.service === 'assembly' ? `Assembly type: ${item.assemblyType}` : null,
-          item.service === 'assembly' && item.assemblyType === 'Other' && item.assemblyOther
+          `Item ${idx + 1}: ${itemServiceName}`,
+          // Only include service-specific details if no catalog items
+          !item.catalogItems?.length && item.service === 'tv_mount' ? `TV size: ${item.tvSize}` : null,
+          !item.catalogItems?.length && item.service === 'tv_mount' ? `Wall: ${item.wallType}` : null,
+          !item.catalogItems?.length && item.service === 'tv_mount' ? `Mount provided: ${item.hasMount === 'yes' ? 'Yes' : 'No'}` : null,
+          !item.catalogItems?.length && item.service === 'tv_mount' && item.hasMount === 'no' && mountTypeLabel ? `Mount type: ${mountTypeLabel}` : null,
+          !item.catalogItems?.length && item.service === 'assembly' ? `Assembly type: ${item.assemblyType}` : null,
+          !item.catalogItems?.length && item.service === 'assembly' && item.assemblyType === 'Other' && item.assemblyOther
             ? `Other: ${item.assemblyOther}`
             : null,
+          !item.catalogItems?.length && item.service === 'electrical' ? `Electrical type: ${item.electricalType}` : null,
+          !item.catalogItems?.length && item.service === 'electrical' && item.electricalType === 'Other' && item.electricalOther
+            ? `Other: ${item.electricalOther}`
+            : null,
+          !item.catalogItems?.length && item.service === 'punch' && item.punchTasks.length ? `Tasks: ${item.punchTasks.join(', ')}` : null,
           item.extraItems.length ? `Additional items: ${item.extraItems.join(', ')}` : null,
           item.photoNames.length ? `Photos: ${item.photoNames.join(', ')}` : null,
           item.notes ? `Notes: ${item.notes}` : null,
@@ -354,7 +465,7 @@ export function useRequestWizard() {
         return parts;
       })
       .join(' || ');
-    const detailsWithDuration = `${details}${details ? ' | ' : ''}Estimated minutes: ${requiredMinutes} | Subtotal: ${(totalPriceCents / 100).toLocaleString(undefined, { style: 'currency', currency: 'USD' })}`;
+    const detailsWithDuration = `Service for: ${recipientLabel} | Address: ${addressLine} | ${details}${details ? ' | ' : ''}Estimated minutes: ${requiredMinutes} | Subtotal: ${(totalPriceCents / 100).toLocaleString(undefined, { style: 'currency', currency: 'USD' })}`;
 
     const selectedSlots = availableSlots[date] ?? [];
     const selectedIdx = selectedSlots.findIndex((s) => s.startIso === slot?.startIso);
@@ -374,11 +485,14 @@ export function useRequestWizard() {
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({
           user_id: session.user.id,
-          service_type: services[service].name,
+          service_type: serviceTypeName,
           date,
           slots: slotStartIso,
           required_minutes: requiredMinutes,
           details: detailsWithDuration || null,
+          total_price_cents: totalPriceCents, // Full price charged to customer
+          labor_price_cents: priceBreakdown.laborCents, // Labor portion (70% to agent)
+          materials_cost_cents: priceBreakdown.materialsCents, // Materials (100% to agent)
         }),
       });
 
@@ -405,7 +519,6 @@ export function useRequestWizard() {
     });
     const chargeBody = await chargeRes.json().catch(() => ({}));
     const chargeStatus = (chargeBody.status as string | undefined) ?? null;
-    const paymentIntentId = (chargeBody.payment_intent_id as string | undefined) ?? null;
     if (!chargeRes.ok || chargeStatus !== 'succeeded') {
       setStatus('Request submitted, but your card was not charged.');
       setError(
@@ -418,9 +531,11 @@ export function useRequestWizard() {
       setStep(5);
       return;
     }
-    setStatus(
-      `Request submitted and card charged. Payment ID: ${paymentIntentId ?? 'created'}. See you soon!`,
-    );
+    // Generate a friendly confirmation number from request ID (last 8 chars, uppercase)
+    const confirmationNumber = newRequestId
+      ? `HPF-${newRequestId.slice(-8).toUpperCase()}`
+      : `HPF-${Date.now().toString(36).toUpperCase()}`;
+    setStatus(confirmationNumber);
 
     setSubmitting(false);
     setStep(5);
@@ -432,6 +547,8 @@ export function useRequestWizard() {
     paymentMethods,
     selectedPaymentMethodId,
     totalPriceCents,
+    priceBreakdown.laborCents,
+    priceBreakdown.materialsCents,
     items,
     buildCurrentItem,
     requiredMinutes,
@@ -439,6 +556,9 @@ export function useRequestWizard() {
     requiredSlots,
     requestId,
     service,
+    serviceRecipient,
+    serviceAddress,
+    useProfileAddress,
   ]);
 
   return {
@@ -448,6 +568,14 @@ export function useRequestWizard() {
     step,
     setStep,
     reset,
+
+    // Service recipient and address
+    serviceRecipient,
+    setServiceRecipient,
+    serviceAddress,
+    setServiceAddress,
+    useProfileAddress,
+    setUseProfileAddress,
 
     // Service selection
     service,
@@ -464,6 +592,16 @@ export function useRequestWizard() {
     setAssemblyType,
     assemblyOther,
     setAssemblyOther,
+    electricalType,
+    setElectricalType,
+    electricalOther,
+    setElectricalOther,
+    punchTasks,
+    setPunchTasks,
+    newPunchTask,
+    setNewPunchTask,
+    catalogItems,
+    setCatalogItems,
 
     // Details
     notes,

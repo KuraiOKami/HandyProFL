@@ -74,6 +74,9 @@ export async function GET() {
       total_earnings_cents: agentData.total_earnings_cents || 0,
       skills: agentData.skills || [],
       stripe_payouts_enabled: agentData.stripe_payouts_enabled || false,
+      identity_verification_status: agentData.identity_verification_status || "not_started",
+      identity_verified_at: agentData.identity_verified_at || null,
+      selfie_url: agentData.selfie_url || null,
       created_at: agentData.created_at || null,
       role: profile?.role || "client",
     };

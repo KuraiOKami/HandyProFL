@@ -9,7 +9,8 @@ export default function AdminNotificationsContent() {
         <p className="text-sm text-slate-600">Email/SMS templates and bulk sends.</p>
       </div>
       <div className="rounded-xl border border-dashed border-slate-200 bg-slate-50 p-5 text-sm text-slate-700">
-        TODO: Hook into notification_preferences, templates, and a sender (SMTP/Twilio).
+        SMS sending is available via <code>/api/notifications/send</code> (admin-only) and respects
+        user <code>notification_preferences</code>. Push notifications are queued for later implementation.
       </div>
     </section>
   );

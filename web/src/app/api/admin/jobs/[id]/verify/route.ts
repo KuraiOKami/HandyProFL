@@ -1,5 +1,6 @@
 import { NextRequest, NextResponse } from "next/server";
 import { createClient, createServiceRoleClient } from "@/utils/supabase/server";
+import { notifyAdmins } from "@/lib/adminNotifications";
 
 async function getAdminSession() {
   const supabase = await createClient();
@@ -143,6 +144,45 @@ export async function POST(
       } catch (err) {
         console.warn("increment_agent_stats RPC missing or failed", err);
       }
+
+      let serviceLabel = "Service";
+      let clientLabel = "Client";
+      if (assignment.request_id) {
+        const { data: requestDetails } = await adminSupabase
+          .from("service_requests")
+          .select("service_type, profiles:user_id(first_name, last_name, email)")
+          .eq("id", assignment.request_id)
+          .maybeSingle();
+
+        if (requestDetails?.service_type) {
+          serviceLabel = requestDetails.service_type;
+        }
+
+        const clientProfile = Array.isArray(requestDetails?.profiles)
+          ? requestDetails?.profiles[0]
+          : requestDetails?.profiles;
+        const clientName =
+          [clientProfile?.first_name, clientProfile?.last_name]
+            .filter(Boolean)
+            .join(" ") || clientProfile?.email;
+
+        if (clientName) {
+          clientLabel = clientName;
+        }
+      }
+
+      const completionMessage = [
+        `Request completed: ${serviceLabel}.`,
+        `Client: ${clientLabel}.`,
+        `Request ID: ${assignment.request_id || "Unknown"}.`,
+        `Job ID: ${jobId}.`,
+      ];
+
+      await notifyAdmins(adminSupabase, {
+        subject: "Request completed",
+        message: completionMessage.join("\n"),
+        sms: `Completed: ${serviceLabel} for ${clientLabel}.`,
+      });
 
       return NextResponse.json({
         ok: true,

@@ -40,7 +40,15 @@ export async function POST(
   const { id: jobId } = await params;
 
   const body = await req.json().catch(() => null);
-  const { latitude, longitude } = body ?? {};
+  const { latitude, longitude, survey } = body ?? {};
+
+  // Survey data structure
+  const surveyData = survey ? {
+    satisfaction: survey.satisfaction,
+    actual_duration: survey.actual_duration,
+    completed_tasks: survey.completed_tasks,
+    additional_notes: survey.additional_notes,
+  } : null;
 
   // Get the job assignment
   const { data: assignment, error } = await adminSupabase
@@ -106,7 +114,7 @@ export async function POST(
     );
   }
 
-  // Create checkout record
+  // Create checkout record with survey data
   const { error: checkoutError } = await adminSupabase.from("agent_checkins").insert({
     assignment_id: jobId,
     agent_id: session.user.id,
@@ -115,6 +123,7 @@ export async function POST(
     longitude: longitude ?? null,
     location_verified: true, // Checkout doesn't require strict location
     distance_from_job_meters: null,
+    survey_data: surveyData,
   });
 
   if (checkoutError) {

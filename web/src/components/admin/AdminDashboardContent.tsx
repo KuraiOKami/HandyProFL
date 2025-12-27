@@ -3,6 +3,7 @@
 import Link from 'next/link';
 import { useEffect, useState } from 'react';
 import { getSupabaseClient } from '@/lib/supabaseClient';
+import { formatTime } from '@/lib/formatting';
 
 type Stats = {
   pendingCount: number;
@@ -177,7 +178,7 @@ export default function AdminDashboardContent() {
                         {req.preferred_date ? formatDateShort(req.preferred_date) : 'Needs date'}
                       </span>
                       <span className="rounded-full bg-white px-2 py-1 ring-1 ring-slate-200">
-                        {req.preferred_time || 'Pick time'}
+                        {formatTime(req.preferred_time) || 'Pick time'}
                       </span>
                     </div>
                   </div>

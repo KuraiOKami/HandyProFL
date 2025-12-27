@@ -4,6 +4,7 @@ import { useCallback, useEffect, useMemo, useState } from 'react';
 import type { Session } from '@supabase/supabase-js';
 import { useRouter } from 'next/navigation';
 import { getSupabaseClient } from '@/lib/supabaseClient';
+import { US_STATES } from '@/lib/usStates';
 
 type Step = 'account' | 'personal' | 'address' | 'complete';
 
@@ -131,9 +132,14 @@ export default function CustomerOnboardingPage() {
     setError(null);
 
     try {
+      const redirectUrl = `${window.location.origin}/auth/callback`;
       const action =
         authMode === 'signup'
-          ? supabase.auth.signUp({ email: email.trim(), password })
+          ? supabase.auth.signUp({
+              email: email.trim(),
+              password,
+              options: { emailRedirectTo: redirectUrl },
+            })
           : supabase.auth.signInWithPassword({ email: email.trim(), password });
 
       const { error: authError, data } = await action;
@@ -172,21 +178,24 @@ export default function CustomerOnboardingPage() {
     setError(null);
 
     try {
-      const { error: upsertError } = await supabase.from('profiles').upsert({
-        id: session.user.id,
-        first_name: firstName.trim(),
-        last_name: lastName.trim(),
-        phone: phone.trim(),
-        email: email.trim() || session.user.email || '',
-        street: street.trim(),
-        city: city.trim(),
-        state: stateCode.trim().toUpperCase(),
-        postal_code: postalCode.trim(),
-        updated_at: new Date().toISOString(),
+      const res = await fetch('/api/onboarding/complete', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({
+          first_name: firstName.trim(),
+          last_name: lastName.trim(),
+          phone: phone.trim(),
+          email: email.trim(),
+          street: street.trim(),
+          city: city.trim(),
+          state: stateCode.trim().toUpperCase(),
+          postal_code: postalCode.trim(),
+        }),
       });
 
-      if (upsertError) {
-        throw upsertError;
+      const data = await res.json().catch(() => ({}));
+      if (!res.ok) {
+        throw new Error(data.error || 'Failed to save profile');
       }
 
       // Move to complete step
@@ -381,14 +390,18 @@ export default function CustomerOnboardingPage() {
             </div>
             <div>
               <label className="block text-sm font-medium text-slate-700">State</label>
-              <input
-                type="text"
+              <select
                 value={stateCode}
-                onChange={(e) => setStateCode(e.target.value.toUpperCase())}
+                onChange={(e) => setStateCode(e.target.value)}
                 className="mt-1 w-full rounded-lg border border-slate-300 px-3 py-2.5 text-sm focus:border-indigo-500 focus:outline-none focus:ring-1 focus:ring-indigo-500"
-                placeholder="FL"
-                maxLength={2}
-              />
+              >
+                <option value="">Select state</option>
+                {US_STATES.map((s) => (
+                  <option key={s.code} value={s.code}>
+                    {s.code} - {s.name}
+                  </option>
+                ))}
+              </select>
             </div>
           </div>
 

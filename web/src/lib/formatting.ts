@@ -7,16 +7,20 @@
  * Handles both ISO datetime strings (e.g., "2025-12-11T15:00:00+00:00")
  * and simple time strings (e.g., "9:00 AM", "14:00").
  */
+const DISPLAY_TIME_ZONE = 'America/New_York';
+
 export function formatTime(timeStr: string | null | undefined): string {
   if (!timeStr) return '';
 
   // Handle ISO datetime strings like "2025-12-11T15:00:00+00:00"
   if (timeStr.includes('T')) {
     const date = new Date(timeStr);
+    if (Number.isNaN(date.getTime())) return '';
     return date.toLocaleTimeString('en-US', {
       hour: 'numeric',
       minute: '2-digit',
       hour12: true,
+      timeZone: DISPLAY_TIME_ZONE,
     });
   }
 

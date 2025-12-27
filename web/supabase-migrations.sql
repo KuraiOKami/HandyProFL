@@ -63,6 +63,10 @@ ALTER TABLE service_requests
   ADD COLUMN IF NOT EXISTS google_calendar_event_id TEXT,
   ADD COLUMN IF NOT EXISTS synced_to_calendar BOOLEAN DEFAULT false,
   ADD COLUMN IF NOT EXISTS calendar_sync_error TEXT;
+ALTER TABLE service_requests
+  ADD COLUMN IF NOT EXISTS cancelled_at TIMESTAMPTZ,
+  ADD COLUMN IF NOT EXISTS cancellation_reason TEXT,
+  ADD COLUMN IF NOT EXISTS cancellation_fee_cents INTEGER DEFAULT 0;
 
 -- Create index for faster lookups
 CREATE INDEX IF NOT EXISTS idx_service_requests_calendar_event
@@ -143,6 +147,11 @@ CREATE TABLE IF NOT EXISTS agent_profiles (
   stripe_charges_enabled BOOLEAN DEFAULT false,
   instant_payout_enabled BOOLEAN DEFAULT false,
   payout_schedule TEXT DEFAULT 'weekly', -- weekly, instant
+  selfie_url TEXT, -- optional selfie/profile photo
+  identity_verification_status TEXT DEFAULT 'not_started', -- not_started, pending, verified, canceled
+  stripe_identity_session_id TEXT, -- last created Stripe Identity session
+  identity_verified_at TIMESTAMPTZ, -- when identity was verified
+  identity_verification_notes TEXT, -- optional notes or last error
   created_at TIMESTAMPTZ DEFAULT NOW(),
   updated_at TIMESTAMPTZ DEFAULT NOW()
 );
@@ -342,6 +351,103 @@ create policy "Authenticated manage proof-of-work objects"
   using (bucket_id = 'proof-of-work')
   with check (bucket_id = 'proof-of-work');
 
+-- Storage bucket for agent verification selfies/photos
+insert into storage.buckets (id, name, public)
+values ('agent-verification', 'agent-verification', true)
+on conflict (id) do nothing;
+
+-- Allow public read of verification assets (e.g., admin review)
+create policy "Public read agent-verification files"
+  on storage.objects for select
+  using (bucket_id = 'agent-verification');
+
+-- Authenticated users can upload/update their own verification photos
+create policy "Authenticated upload agent-verification files"
+  on storage.objects for insert
+  to authenticated
+  with check (bucket_id = 'agent-verification');
+
+create policy "Authenticated update agent-verification files"
+  on storage.objects for update
+  to authenticated
+  using (bucket_id = 'agent-verification')
+  with check (bucket_id = 'agent-verification');
+
+-- ============================================
+-- Notifications (preferences + log)
+-- ============================================
+
+CREATE TABLE IF NOT EXISTS notification_preferences (
+  user_id UUID PRIMARY KEY REFERENCES auth.users(id) ON DELETE CASCADE,
+  email_updates BOOLEAN DEFAULT true,
+  sms_updates BOOLEAN DEFAULT true,
+  push_updates BOOLEAN DEFAULT true,
+  marketing BOOLEAN DEFAULT false,
+  created_at TIMESTAMPTZ DEFAULT NOW(),
+  updated_at TIMESTAMPTZ DEFAULT NOW()
+);
+
+ALTER TABLE notification_preferences ENABLE ROW LEVEL SECURITY;
+
+CREATE POLICY "Users manage own notification prefs"
+  ON notification_preferences FOR ALL
+  USING (auth.uid() = user_id)
+  WITH CHECK (auth.uid() = user_id);
+
+CREATE POLICY "Admins can view notification prefs"
+  ON notification_preferences FOR SELECT
+  USING (
+    EXISTS (
+      SELECT 1 FROM profiles
+      WHERE profiles.id = auth.uid()
+      AND profiles.role = 'admin'
+    )
+  );
+
+CREATE TRIGGER update_notification_preferences_updated_at
+  BEFORE UPDATE ON notification_preferences
+  FOR EACH ROW
+  EXECUTE FUNCTION update_updated_at_column();
+
+CREATE TABLE IF NOT EXISTS notifications (
+  id UUID PRIMARY KEY DEFAULT gen_random_uuid(),
+  user_id UUID REFERENCES auth.users(id) ON DELETE SET NULL,
+  channel TEXT NOT NULL, -- sms, push, email
+  template TEXT,
+  title TEXT,
+  body TEXT NOT NULL,
+  payload JSONB,
+  status TEXT DEFAULT 'queued', -- queued, sent, failed, skipped
+  error TEXT,
+  sent_at TIMESTAMPTZ,
+  created_at TIMESTAMPTZ DEFAULT NOW(),
+  updated_at TIMESTAMPTZ DEFAULT NOW()
+);
+
+ALTER TABLE notifications ENABLE ROW LEVEL SECURITY;
+
+CREATE POLICY "Users can view own notifications"
+  ON notifications FOR SELECT
+  USING (user_id IS NOT NULL AND auth.uid() = user_id);
+
+CREATE POLICY "Admins can manage notifications"
+  ON notifications FOR ALL
+  USING (
+    EXISTS (
+      SELECT 1 FROM profiles
+      WHERE profiles.id = auth.uid()
+      AND profiles.role = 'admin'
+    )
+  );
+
+CREATE TRIGGER update_notifications_updated_at
+  BEFORE UPDATE ON notifications
+  FOR EACH ROW
+  EXECUTE FUNCTION update_updated_at_column();
+
+CREATE INDEX IF NOT EXISTS idx_notifications_user ON notifications(user_id);
+CREATE INDEX IF NOT EXISTS idx_notifications_status ON notifications(status);
+
 -- Agent earnings per job
 CREATE TABLE IF NOT EXISTS agent_earnings (
   id UUID PRIMARY KEY DEFAULT gen_random_uuid(),
@@ -420,6 +526,18 @@ ALTER TABLE service_requests
   ADD COLUMN IF NOT EXISTS assigned_agent_id UUID REFERENCES auth.users(id),
   ADD COLUMN IF NOT EXISTS job_latitude DECIMAL(10,8),
   ADD COLUMN IF NOT EXISTS job_longitude DECIMAL(11,8);
+
+-- Store pricing breakdown on the request for accurate agent payouts and material reimbursement
+-- total_price_cents: full amount charged to the customer
+-- labor_price_cents: commissioned labor portion (agent gets 70%)
+-- materials_cost_cents: pass-through materials (agent gets 100% reimbursement)
+ALTER TABLE service_requests
+  ADD COLUMN IF NOT EXISTS total_price_cents INTEGER,
+  ADD COLUMN IF NOT EXISTS labor_price_cents INTEGER,
+  ADD COLUMN IF NOT EXISTS materials_cost_cents INTEGER;
+
+ALTER TABLE service_requests
+  ADD COLUMN IF NOT EXISTS payment_intent_id TEXT;
 
 -- Add extended tracking for job lifecycle
 ALTER TABLE job_assignments
@@ -524,3 +642,54 @@ COMMENT ON TABLE agent_checkins IS 'GPS check-in/out records for job tracking';
 COMMENT ON TABLE proof_of_work IS 'Before/after photos documenting completed work';
 COMMENT ON TABLE agent_earnings IS 'Per-job earnings for agents (70% split)';
 COMMENT ON TABLE agent_payouts IS 'Batch payout records (weekly or instant)';
+
+-- ============================================
+-- CLIENT DASHBOARD RLS POLICIES
+-- Allow users to read and update their own service requests
+-- ============================================
+
+-- Enable RLS on service_requests if not already enabled
+ALTER TABLE service_requests ENABLE ROW LEVEL SECURITY;
+
+-- Users can view their own service requests
+CREATE POLICY "Users can view own service requests"
+  ON service_requests FOR SELECT
+  TO authenticated
+  USING (user_id = auth.uid());
+
+-- Users can insert service requests for themselves
+CREATE POLICY "Users can create service requests"
+  ON service_requests FOR INSERT
+  TO authenticated
+  WITH CHECK (user_id = auth.uid());
+
+-- Users can update their own service requests (e.g., cancel, reschedule)
+CREATE POLICY "Users can update own service requests"
+  ON service_requests FOR UPDATE
+  TO authenticated
+  USING (user_id = auth.uid())
+  WITH CHECK (user_id = auth.uid());
+
+-- Admins can view all service requests
+CREATE POLICY "Admins can view all service requests"
+  ON service_requests FOR SELECT
+  TO authenticated
+  USING (
+    EXISTS (
+      SELECT 1 FROM profiles
+      WHERE profiles.id = auth.uid()
+      AND profiles.role = 'admin'
+    )
+  );
+
+-- Admins can update any service request
+CREATE POLICY "Admins can update all service requests"
+  ON service_requests FOR UPDATE
+  TO authenticated
+  USING (
+    EXISTS (
+      SELECT 1 FROM profiles
+      WHERE profiles.id = auth.uid()
+      AND profiles.role = 'admin'
+    )
+  );

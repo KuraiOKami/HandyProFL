@@ -1,7 +1,6 @@
 'use client';
 
-import { FormEvent, useMemo, useState } from 'react';
-import { getSupabaseClient } from '@/lib/supabaseClient';
+import { FormEvent, useState } from 'react';
 import { useSupabaseSession } from '@/hooks/useSupabaseSession';
 
 const defaultServices = [
@@ -17,7 +16,6 @@ const defaultServices = [
 
 export default function ServiceRequestForm() {
   const { session } = useSupabaseSession();
-  const supabase = getSupabaseClient();
   const [service, setService] = useState(defaultServices[0]);
   const [date, setDate] = useState('');
   const [time, setTime] = useState('');
@@ -27,11 +25,11 @@ export default function ServiceRequestForm() {
   const [submitting, setSubmitting] = useState(false);
 
   const userId = session?.user?.id ?? null;
-  const canSubmit = useMemo(() => Boolean(userId && supabase), [userId, supabase]);
+  const canSubmit = Boolean(userId);
 
   const handleSubmit = async (event: FormEvent<HTMLFormElement>) => {
     event.preventDefault();
-    if (!canSubmit || !supabase) {
+    if (!canSubmit) {
       setError('Sign in to request a service.');
       return;
     }
@@ -39,22 +37,29 @@ export default function ServiceRequestForm() {
     setStatus(null);
     setError(null);
 
-    const { error: insertError } = await supabase.from('service_requests').insert({
-      user_id: userId,
-      service_type: service,
-      preferred_date: date || null,
-      preferred_time: time || null,
-      details: details || null,
-      status: 'pending',
-    });
+    try {
+      const res = await fetch('/api/requests/create', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({
+          service_type: service,
+          preferred_date: date || null,
+          preferred_time: time || null,
+          details: details || null,
+        }),
+      });
 
-    if (insertError) {
-      setError(insertError.message);
-    } else {
+      const data = await res.json().catch(() => ({}));
+      if (!res.ok) {
+        throw new Error(data.error || 'Failed to submit request');
+      }
+
       setStatus('Request submitted. We will confirm the appointment shortly.');
       setDetails('');
       setDate('');
       setTime('');
+    } catch (err) {
+      setError(err instanceof Error ? err.message : 'Failed to submit request');
     }
     setSubmitting(false);
   };

@@ -14,22 +14,22 @@ export default function WizardProgress({ currentStep }: WizardProgressProps) {
   ];
 
   return (
-    <div className="grid grid-cols-5 gap-2 text-xs font-semibold uppercase tracking-wide text-slate-600">
+    <div className="flex justify-between gap-1 text-xs font-semibold uppercase tracking-wide text-slate-600 sm:grid sm:grid-cols-5 sm:gap-2">
       {steps.map((s) => (
         <div
           key={s.id}
-          className={`flex items-center gap-2 rounded-lg border px-3 py-2 ${
+          className={`flex items-center justify-center gap-2 rounded-lg border px-2 py-2 sm:justify-start sm:px-3 ${
             currentStep === s.id ? 'border-indigo-600 bg-indigo-50 text-indigo-800' : 'border-slate-200 bg-slate-50'
           }`}
         >
           <span
-            className={`flex h-6 w-6 items-center justify-center rounded-full text-[11px] font-bold ${
+            className={`flex h-6 w-6 flex-shrink-0 items-center justify-center rounded-full text-[11px] font-bold ${
               currentStep >= s.id ? 'bg-indigo-700 text-white' : 'bg-slate-200 text-slate-700'
             }`}
           >
             {s.id}
           </span>
-          <span>{s.label}</span>
+          <span className="hidden sm:inline">{s.label}</span>
         </div>
       ))}
     </div>

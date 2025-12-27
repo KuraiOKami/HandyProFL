@@ -35,8 +35,12 @@ export default function ReviewStep({
   isLoggedIn,
 }: ReviewStepProps) {
   return (
-    <div className="grid gap-3 rounded-xl border border-slate-200 p-4">
-      <p className="text-sm font-semibold text-slate-900">Review & payment</p>
+    <div className="grid gap-3 rounded-xl border border-indigo-200 bg-indigo-50/30 p-4">
+      <div className="flex items-center gap-2">
+        <span className="text-lg">📋</span>
+        <p className="text-sm font-semibold text-slate-900">Confirm your booking</p>
+      </div>
+      <p className="text-xs text-slate-600">Review your request details below. Your card will be charged when you submit.</p>
       <div className="grid gap-2">
         <div className="flex items-center justify-between">
           <p className="text-sm font-semibold text-slate-900">Items</p>
