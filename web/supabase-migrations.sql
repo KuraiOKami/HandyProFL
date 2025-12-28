@@ -1289,3 +1289,163 @@ COMMENT ON TABLE service_catalog IS 'Master list of all available services';
 COMMENT ON TABLE agent_skills IS 'Agent service capabilities with proficiency levels';
 COMMENT ON TABLE service_suggestions IS 'Agent-submitted service suggestions for admin review';
 COMMENT ON FUNCTION get_agent_skills_array IS 'Get agent skills as array for backward compatibility';
+
+-- ============================================
+-- MESSAGING SYSTEM
+-- In-app messaging between agents and clients
+-- ============================================
+
+-- Add auto_assigned flag to job_assignments
+ALTER TABLE job_assignments
+  ADD COLUMN IF NOT EXISTS auto_assigned BOOLEAN DEFAULT false;
+
+COMMENT ON COLUMN job_assignments.auto_assigned IS 'Whether this job was auto-assigned by the booking engine';
+
+-- Messages table for in-app messaging
+CREATE TABLE IF NOT EXISTS messages (
+  id UUID PRIMARY KEY DEFAULT gen_random_uuid(),
+  job_id UUID NOT NULL REFERENCES job_assignments(id) ON DELETE CASCADE,
+  sender_id UUID NOT NULL REFERENCES auth.users(id),
+  sender_role TEXT NOT NULL CHECK (sender_role IN ('agent', 'client')),
+  content TEXT NOT NULL,
+  read_at TIMESTAMPTZ,
+  created_at TIMESTAMPTZ DEFAULT NOW()
+);
+
+ALTER TABLE messages ENABLE ROW LEVEL SECURITY;
+
+-- Agents can view messages for their jobs
+CREATE POLICY "Agents can view job messages"
+  ON messages FOR SELECT
+  TO authenticated
+  USING (
+    EXISTS (
+      SELECT 1 FROM job_assignments ja
+      WHERE ja.id = messages.job_id
+      AND ja.agent_id = auth.uid()
+    )
+  );
+
+-- Clients can view messages for their jobs
+CREATE POLICY "Clients can view job messages"
+  ON messages FOR SELECT
+  TO authenticated
+  USING (
+    EXISTS (
+      SELECT 1 FROM job_assignments ja
+      JOIN service_requests sr ON sr.id = ja.request_id
+      WHERE ja.id = messages.job_id
+      AND sr.user_id = auth.uid()
+    )
+  );
+
+-- Agents can send messages for their jobs
+CREATE POLICY "Agents can send job messages"
+  ON messages FOR INSERT
+  TO authenticated
+  WITH CHECK (
+    EXISTS (
+      SELECT 1 FROM job_assignments ja
+      WHERE ja.id = messages.job_id
+      AND ja.agent_id = auth.uid()
+    )
+  );
+
+-- Clients can send messages for their jobs
+CREATE POLICY "Clients can send job messages"
+  ON messages FOR INSERT
+  TO authenticated
+  WITH CHECK (
+    EXISTS (
+      SELECT 1 FROM job_assignments ja
+      JOIN service_requests sr ON sr.id = ja.request_id
+      WHERE ja.id = messages.job_id
+      AND sr.user_id = auth.uid()
+    )
+  );
+
+-- Users can update read_at on messages sent to them
+CREATE POLICY "Users can mark messages as read"
+  ON messages FOR UPDATE
+  TO authenticated
+  USING (sender_id != auth.uid())
+  WITH CHECK (sender_id != auth.uid());
+
+CREATE INDEX IF NOT EXISTS idx_messages_job ON messages(job_id);
+CREATE INDEX IF NOT EXISTS idx_messages_sender ON messages(sender_id);
+CREATE INDEX IF NOT EXISTS idx_messages_created ON messages(created_at);
+
+GRANT ALL ON messages TO authenticated;
+
+COMMENT ON TABLE messages IS 'In-app messaging between agents and clients for each job';
+
+-- ============================================
+-- NOTIFICATION LOGGING
+-- Track all sent notifications for debugging
+-- ============================================
+
+CREATE TABLE IF NOT EXISTS notifications (
+  id UUID PRIMARY KEY DEFAULT gen_random_uuid(),
+  user_id UUID NOT NULL REFERENCES auth.users(id),
+  channel TEXT NOT NULL CHECK (channel IN ('sms', 'email', 'push')),
+  template TEXT NOT NULL,
+  status TEXT NOT NULL CHECK (status IN ('sent', 'failed')),
+  error TEXT,
+  sent_at TIMESTAMPTZ DEFAULT NOW()
+);
+
+ALTER TABLE notifications ENABLE ROW LEVEL SECURITY;
+
+-- Users can view their own notifications
+CREATE POLICY "Users can view own notifications"
+  ON notifications FOR SELECT
+  TO authenticated
+  USING (user_id = auth.uid());
+
+-- Admins can view all notifications
+CREATE POLICY "Admins can view all notifications"
+  ON notifications FOR SELECT
+  TO authenticated
+  USING (
+    EXISTS (
+      SELECT 1 FROM profiles
+      WHERE profiles.id = auth.uid()
+      AND profiles.role = 'admin'
+    )
+  );
+
+CREATE INDEX IF NOT EXISTS idx_notifications_user ON notifications(user_id);
+CREATE INDEX IF NOT EXISTS idx_notifications_sent ON notifications(sent_at);
+
+GRANT ALL ON notifications TO authenticated;
+
+COMMENT ON TABLE notifications IS 'Log of all sent notifications for debugging and tracking';
+
+-- ============================================
+-- NOTIFICATION PREFERENCES
+-- User preferences for notification channels
+-- ============================================
+
+CREATE TABLE IF NOT EXISTS notification_preferences (
+  id UUID PRIMARY KEY DEFAULT gen_random_uuid(),
+  user_id UUID NOT NULL REFERENCES auth.users(id) UNIQUE,
+  email_updates BOOLEAN DEFAULT true,
+  sms_updates BOOLEAN DEFAULT true,
+  push_updates BOOLEAN DEFAULT true,
+  marketing_emails BOOLEAN DEFAULT false,
+  created_at TIMESTAMPTZ DEFAULT NOW(),
+  updated_at TIMESTAMPTZ DEFAULT NOW()
+);
+
+ALTER TABLE notification_preferences ENABLE ROW LEVEL SECURITY;
+
+-- Users can view and update their own preferences
+CREATE POLICY "Users can manage own preferences"
+  ON notification_preferences FOR ALL
+  TO authenticated
+  USING (user_id = auth.uid())
+  WITH CHECK (user_id = auth.uid());
+
+GRANT ALL ON notification_preferences TO authenticated;
+
+COMMENT ON TABLE notification_preferences IS 'User notification channel preferences';

@@ -1,7 +1,8 @@
 import { NextRequest, NextResponse } from "next/server";
 import { createClient, createServiceRoleClient } from "@/utils/supabase/server";
 import { notifyAdmins } from "@/lib/adminNotifications";
-import { notifyClientBookingConfirmed } from "@/lib/notifications";
+import { notifyClientBookingConfirmed, notifyClientAgentAssigned } from "@/lib/notifications";
+import { processAutoBooking } from "@/lib/autoBooking";
 
 function buildScheduleLabel(preferredDate: string | null, preferredTime: string | null) {
   if (preferredTime && preferredDate) return `${preferredDate} ${preferredTime}`;
@@ -82,17 +83,17 @@ export async function POST(req: NextRequest) {
     sms: smsBody,
   });
 
+  // Get service display name
+  const { data: serviceData } = await adminSupabase
+    .from("service_catalog")
+    .select("name")
+    .eq("id", serviceType)
+    .single();
+
+  const serviceName = serviceData?.name || serviceType;
+
   // Send booking confirmation to the client
   try {
-    // Get service display name
-    const { data: serviceData } = await adminSupabase
-      .from("service_catalog")
-      .select("name")
-      .eq("id", serviceType)
-      .single();
-
-    const serviceName = serviceData?.name || serviceType;
-
     await notifyClientBookingConfirmed(adminSupabase, session.user.id, {
       serviceName,
       date: preferredDate || "To be scheduled",
@@ -103,5 +104,56 @@ export async function POST(req: NextRequest) {
     console.warn("Failed to send booking confirmation:", notifyErr);
   }
 
-  return NextResponse.json({ ok: true, id: requestRow.id });
+  // Process auto-booking
+  // Get client location for distance-based matching
+  let jobLatitude: number | null = null;
+  let jobLongitude: number | null = null;
+
+  if (profile) {
+    const { data: fullProfile } = await adminSupabase
+      .from("profiles")
+      .select("location_latitude, location_longitude")
+      .eq("id", session.user.id)
+      .single();
+
+    jobLatitude = fullProfile?.location_latitude || null;
+    jobLongitude = fullProfile?.location_longitude || null;
+  }
+
+  // Try auto-booking
+  const autoBookResult = await processAutoBooking(
+    adminSupabase,
+    requestRow.id,
+    serviceType,
+    serviceName,
+    session.user.id,
+    preferredDate,
+    preferredTime,
+    jobLatitude,
+    jobLongitude
+  );
+
+  // If auto-assigned, notify the client
+  if (autoBookResult.success && autoBookResult.method === "auto_assigned" && autoBookResult.agentName) {
+    try {
+      await notifyClientAgentAssigned(adminSupabase, session.user.id, {
+        agentName: autoBookResult.agentName,
+        serviceName,
+        date: preferredDate || "To be scheduled",
+        requestId: requestRow.id,
+      });
+    } catch (notifyErr) {
+      console.warn("Failed to notify client of auto-assignment:", notifyErr);
+    }
+  }
+
+  return NextResponse.json({
+    ok: true,
+    id: requestRow.id,
+    autoBooking: {
+      success: autoBookResult.success,
+      method: autoBookResult.method,
+      agentAssigned: autoBookResult.method === "auto_assigned",
+    },
+  });
 }

@@ -5,6 +5,7 @@ import { useParams, useRouter } from 'next/navigation';
 import { getSupabaseClient } from '@/lib/supabaseClient';
 import { formatTime } from '@/lib/formatting';
 import Image from 'next/image';
+import JobChat from '@/components/chat/JobChat';
 
 // Extract error message from API response (handles both string and object errors)
 function getErrorMessage(data: { error?: string | { message?: string } }, fallback: string): string {
@@ -655,6 +656,16 @@ export default function JobDetailPage() {
             </div>
           </div>
         </div>
+
+        {/* Message Client */}
+        {['assigned', 'in_progress', 'pending_verification', 'completed'].includes(job.status) && (
+          <div className="mt-6 rounded-xl border border-slate-200 bg-white shadow-sm">
+            <div className="border-b border-slate-100 px-5 py-4">
+              <h2 className="font-semibold text-slate-900">Message Client</h2>
+            </div>
+            <JobChat jobId={jobId} className="h-80" />
+          </div>
+        )}
 
         {/* Uploaded Photos */}
         {photos.length > 0 && (

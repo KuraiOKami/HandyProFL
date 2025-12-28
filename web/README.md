@@ -39,6 +39,7 @@ Enable Row Level Security and policies to allow:
 
 - Email/password login + signup (`/auth`).
 - Phone + one-time code via `signInWithOtp`. Ensure SMS is enabled in your Supabase project and phone numbers are in E.164 format (e.g., `+15555555555`).
+- Google and Apple OAuth - See [OAUTH_SETUP.md](./OAUTH_SETUP.md) for configuration guide.
 
 ## Deployment (Netlify)
 

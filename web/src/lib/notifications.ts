@@ -14,6 +14,12 @@ export const SMS_TEMPLATES = {
   AGENT_NEW_GIG: (serviceName: string, date: string, requestId: string) =>
     `New gig available: ${serviceName} on ${date}. View details: ${getAppUrl()}/agent?gig=${requestId}`,
 
+  AGENT_AUTO_ASSIGNED: (serviceName: string, date: string, jobId: string) =>
+    `You've been auto-assigned: ${serviceName} on ${date}. Your client is waiting! View job: ${getAppUrl()}/agent/jobs/${jobId}`,
+
+  AGENT_GIG_OFFERED: (serviceName: string, date: string, requestId: string) =>
+    `Priority gig for you: ${serviceName} on ${date}. Accept now: ${getAppUrl()}/agent?gig=${requestId}`,
+
   AGENT_GIG_ASSIGNED: (serviceName: string, date: string, time: string, jobId: string) =>
     `You've been assigned: ${serviceName} on ${date} at ${time}. View job: ${getAppUrl()}/agent/jobs/${jobId}`,
 
@@ -194,6 +200,7 @@ export async function notifyUser(
 
 /**
  * Notify agent about a new available gig
+ * Can be used for regular gig notifications, auto-assignments, or priority offers
  */
 export async function notifyAgentNewGig(
   supabase: SupabaseClient,
@@ -201,18 +208,34 @@ export async function notifyAgentNewGig(
   {
     serviceName,
     date,
+    jobId,
     requestId,
+    isAutoAssigned = false,
   }: {
     serviceName: string;
     date: string;
-    requestId: string;
+    jobId?: string;
+    requestId?: string;
+    isAutoAssigned?: boolean;
   }
 ) {
+  // Auto-assigned jobs use jobId and go directly to the job page
+  if (isAutoAssigned && jobId) {
+    return notifyUser(supabase, agentId, {
+      smsBody: SMS_TEMPLATES.AGENT_AUTO_ASSIGNED(serviceName, date, jobId),
+      emailSubject: `Auto-assigned: ${serviceName}`,
+      emailBody: `You've been automatically assigned to a ${serviceName} job on ${date}.\n\nThis client was referred to you or matched based on your skills and location.\n\nView job: ${getAppUrl()}/agent/jobs/${jobId}`,
+      templateName: "AGENT_AUTO_ASSIGNED",
+    });
+  }
+
+  // Priority offers use requestId and go to the gig acceptance flow
+  const id = requestId || jobId || "";
   return notifyUser(supabase, agentId, {
-    smsBody: SMS_TEMPLATES.AGENT_NEW_GIG(serviceName, date, requestId),
-    emailSubject: `New gig available: ${serviceName}`,
-    emailBody: `A new ${serviceName} job is available on ${date}.\n\nView details: ${getAppUrl()}/agent?gig=${requestId}`,
-    templateName: "AGENT_NEW_GIG",
+    smsBody: SMS_TEMPLATES.AGENT_GIG_OFFERED(serviceName, date, id),
+    emailSubject: `Priority gig: ${serviceName}`,
+    emailBody: `A new ${serviceName} job is available on ${date}.\n\nYou've been selected as a priority match for this job based on your skills and proximity.\n\nAccept now: ${getAppUrl()}/agent?gig=${id}`,
+    templateName: "AGENT_GIG_OFFERED",
   });
 }
 
