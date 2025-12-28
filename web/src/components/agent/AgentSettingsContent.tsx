@@ -91,6 +91,9 @@ export default function AgentSettingsContent() {
   const [suggestionError, setSuggestionError] = useState<string | null>(null);
   const [suggestionSuccess, setSuggestionSuccess] = useState(false);
 
+  // Expanded skill groups state
+  const [expandedSkillGroups, setExpandedSkillGroups] = useState<string[]>([]);
+
   const groupedSkills = useMemo(() => {
     return serviceCatalog.reduce<Record<string, ServiceCatalogItem[]>>((acc, service) => {
       const key = (service.general_skill || service.category || 'general').toLowerCase();
@@ -254,6 +257,24 @@ export default function AgentSettingsContent() {
       const next = new Set(prev);
       serviceIds.forEach((id) => next.add(id));
       return Array.from(next);
+    });
+  };
+
+  const toggleSingleService = (serviceId: string) => {
+    setSkills((prev) => {
+      if (prev.includes(serviceId)) {
+        return prev.filter((id) => id !== serviceId);
+      }
+      return [...prev, serviceId];
+    });
+  };
+
+  const toggleExpandedGroup = (skillKey: string) => {
+    setExpandedSkillGroups((prev) => {
+      if (prev.includes(skillKey)) {
+        return prev.filter((key) => key !== skillKey);
+      }
+      return [...prev, skillKey];
     });
   };
 
@@ -520,44 +541,115 @@ export default function AgentSettingsContent() {
       {/* Skills */}
       <div className="rounded-xl border border-slate-200 bg-white p-5 shadow-sm">
         <h3 className="text-lg font-semibold text-slate-900">Skills & Services</h3>
-        <p className="text-sm text-slate-500">Select the skill groups you can provide</p>
+        <p className="text-sm text-slate-500">Select skill groups or expand to choose individual services</p>
 
-        <div className="mt-4 grid gap-2 sm:grid-cols-2 lg:grid-cols-3">
+        <div className="mt-4 space-y-2">
           {skillGroups.map(([skillKey, services]) => {
             const serviceIds = services.map((service) => service.id);
             const selectedCount = serviceIds.filter((id) => skills.includes(id)).length;
             const isSelected = selectedCount === serviceIds.length && serviceIds.length > 0;
             const isPartial = selectedCount > 0 && !isSelected;
+            const isExpanded = expandedSkillGroups.includes(skillKey);
             const meta = GENERAL_SKILL_META[skillKey] || {
               label: formatSkillLabel(skillKey),
               icon: services[0]?.icon || '🧰',
             };
 
             return (
-              <button
-                key={skillKey}
-                type="button"
-                onClick={() => toggleSkillGroup(serviceIds)}
-                className={`rounded-lg border px-4 py-3 text-left text-sm font-medium transition ${
-                  isSelected
-                    ? 'border-emerald-500 bg-emerald-50 text-emerald-700'
-                    : isPartial
-                      ? 'border-amber-200 bg-amber-50 text-amber-800'
-                      : 'border-slate-200 text-slate-700 hover:border-slate-300 hover:bg-slate-50'
-                }`}
-              >
-                <div className="flex items-center gap-3">
+              <div key={skillKey} className="rounded-lg border border-slate-200 overflow-hidden">
+                {/* Group Header */}
+                <div
+                  className={`flex items-center gap-3 px-4 py-3 ${
+                    isSelected
+                      ? 'bg-emerald-50'
+                      : isPartial
+                        ? 'bg-amber-50'
+                        : 'bg-white'
+                  }`}
+                >
+                  {/* Checkbox for group */}
+                  <button
+                    type="button"
+                    onClick={() => toggleSkillGroup(serviceIds)}
+                    className={`flex h-5 w-5 shrink-0 items-center justify-center rounded border-2 transition ${
+                      isSelected
+                        ? 'border-emerald-500 bg-emerald-500 text-white'
+                        : isPartial
+                          ? 'border-amber-500 bg-amber-500 text-white'
+                          : 'border-slate-300 hover:border-slate-400'
+                    }`}
+                  >
+                    {isSelected && (
+                      <svg className="h-3 w-3" fill="currentColor" viewBox="0 0 12 12">
+                        <path d="M10.28 2.28L3.989 8.575 1.695 6.28A1 1 0 00.28 7.695l3 3a1 1 0 001.414 0l7-7A1 1 0 0010.28 2.28z" />
+                      </svg>
+                    )}
+                    {isPartial && <span className="h-2 w-2 rounded-sm bg-white" />}
+                  </button>
+
                   <span className="text-lg">{meta.icon}</span>
                   <div className="min-w-0 flex-1">
                     <p className="text-sm font-medium text-slate-900">{meta.label}</p>
                     <p className="text-xs text-slate-500">
-                      {selectedCount}/{serviceIds.length} services selected
+                      {selectedCount}/{serviceIds.length} services
                     </p>
                   </div>
-                  {isSelected && <span className="text-xs font-semibold">✓</span>}
-                  {isPartial && <span className="text-xs font-semibold">Partial</span>}
+
+                  {/* Expand/Collapse button */}
+                  <button
+                    type="button"
+                    onClick={() => toggleExpandedGroup(skillKey)}
+                    className="rounded p-1 text-slate-400 hover:bg-slate-100 hover:text-slate-600"
+                  >
+                    <svg
+                      className={`h-5 w-5 transition-transform ${isExpanded ? 'rotate-180' : ''}`}
+                      fill="none"
+                      viewBox="0 0 24 24"
+                      stroke="currentColor"
+                    >
+                      <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M19 9l-7 7-7-7" />
+                    </svg>
+                  </button>
                 </div>
-              </button>
+
+                {/* Expanded Services List */}
+                {isExpanded && (
+                  <div className="border-t border-slate-200 bg-slate-50 px-4 py-2">
+                    <div className="grid gap-1">
+                      {services.map((service) => {
+                        const isServiceSelected = skills.includes(service.id);
+                        return (
+                          <button
+                            key={service.id}
+                            type="button"
+                            onClick={() => toggleSingleService(service.id)}
+                            className={`flex items-center gap-3 rounded-md px-3 py-2 text-left text-sm transition ${
+                              isServiceSelected
+                                ? 'bg-emerald-100 text-emerald-800'
+                                : 'hover:bg-slate-100 text-slate-700'
+                            }`}
+                          >
+                            <span
+                              className={`flex h-4 w-4 shrink-0 items-center justify-center rounded border ${
+                                isServiceSelected
+                                  ? 'border-emerald-500 bg-emerald-500 text-white'
+                                  : 'border-slate-300'
+                              }`}
+                            >
+                              {isServiceSelected && (
+                                <svg className="h-2.5 w-2.5" fill="currentColor" viewBox="0 0 12 12">
+                                  <path d="M10.28 2.28L3.989 8.575 1.695 6.28A1 1 0 00.28 7.695l3 3a1 1 0 001.414 0l7-7A1 1 0 0010.28 2.28z" />
+                                </svg>
+                              )}
+                            </span>
+                            <span>{service.name}</span>
+                          </button>
+                        );
+                      })}
+                    </div>
+                  </div>
+                )}
+              </div>
             );
           })}
         </div>
