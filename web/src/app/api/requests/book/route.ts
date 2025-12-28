@@ -1,5 +1,7 @@
 import { NextRequest, NextResponse } from "next/server";
 import { createServiceRoleClient } from "@/utils/supabase/server";
+import { processAutoBooking } from "@/lib/autoBooking";
+import { notifyClientAgentAssigned, notifyClientBookingConfirmed } from "@/lib/notifications";
 
 // Atomically reserve slots and insert a request
 export async function POST(req: NextRequest) {
@@ -113,5 +115,85 @@ export async function POST(req: NextRequest) {
     return NextResponse.json({ error: insertError.message }, { status: 400 });
   }
 
-  return NextResponse.json({ ok: true, request_id: inserted?.id });
+  const requestId = inserted?.id;
+
+  // Get service name for notifications
+  let serviceName = service_type || "Service";
+  if (service_type) {
+    const { data: catalogEntry } = await client
+      .from("service_catalog")
+      .select("name")
+      .eq("id", service_type)
+      .maybeSingle();
+    if (catalogEntry?.name) {
+      serviceName = catalogEntry.name;
+    }
+  }
+
+  // Get client location for distance-based matching
+  let jobLatitude: number | null = null;
+  let jobLongitude: number | null = null;
+
+  const { data: profile } = await client
+    .from("profiles")
+    .select("location_latitude, location_longitude")
+    .eq("id", user_id)
+    .single();
+
+  if (profile) {
+    jobLatitude = profile.location_latitude || null;
+    jobLongitude = profile.location_longitude || null;
+  }
+
+  // Send booking confirmation to client
+  try {
+    await notifyClientBookingConfirmed(client, user_id, {
+      serviceName,
+      date: date || "To be scheduled",
+      time: storedPreferredTime || "",
+      requestId,
+    });
+  } catch (notifyErr) {
+    console.warn("Failed to send booking confirmation:", notifyErr);
+  }
+
+  // Try auto-booking
+  const autoBookResult = await processAutoBooking(
+    client,
+    requestId,
+    service_type || "",
+    serviceName,
+    user_id,
+    date || null,
+    storedPreferredTime || null,
+    jobLatitude,
+    jobLongitude,
+    normalizedTotalPriceCents !== null
+      ? {
+          totalPriceCents: normalizedTotalPriceCents,
+          laborPriceCents: normalizedLaborPriceCents ?? normalizedTotalPriceCents,
+          materialsCostCents: normalizedMaterialsCostCents ?? 0,
+        }
+      : null
+  );
+
+  // If auto-assigned, notify the client
+  if (autoBookResult.success && autoBookResult.method === "auto_assigned" && autoBookResult.agentName) {
+    try {
+      await notifyClientAgentAssigned(client, user_id, {
+        agentName: autoBookResult.agentName,
+        serviceName,
+        date: date || "To be scheduled",
+        requestId,
+      });
+    } catch (notifyErr) {
+      console.warn("Failed to notify client of auto-assignment:", notifyErr);
+    }
+  }
+
+  return NextResponse.json({
+    ok: true,
+    request_id: requestId,
+    auto_booking: autoBookResult,
+  });
 }

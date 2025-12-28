@@ -20,6 +20,38 @@ type AutoBookingResult = {
   error?: string;
 };
 
+type PricingInfo = {
+  totalPriceCents: number;
+  laborPriceCents: number;
+  materialsCostCents: number;
+};
+
+// Agent payout policy (tier-based):
+// - Labor: Bronze 50%, Silver 55%, Gold 60%, Platinum 70%
+// - 100% of materials (reimbursed/pass-through)
+// - 50% of any additional surcharge (e.g., urgency/priority fee)
+const TIER_PAYOUT_PERCENTAGES: Record<string, number> = {
+  bronze: 0.50,
+  silver: 0.55,
+  gold: 0.60,
+  platinum: 0.70,
+};
+const SURCHARGE_PAYOUT_PERCENTAGE = 0.5;
+
+function computeAgentPayoutCents(args: {
+  totalCents: number;
+  laborCents: number;
+  materialsCents: number;
+  tier: string;
+}) {
+  const laborPayoutPercentage = TIER_PAYOUT_PERCENTAGES[args.tier] || TIER_PAYOUT_PERCENTAGES.bronze;
+  const surchargeCents = Math.max(0, args.totalCents - args.laborCents - args.materialsCents);
+  const laborPayoutCents = Math.round(args.laborCents * laborPayoutPercentage);
+  const surchargePayoutCents = Math.round(surchargeCents * SURCHARGE_PAYOUT_PERCENTAGE);
+  const payoutCents = laborPayoutCents + args.materialsCents + surchargePayoutCents;
+  return Math.min(args.totalCents, Math.max(1, payoutCents));
+}
+
 type EligibleAgent = {
   id: string;
   firstName: string;
@@ -233,7 +265,8 @@ export async function processAutoBooking(
   preferredDate: string | null,
   preferredTime: string | null,
   jobLatitude: number | null,
-  jobLongitude: number | null
+  jobLongitude: number | null,
+  pricing?: PricingInfo | null
 ): Promise<AutoBookingResult> {
   try {
     // Find eligible agents
@@ -263,6 +296,21 @@ export async function processAutoBooking(
 
     // If the agent is the referrer, auto-assign directly
     if (bestAgent.isReferrer) {
+      // Calculate payout based on agent tier
+      const totalCents = pricing?.totalPriceCents ?? 0;
+      const laborCents = pricing?.laborPriceCents ?? totalCents;
+      const materialsCents = pricing?.materialsCostCents ?? 0;
+
+      const agentPayoutCents = totalCents > 0
+        ? computeAgentPayoutCents({
+            totalCents,
+            laborCents,
+            materialsCents,
+            tier: bestAgent.tier,
+          })
+        : 0;
+      const platformFeeCents = totalCents - agentPayoutCents;
+
       // Create job assignment
       const { data: assignment, error: assignError } = await adminSupabase
         .from("job_assignments")
@@ -271,6 +319,9 @@ export async function processAutoBooking(
           agent_id: bestAgent.id,
           status: "assigned",
           auto_assigned: true,
+          job_price_cents: totalCents,
+          agent_payout_cents: agentPayoutCents,
+          platform_fee_cents: platformFeeCents,
         })
         .select("id")
         .single();
