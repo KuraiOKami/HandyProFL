@@ -26,6 +26,7 @@ export default function AdminAgentsContent() {
   const [error, setError] = useState<string | null>(null);
   const [filter, setFilter] = useState<'all' | 'pending' | 'approved' | 'suspended'>('all');
   const [actionLoading, setActionLoading] = useState<string | null>(null);
+  const [selectedAgent, setSelectedAgent] = useState<Agent | null>(null);
 
   useEffect(() => {
     loadAgents();
@@ -247,7 +248,12 @@ export default function AdminAgentsContent() {
           {/* Mobile cards */}
           <div className="grid gap-3 md:hidden">
             {filteredAgents.map((agent) => (
-              <div key={agent.id} className="rounded-xl border border-slate-200 bg-white p-4 shadow-sm">
+              <button
+                key={agent.id}
+                type="button"
+                onClick={() => setSelectedAgent(agent)}
+                className="rounded-xl border border-slate-200 bg-white p-4 text-left shadow-sm transition hover:-translate-y-0.5 hover:shadow"
+              >
                 <div className="flex items-start justify-between gap-3">
                   <div className="min-w-0">
                     <p className="text-base font-semibold text-slate-900">
@@ -284,6 +290,7 @@ export default function AdminAgentsContent() {
                       onClick={() => handleApprove(agent.id)}
                       disabled={actionLoading === agent.id}
                       className="rounded-lg bg-emerald-600 px-3 py-2 text-xs font-semibold text-white hover:bg-emerald-700 disabled:bg-emerald-400"
+                      onClickCapture={(e) => e.stopPropagation()}
                     >
                       {actionLoading === agent.id ? '...' : 'Approve'}
                     </button>
@@ -293,6 +300,7 @@ export default function AdminAgentsContent() {
                       onClick={() => handleSuspend(agent.id)}
                       disabled={actionLoading === agent.id}
                       className="rounded-lg bg-rose-600 px-3 py-2 text-xs font-semibold text-white hover:bg-rose-700 disabled:bg-rose-400"
+                      onClickCapture={(e) => e.stopPropagation()}
                     >
                       {actionLoading === agent.id ? '...' : 'Suspend'}
                     </button>
@@ -302,12 +310,13 @@ export default function AdminAgentsContent() {
                       onClick={() => handleUnsuspend(agent.id)}
                       disabled={actionLoading === agent.id}
                       className="rounded-lg bg-emerald-600 px-3 py-2 text-xs font-semibold text-white hover:bg-emerald-700 disabled:bg-emerald-400"
+                      onClickCapture={(e) => e.stopPropagation()}
                     >
                       {actionLoading === agent.id ? '...' : 'Reactivate'}
                     </button>
                   )}
                 </div>
-              </div>
+              </button>
             ))}
           </div>
 
@@ -344,7 +353,11 @@ export default function AdminAgentsContent() {
               </thead>
               <tbody className="divide-y divide-slate-200">
                 {filteredAgents.map((agent) => (
-                  <tr key={agent.id} className="hover:bg-slate-50">
+                  <tr
+                    key={agent.id}
+                    className="cursor-pointer hover:bg-slate-50"
+                    onClick={() => setSelectedAgent(agent)}
+                  >
                     <td className="px-5 py-4">
                       <div>
                         <p className="font-medium text-slate-900">
@@ -386,6 +399,7 @@ export default function AdminAgentsContent() {
                             onClick={() => handleApprove(agent.id)}
                             disabled={actionLoading === agent.id}
                             className="rounded-lg bg-emerald-600 px-3 py-1.5 text-xs font-semibold text-white hover:bg-emerald-700 disabled:bg-emerald-400"
+                            onClickCapture={(e) => e.stopPropagation()}
                           >
                             {actionLoading === agent.id ? '...' : 'Approve'}
                           </button>
@@ -395,6 +409,7 @@ export default function AdminAgentsContent() {
                             onClick={() => handleSuspend(agent.id)}
                             disabled={actionLoading === agent.id}
                             className="rounded-lg bg-rose-600 px-3 py-1.5 text-xs font-semibold text-white hover:bg-rose-700 disabled:bg-rose-400"
+                            onClickCapture={(e) => e.stopPropagation()}
                           >
                             {actionLoading === agent.id ? '...' : 'Suspend'}
                           </button>
@@ -404,6 +419,7 @@ export default function AdminAgentsContent() {
                             onClick={() => handleUnsuspend(agent.id)}
                             disabled={actionLoading === agent.id}
                             className="rounded-lg bg-emerald-600 px-3 py-1.5 text-xs font-semibold text-white hover:bg-emerald-700 disabled:bg-emerald-400"
+                            onClickCapture={(e) => e.stopPropagation()}
                           >
                             {actionLoading === agent.id ? '...' : 'Reactivate'}
                           </button>
@@ -416,6 +432,91 @@ export default function AdminAgentsContent() {
             </table>
           </div>
         </>
+      )}
+
+      {/* Agent detail modal */}
+      {selectedAgent && (
+        <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/50 p-4">
+          <div className="w-full max-w-lg rounded-2xl bg-white p-6 shadow-2xl">
+            <div className="flex items-start justify-between gap-3">
+              <div>
+                <p className="text-xl font-semibold text-slate-900">
+                  {selectedAgent.first_name} {selectedAgent.last_name}
+                </p>
+                <p className="text-sm text-slate-600">{selectedAgent.email}</p>
+                {selectedAgent.phone && <p className="text-sm text-slate-600">{selectedAgent.phone}</p>}
+              </div>
+              <button
+                className="rounded-full bg-slate-100 px-3 py-1.5 text-sm font-medium text-slate-700 hover:bg-slate-200"
+                onClick={() => setSelectedAgent(null)}
+              >
+                Close
+              </button>
+            </div>
+
+            <div className="mt-4 flex flex-wrap items-center gap-2">
+              {getStatusBadge(selectedAgent.status)}
+              {getIdentityBadge(selectedAgent.identity_verification_status)}
+              <span className="rounded-full bg-slate-100 px-3 py-1 text-xs font-medium text-slate-700">
+                Joined: {new Date(selectedAgent.created_at).toLocaleDateString()}
+              </span>
+            </div>
+
+            <div className="mt-4 grid gap-3 sm:grid-cols-2">
+              <div className="rounded-lg border border-slate-200 bg-slate-50 px-4 py-3">
+                <p className="text-xs font-semibold uppercase tracking-wide text-slate-500">Jobs</p>
+                <p className="text-lg font-semibold text-slate-900">{selectedAgent.total_jobs}</p>
+              </div>
+              <div className="rounded-lg border border-slate-200 bg-slate-50 px-4 py-3">
+                <p className="text-xs font-semibold uppercase tracking-wide text-slate-500">Earnings</p>
+                <p className="text-lg font-semibold text-slate-900">{formatCurrency(selectedAgent.total_earnings_cents)}</p>
+              </div>
+              <div className="rounded-lg border border-slate-200 bg-slate-50 px-4 py-3">
+                <p className="text-xs font-semibold uppercase tracking-wide text-slate-500">Rating</p>
+                <div className="mt-1 flex items-center gap-1 text-lg font-semibold text-slate-900">
+                  <span className="text-yellow-500">⭐</span>
+                  {selectedAgent.rating.toFixed(1)}
+                </div>
+              </div>
+              <div className="rounded-lg border border-slate-200 bg-slate-50 px-4 py-3">
+                <p className="text-xs font-semibold uppercase tracking-wide text-slate-500">Payouts</p>
+                <p className="mt-1 text-sm font-semibold text-slate-900">
+                  {selectedAgent.stripe_payouts_enabled ? 'Connected' : 'Not setup'}
+                </p>
+              </div>
+            </div>
+
+            <div className="mt-4 flex flex-wrap gap-2">
+              {selectedAgent.status === 'pending_approval' && (
+                <button
+                  onClick={() => handleApprove(selectedAgent.id)}
+                  disabled={actionLoading === selectedAgent.id}
+                  className="rounded-lg bg-emerald-600 px-4 py-2 text-sm font-semibold text-white hover:bg-emerald-700 disabled:bg-emerald-400"
+                >
+                  {actionLoading === selectedAgent.id ? '...' : 'Approve'}
+                </button>
+              )}
+              {selectedAgent.status === 'approved' && (
+                <button
+                  onClick={() => handleSuspend(selectedAgent.id)}
+                  disabled={actionLoading === selectedAgent.id}
+                  className="rounded-lg bg-rose-600 px-4 py-2 text-sm font-semibold text-white hover:bg-rose-700 disabled:bg-rose-400"
+                >
+                  {actionLoading === selectedAgent.id ? '...' : 'Suspend'}
+                </button>
+              )}
+              {selectedAgent.status === 'suspended' && (
+                <button
+                  onClick={() => handleUnsuspend(selectedAgent.id)}
+                  disabled={actionLoading === selectedAgent.id}
+                  className="rounded-lg bg-emerald-600 px-4 py-2 text-sm font-semibold text-white hover:bg-emerald-700 disabled:bg-emerald-400"
+                >
+                  {actionLoading === selectedAgent.id ? '...' : 'Reactivate'}
+                </button>
+              )}
+            </div>
+          </div>
+        </div>
       )}
     </div>
   );
