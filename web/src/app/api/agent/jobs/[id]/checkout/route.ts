@@ -1,6 +1,7 @@
 import { NextRequest, NextResponse } from "next/server";
 import { createClient, createServiceRoleClient } from "@/utils/supabase/server";
 import { errorResponse } from "@/lib/api-errors";
+import { notifyClientJobCompleted } from "@/lib/notifications";
 
 async function getAgentSession() {
   const supabase = await createClient();
@@ -195,6 +196,34 @@ export async function POST(
 
   // NOTE: Earnings record is NOT created yet - it will be created when admin verifies and marks as paid
   // This ensures agents only get paid after admin confirms the work quality
+
+  // Notify client that job is complete
+  if (assignmentFull?.request_id) {
+    try {
+      const { data: requestData } = await adminSupabase
+        .from("service_requests")
+        .select("user_id, service_type")
+        .eq("id", assignmentFull.request_id)
+        .single();
+
+      if (requestData?.user_id) {
+        const { data: serviceData } = await adminSupabase
+          .from("service_catalog")
+          .select("name")
+          .eq("id", requestData.service_type)
+          .single();
+
+        const serviceName = serviceData?.name || requestData.service_type;
+
+        await notifyClientJobCompleted(adminSupabase, requestData.user_id, {
+          serviceName,
+          requestId: assignmentFull.request_id,
+        });
+      }
+    } catch (notifyErr) {
+      console.warn("Failed to send job completed notification:", notifyErr);
+    }
+  }
 
   return NextResponse.json({
     ok: true,

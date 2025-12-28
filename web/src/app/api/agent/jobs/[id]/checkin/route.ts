@@ -1,6 +1,7 @@
 import { NextRequest, NextResponse } from "next/server";
 import { createClient, createServiceRoleClient } from "@/utils/supabase/server";
 import { errorResponse } from "@/lib/api-errors";
+import { notifyClientJobStarted } from "@/lib/notifications";
 
 // Maximum distance from job location to check in (in meters)
 const MAX_CHECKIN_DISTANCE = 100;
@@ -79,6 +80,8 @@ export async function POST(
       agent_id,
       service_requests (
         id,
+        user_id,
+        service_type,
         job_latitude,
         job_longitude
       )
@@ -169,6 +172,38 @@ export async function POST(
   const requestId = assignment.request_id || sr?.id;
   if (requestId) {
     await adminSupabase.from("service_requests").update({ status: "in_progress" }).eq("id", requestId);
+  }
+
+  // Notify client that job has started
+  try {
+    const srFull = sr as { id?: string; user_id?: string; service_type?: string; job_latitude: number | null; job_longitude: number | null } | null;
+    if (srFull?.user_id) {
+      const [agentResult, serviceResult] = await Promise.all([
+        adminSupabase
+          .from("profiles")
+          .select("first_name, last_name")
+          .eq("id", session.user.id)
+          .single(),
+        adminSupabase
+          .from("service_catalog")
+          .select("name")
+          .eq("id", srFull.service_type || "")
+          .single(),
+      ]);
+
+      const agentName = [agentResult.data?.first_name, agentResult.data?.last_name]
+        .filter(Boolean)
+        .join(" ") || "Your agent";
+      const serviceName = serviceResult.data?.name || srFull.service_type || "your service";
+
+      await notifyClientJobStarted(adminSupabase, srFull.user_id, {
+        agentName,
+        serviceName,
+        requestId: requestId || srFull.id || "",
+      });
+    }
+  } catch (notifyErr) {
+    console.warn("Failed to send job started notification:", notifyErr);
   }
 
   return NextResponse.json({

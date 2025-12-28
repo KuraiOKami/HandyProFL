@@ -4,9 +4,25 @@ const accountSid = process.env.TWILIO_ACCOUNT_SID;
 const authToken = process.env.TWILIO_AUTH_TOKEN;
 const fromNumber = process.env.TWILIO_FROM_NUMBER;
 
-export const twilioClient: Twilio | null =
-  accountSid && authToken ? twilio(accountSid, authToken) : null;
+// Only initialize Twilio client if credentials are properly formatted
+// Account SID must start with "AC"
+const isValidCredentials =
+  accountSid &&
+  authToken &&
+  accountSid.startsWith("AC") &&
+  accountSid.length > 2 &&
+  authToken.length > 0;
 
+let twilioClient: Twilio | null = null;
+try {
+  if (isValidCredentials) {
+    twilioClient = twilio(accountSid, authToken);
+  }
+} catch (err) {
+  console.warn("Failed to initialize Twilio client:", err);
+}
+
+export { twilioClient };
 export const twilioConfigured = Boolean(twilioClient && fromNumber);
 
 export async function sendSms(to: string, body: string) {

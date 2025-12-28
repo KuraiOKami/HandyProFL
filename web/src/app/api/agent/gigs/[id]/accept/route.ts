@@ -3,6 +3,7 @@ import { createClient, createServiceRoleClient } from "@/utils/supabase/server";
 import { errorResponse } from "@/lib/api-errors";
 import { stripe } from "@/lib/stripe";
 import { getOrCreateCustomer } from "@/lib/stripeCustomer";
+import { notifyClientAgentAssigned } from "@/lib/notifications";
 import * as Sentry from "@sentry/nextjs";
 
 // Agent payout policy (tier-based):
@@ -96,7 +97,7 @@ export async function POST(
     const { data: request, error: reqError } = await adminSupabase
       .from("service_requests")
       .select(
-        "id, user_id, service_type, status, assigned_agent_id, estimated_minutes, total_price_cents, labor_price_cents, materials_cost_cents, payment_method_id"
+        "id, user_id, service_type, status, assigned_agent_id, estimated_minutes, total_price_cents, labor_price_cents, materials_cost_cents, payment_method_id, preferred_date, preferred_time"
       )
       .eq("id", requestId)
       .single();
@@ -241,6 +242,39 @@ export async function POST(
       // Rollback the assignment
       await adminSupabase.from("job_assignments").delete().eq("id", assignment.id);
       return errorResponse("internal.error", updateError.message, 500);
+    }
+
+    // Notify the client that an agent has been assigned
+    try {
+      // Get agent name and service name for notification
+      const [agentResult, serviceResult] = await Promise.all([
+        adminSupabase
+          .from("profiles")
+          .select("first_name, last_name")
+          .eq("id", session.user.id)
+          .single(),
+        adminSupabase
+          .from("service_catalog")
+          .select("name")
+          .eq("id", request.service_type)
+          .single(),
+      ]);
+
+      const agentName = [agentResult.data?.first_name, agentResult.data?.last_name]
+        .filter(Boolean)
+        .join(" ") || "Your agent";
+      const serviceName = serviceResult.data?.name || request.service_type;
+      const preferredDate = (request as { preferred_date?: string }).preferred_date || "your scheduled date";
+
+      await notifyClientAgentAssigned(adminSupabase, request.user_id, {
+        agentName,
+        serviceName,
+        date: preferredDate,
+        requestId,
+      });
+    } catch (notifyErr) {
+      // Don't fail the request if notification fails
+      console.warn("Failed to send assignment notification:", notifyErr);
     }
 
     return NextResponse.json({

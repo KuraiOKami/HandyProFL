@@ -1,6 +1,7 @@
 import { NextRequest, NextResponse } from "next/server";
 import { createClient, createServiceRoleClient } from "@/utils/supabase/server";
 import { notifyAdmins } from "@/lib/adminNotifications";
+import { notifyClientBookingConfirmed } from "@/lib/notifications";
 
 function buildScheduleLabel(preferredDate: string | null, preferredTime: string | null) {
   if (preferredTime && preferredDate) return `${preferredDate} ${preferredTime}`;
@@ -80,6 +81,27 @@ export async function POST(req: NextRequest) {
     message: messageLines.join("\n"),
     sms: smsBody,
   });
+
+  // Send booking confirmation to the client
+  try {
+    // Get service display name
+    const { data: serviceData } = await adminSupabase
+      .from("service_catalog")
+      .select("name")
+      .eq("id", serviceType)
+      .single();
+
+    const serviceName = serviceData?.name || serviceType;
+
+    await notifyClientBookingConfirmed(adminSupabase, session.user.id, {
+      serviceName,
+      date: preferredDate || "To be scheduled",
+      time: preferredTime || "",
+      requestId: requestRow.id,
+    });
+  } catch (notifyErr) {
+    console.warn("Failed to send booking confirmation:", notifyErr);
+  }
 
   return NextResponse.json({ ok: true, id: requestRow.id });
 }
