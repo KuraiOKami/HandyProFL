@@ -1,11 +1,12 @@
 'use client';
 
-import { useEffect, useMemo, useState, useRef } from 'react';
+import { useEffect, useMemo, useState, useRef, useCallback } from 'react';
 import type { Session } from '@supabase/supabase-js';
 import { useRouter } from 'next/navigation';
 import Image from 'next/image';
 import { getSupabaseClient } from '@/lib/supabaseClient';
 import { US_STATES } from '@/lib/usStates';
+import PinInput from '@/components/auth/PinInput';
 
 const SKILL_OPTIONS = [
   { id: 'assembly', label: 'Furniture Assembly', icon: '🪑' },
@@ -29,13 +30,20 @@ export default function AgentOnboardingPage() {
   const [authChecked, setAuthChecked] = useState(false);
   const [stepIndex, setStepIndex] = useState(0);
   const [authMode, setAuthMode] = useState<'signup' | 'login'>('signup');
+  const [authMethod, setAuthMethod] = useState<'email' | 'phone'>('phone'); // Default to phone for simpler flow
   const [authLoading, setAuthLoading] = useState(false);
   const [submitLoading, setSubmitLoading] = useState(false);
   const [error, setError] = useState<string | null>(null);
+  const [profileLoaded, setProfileLoaded] = useState(false);
 
-  // Account info
+  // Account info - Email
   const [email, setEmail] = useState('');
   const [password, setPassword] = useState('');
+
+  // Account info - Phone OTP
+  const [authPhone, setAuthPhone] = useState('');
+  const [otp, setOtp] = useState('');
+  const [otpSent, setOtpSent] = useState(false);
 
   // Profile info
   const [firstName, setFirstName] = useState('');
@@ -99,6 +107,139 @@ export default function AgentOnboardingPage() {
       setStepIndex(steps.length - 1);
     }
   }, [steps, stepIndex]);
+
+  // Pre-fill profile data for logged-in users
+  const loadExistingProfile = useCallback(async () => {
+    if (!supabase || !session || profileLoaded) return;
+
+    try {
+      const { data: profile } = await supabase
+        .from('profiles')
+        .select('first_name, last_name, phone, street, city, state, postal_code')
+        .eq('id', session.user.id)
+        .single();
+
+      if (profile) {
+        if (profile.first_name) setFirstName(profile.first_name);
+        if (profile.last_name) setLastName(profile.last_name);
+        if (profile.phone) setPhone(profile.phone);
+        if (profile.street) setStreet(profile.street);
+        if (profile.city) setCity(profile.city);
+        if (profile.state) setStateCode(profile.state);
+        if (profile.postal_code) setPostalCode(profile.postal_code);
+      }
+
+      // Also check if they have an existing agent profile
+      const { data: agentProfile } = await supabase
+        .from('agent_profiles')
+        .select('bio, selfie_url, service_area_miles')
+        .eq('id', session.user.id)
+        .single();
+
+      if (agentProfile) {
+        if (agentProfile.bio) setBio(agentProfile.bio);
+        if (agentProfile.selfie_url) {
+          setSelfieUrl(agentProfile.selfie_url);
+          setSelfiePreview(agentProfile.selfie_url);
+        }
+        if (agentProfile.service_area_miles) setServiceArea(agentProfile.service_area_miles);
+      }
+
+      setProfileLoaded(true);
+    } catch (err) {
+      console.error('Failed to load existing profile:', err);
+      setProfileLoaded(true);
+    }
+  }, [supabase, session, profileLoaded]);
+
+  useEffect(() => {
+    if (session) {
+      loadExistingProfile();
+    }
+  }, [session, loadExistingProfile]);
+
+  // Format phone number for display
+  const formatPhoneNumber = (value: string) => {
+    const digits = value.replace(/\D/g, '');
+    if (digits.length <= 3) return digits;
+    if (digits.length <= 6) return `(${digits.slice(0, 3)}) ${digits.slice(3)}`;
+    return `(${digits.slice(0, 3)}) ${digits.slice(3, 6)}-${digits.slice(6, 10)}`;
+  };
+
+  // Send OTP to phone
+  const handleSendOtp = async () => {
+    if (!supabase) {
+      setError('Supabase is not configured.');
+      return;
+    }
+
+    const digits = authPhone.replace(/\D/g, '');
+    if (digits.length !== 10) {
+      setError('Please enter a valid 10-digit phone number.');
+      return;
+    }
+
+    setAuthLoading(true);
+    setError(null);
+
+    try {
+      const fullPhone = `+1${digits}`;
+      const { error: otpError } = await supabase.auth.signInWithOtp({
+        phone: fullPhone,
+      });
+
+      if (otpError) {
+        throw otpError;
+      }
+
+      setOtpSent(true);
+    } catch (err) {
+      setError(err instanceof Error ? err.message : 'Failed to send verification code.');
+    } finally {
+      setAuthLoading(false);
+    }
+  };
+
+  // Verify OTP
+  const handleVerifyOtp = async () => {
+    if (!supabase) {
+      setError('Supabase is not configured.');
+      return;
+    }
+
+    if (otp.length !== 6) {
+      setError('Please enter the 6-digit code.');
+      return;
+    }
+
+    setAuthLoading(true);
+    setError(null);
+
+    try {
+      const digits = authPhone.replace(/\D/g, '');
+      const fullPhone = `+1${digits}`;
+      const { data, error: verifyError } = await supabase.auth.verifyOtp({
+        phone: fullPhone,
+        token: otp,
+        type: 'sms',
+      });
+
+      if (verifyError) {
+        throw verifyError;
+      }
+
+      if (data.session) {
+        setSession(data.session);
+        // Pre-fill phone in profile since they authenticated with it
+        setPhone(formatPhoneNumber(digits));
+        setStepIndex(0);
+      }
+    } catch (err) {
+      setError(err instanceof Error ? err.message : 'Invalid verification code.');
+    } finally {
+      setAuthLoading(false);
+    }
+  };
 
   const toggleSkill = (skillId: string) => {
     setSkills((prev) =>
@@ -331,9 +472,12 @@ export default function AgentOnboardingPage() {
   const canProceed = () => {
     switch (currentStep) {
       case 'account':
-        return Boolean(
-          session || (email.trim() && password.trim() && password.trim().length >= 6)
-        );
+        if (session) return true;
+        if (authMethod === 'phone') {
+          if (otpSent) return otp.length === 6;
+          return authPhone.replace(/\D/g, '').length === 10;
+        }
+        return Boolean(email.trim() && password.trim() && password.trim().length >= 6);
       case 'personal':
         return Boolean(firstName.trim() && lastName.trim() && phone.trim());
       case 'verification':
@@ -364,63 +508,148 @@ export default function AgentOnboardingPage() {
       return (
         <div className="space-y-4">
           <div>
-            <h2 className="text-xl font-semibold text-slate-900">Create or sign in</h2>
+            <h2 className="text-xl font-semibold text-slate-900">Get started</h2>
             <p className="mt-1 text-sm text-slate-500">
-              Use your email and password to create a HandyProFL account. We&apos;ll use it for payouts and dispatch updates.
+              Enter your phone number to create an account or sign in. No password needed.
             </p>
           </div>
 
+          {/* Auth Method Toggle */}
           <div className="flex gap-2 rounded-full border border-slate-200 bg-slate-50 p-1 text-xs font-semibold text-slate-700">
             <button
-              className={`flex-1 rounded-full px-3 py-1 transition ${authMode === 'signup' ? 'bg-white shadow-sm ring-1 ring-slate-200' : ''}`}
+              className={`flex-1 rounded-full px-3 py-1.5 transition ${authMethod === 'phone' ? 'bg-white shadow-sm ring-1 ring-slate-200' : ''}`}
               onClick={() => {
-                setAuthMode('signup');
+                setAuthMethod('phone');
                 setError(null);
+                setOtpSent(false);
+                setOtp('');
               }}
             >
-              Create account
+              Phone (Recommended)
             </button>
             <button
-              className={`flex-1 rounded-full px-3 py-1 transition ${authMode === 'login' ? 'bg-white shadow-sm ring-1 ring-slate-200' : ''}`}
+              className={`flex-1 rounded-full px-3 py-1.5 transition ${authMethod === 'email' ? 'bg-white shadow-sm ring-1 ring-slate-200' : ''}`}
               onClick={() => {
-                setAuthMode('login');
+                setAuthMethod('email');
                 setError(null);
               }}
             >
-              Sign in
+              Email
             </button>
           </div>
 
-          <div className="grid gap-4">
-            <div className="grid gap-1">
-              <label className="text-sm font-medium text-slate-700">Email</label>
-              <input
-                type="email"
-                value={email}
-                onChange={(e) => setEmail(e.target.value)}
-                className="w-full rounded-lg border border-slate-300 px-3 py-2.5 text-sm focus:border-emerald-500 focus:outline-none focus:ring-1 focus:ring-emerald-500"
-                placeholder="you@example.com"
-                required
-              />
+          {authMethod === 'phone' ? (
+            <div className="space-y-4">
+              {!otpSent ? (
+                <div className="grid gap-1">
+                  <label className="text-sm font-medium text-slate-700">Phone Number</label>
+                  <div className="flex items-center gap-2">
+                    <span className="rounded-lg border border-slate-300 bg-slate-50 px-3 py-2.5 text-sm text-slate-600">
+                      +1
+                    </span>
+                    <input
+                      type="tel"
+                      value={authPhone}
+                      onChange={(e) => setAuthPhone(formatPhoneNumber(e.target.value))}
+                      className="flex-1 rounded-lg border border-slate-300 px-3 py-2.5 text-sm focus:border-emerald-500 focus:outline-none focus:ring-1 focus:ring-emerald-500"
+                      placeholder="(555) 123-4567"
+                      maxLength={14}
+                    />
+                  </div>
+                  <p className="mt-1 text-xs text-slate-500">
+                    We&apos;ll send you a 6-digit code to verify your number.
+                  </p>
+                </div>
+              ) : (
+                <div className="space-y-4">
+                  <div className="rounded-lg border border-emerald-200 bg-emerald-50 p-4 text-center">
+                    <p className="text-sm font-medium text-emerald-800">
+                      Code sent to {authPhone}
+                    </p>
+                    <button
+                      type="button"
+                      onClick={() => {
+                        setOtpSent(false);
+                        setOtp('');
+                      }}
+                      className="mt-1 text-xs text-emerald-600 hover:text-emerald-700"
+                    >
+                      Change number
+                    </button>
+                  </div>
+                  <div className="grid gap-1">
+                    <label className="text-sm font-medium text-slate-700 text-center">
+                      Enter verification code
+                    </label>
+                    <PinInput value={otp} onChange={setOtp} length={6} disabled={authLoading} />
+                  </div>
+                  <button
+                    type="button"
+                    onClick={handleSendOtp}
+                    disabled={authLoading}
+                    className="w-full text-center text-sm text-slate-600 hover:text-slate-800"
+                  >
+                    Didn&apos;t receive code? Resend
+                  </button>
+                </div>
+              )}
             </div>
-            <div className="grid gap-1">
-              <label className="text-sm font-medium text-slate-700">Password</label>
-              <input
-                type="password"
-                value={password}
-                onChange={(e) => setPassword(e.target.value)}
-                className="w-full rounded-lg border border-slate-300 px-3 py-2.5 text-sm focus:border-emerald-500 focus:outline-none focus:ring-1 focus:ring-emerald-500"
-                placeholder="At least 6 characters"
-                required
-              />
-            </div>
-          </div>
+          ) : (
+            <>
+              {/* Email/Password Mode Toggle */}
+              <div className="flex gap-2 rounded-lg border border-slate-200 bg-slate-50 p-1 text-xs font-semibold text-slate-700">
+                <button
+                  className={`flex-1 rounded-md px-3 py-1 transition ${authMode === 'signup' ? 'bg-white shadow-sm' : ''}`}
+                  onClick={() => {
+                    setAuthMode('signup');
+                    setError(null);
+                  }}
+                >
+                  Create account
+                </button>
+                <button
+                  className={`flex-1 rounded-md px-3 py-1 transition ${authMode === 'login' ? 'bg-white shadow-sm' : ''}`}
+                  onClick={() => {
+                    setAuthMode('login');
+                    setError(null);
+                  }}
+                >
+                  Sign in
+                </button>
+              </div>
 
-          <div className="rounded-lg border border-slate-200 bg-slate-50 p-4 text-sm text-slate-600">
-            <p>
-              Already using SMS login? You can also sign in at <span className="font-medium text-slate-800">/auth</span> and then return here to finish your application.
-            </p>
-          </div>
+              <div className="grid gap-4">
+                <div className="grid gap-1">
+                  <label className="text-sm font-medium text-slate-700">Email</label>
+                  <input
+                    type="email"
+                    value={email}
+                    onChange={(e) => setEmail(e.target.value)}
+                    className="w-full rounded-lg border border-slate-300 px-3 py-2.5 text-sm focus:border-emerald-500 focus:outline-none focus:ring-1 focus:ring-emerald-500"
+                    placeholder="you@example.com"
+                    required
+                  />
+                </div>
+                <div className="grid gap-1">
+                  <label className="text-sm font-medium text-slate-700">Password</label>
+                  <input
+                    type="password"
+                    value={password}
+                    onChange={(e) => setPassword(e.target.value)}
+                    className="w-full rounded-lg border border-slate-300 px-3 py-2.5 text-sm focus:border-emerald-500 focus:outline-none focus:ring-1 focus:ring-emerald-500"
+                    placeholder="At least 6 characters"
+                    required
+                  />
+                </div>
+              </div>
+
+              <div className="rounded-lg border border-amber-200 bg-amber-50 p-3 text-sm text-amber-700">
+                <p>
+                  Note: Email signup requires email verification. For instant access, use phone number instead.
+                </p>
+              </div>
+            </>
+          )}
         </div>
       );
     }
@@ -545,9 +774,45 @@ export default function AgentOnboardingPage() {
           <div>
             <h2 className="text-xl font-semibold text-slate-900">Identity Verification</h2>
             <p className="mt-1 text-sm text-slate-500">
-              We need to verify your identity with a government-issued ID. This helps protect both you and our clients.
+              We need to verify your identity to ensure safety for everyone. This only takes a few minutes.
             </p>
           </div>
+
+          {/* What you'll need - Document Checklist */}
+          {identityStatus !== 'verified' && (
+            <div className="rounded-lg border border-slate-200 bg-white p-4">
+              <h3 className="text-sm font-semibold text-slate-900">What you&apos;ll need:</h3>
+              <div className="mt-3 grid gap-3">
+                <div className="flex items-center gap-3 rounded-lg border border-slate-100 bg-slate-50 p-3">
+                  <div className="flex h-10 w-10 items-center justify-center rounded-lg bg-indigo-100 text-xl">
+                    🪪
+                  </div>
+                  <div>
+                    <p className="text-sm font-medium text-slate-900">Front of ID</p>
+                    <p className="text-xs text-slate-500">Driver&apos;s license, passport, or state ID</p>
+                  </div>
+                </div>
+                <div className="flex items-center gap-3 rounded-lg border border-slate-100 bg-slate-50 p-3">
+                  <div className="flex h-10 w-10 items-center justify-center rounded-lg bg-indigo-100 text-xl">
+                    🔄
+                  </div>
+                  <div>
+                    <p className="text-sm font-medium text-slate-900">Back of ID</p>
+                    <p className="text-xs text-slate-500">We&apos;ll verify the barcode and info</p>
+                  </div>
+                </div>
+                <div className="flex items-center gap-3 rounded-lg border border-slate-100 bg-slate-50 p-3">
+                  <div className="flex h-10 w-10 items-center justify-center rounded-lg bg-indigo-100 text-xl">
+                    📸
+                  </div>
+                  <div>
+                    <p className="text-sm font-medium text-slate-900">Live Selfie</p>
+                    <p className="text-xs text-slate-500">Quick photo to match with your ID</p>
+                  </div>
+                </div>
+              </div>
+            </div>
+          )}
 
           {/* ID Verification Section */}
           <div className="rounded-lg border border-slate-200 bg-slate-50 p-6">
@@ -559,7 +824,7 @@ export default function AgentOnboardingPage() {
                 <div className="text-center">
                   <p className="text-lg font-semibold text-emerald-700">Identity Verified</p>
                   <p className="mt-1 text-sm text-slate-600">
-                    Your identity has been successfully verified.
+                    Your identity has been successfully verified. You can continue to the next step.
                   </p>
                 </div>
               </div>
@@ -583,15 +848,15 @@ export default function AgentOnboardingPage() {
                   Check again or restart
                 </button>
               </div>
-            ) : (
+            ) : identityStatus === 'canceled' ? (
               <div className="flex flex-col items-center gap-4">
-                <div className="flex h-20 w-20 items-center justify-center rounded-full bg-slate-200 text-4xl">
-                  🪪
+                <div className="flex h-20 w-20 items-center justify-center rounded-full bg-rose-100 text-4xl">
+                  ❌
                 </div>
                 <div className="text-center">
-                  <p className="text-lg font-semibold text-slate-900">Verify Your Identity</p>
+                  <p className="text-lg font-semibold text-rose-700">Verification Incomplete</p>
                   <p className="mt-1 text-sm text-slate-600">
-                    You&apos;ll need a government-issued ID (driver&apos;s license, passport, or ID card).
+                    Your previous verification was not completed. Please try again.
                   </p>
                 </div>
                 <button
@@ -600,8 +865,31 @@ export default function AgentOnboardingPage() {
                   disabled={identityLoading}
                   className="rounded-lg bg-emerald-600 px-6 py-3 text-sm font-semibold text-white hover:bg-emerald-700 disabled:opacity-50"
                 >
-                  {identityLoading ? 'Starting verification...' : 'Start ID Verification'}
+                  {identityLoading ? 'Starting...' : 'Try Again'}
                 </button>
+              </div>
+            ) : (
+              <div className="flex flex-col items-center gap-4">
+                <div className="flex h-20 w-20 items-center justify-center rounded-full bg-indigo-100 text-4xl">
+                  🔐
+                </div>
+                <div className="text-center">
+                  <p className="text-lg font-semibold text-slate-900">Ready to Verify</p>
+                  <p className="mt-1 text-sm text-slate-600">
+                    Click below to securely verify your identity. Takes about 2 minutes.
+                  </p>
+                </div>
+                <button
+                  type="button"
+                  onClick={startIdentityVerification}
+                  disabled={identityLoading}
+                  className="rounded-lg bg-emerald-600 px-6 py-3 text-sm font-semibold text-white hover:bg-emerald-700 disabled:opacity-50"
+                >
+                  {identityLoading ? 'Starting verification...' : 'Start Secure Verification'}
+                </button>
+                <p className="text-xs text-slate-500">
+                  Powered by Stripe Identity - your data is encrypted and secure
+                </p>
               </div>
             )}
           </div>
@@ -609,7 +897,7 @@ export default function AgentOnboardingPage() {
           {/* Profile Photo Section (optional, still nice to have) */}
           <div className="rounded-lg border border-slate-200 bg-white p-4">
             <h3 className="text-sm font-semibold text-slate-900">Profile Photo (Optional)</h3>
-            <p className="mt-1 text-xs text-slate-500">Add a friendly photo for your profile.</p>
+            <p className="mt-1 text-xs text-slate-500">Add a friendly photo clients will see when you&apos;re assigned to their job.</p>
             <div className="mt-3 flex items-center gap-4">
               <input
                 ref={selfieInputRef}
@@ -655,20 +943,20 @@ export default function AgentOnboardingPage() {
             </div>
           </div>
 
-          <div className="rounded-lg border border-amber-200 bg-amber-50 p-4">
-            <h3 className="text-sm font-semibold text-amber-800">Why we verify identity</h3>
-            <ul className="mt-2 space-y-1 text-sm text-amber-700">
+          <div className="rounded-lg border border-emerald-200 bg-emerald-50 p-4">
+            <h3 className="text-sm font-semibold text-emerald-800">Why we verify identity</h3>
+            <ul className="mt-2 space-y-1 text-sm text-emerald-700">
               <li className="flex items-start gap-2">
-                <span className="mt-0.5">•</span>
-                <span>Ensure safety for clients allowing you into their homes</span>
+                <span className="mt-0.5 text-emerald-500">✓</span>
+                <span>Clients trust verified agents in their homes</span>
               </li>
               <li className="flex items-start gap-2">
-                <span className="mt-0.5">•</span>
-                <span>Protect you from identity fraud</span>
+                <span className="mt-0.5 text-emerald-500">✓</span>
+                <span>Protects you from identity fraud</span>
               </li>
               <li className="flex items-start gap-2">
-                <span className="mt-0.5">•</span>
-                <span>Create a safer experience for everyone</span>
+                <span className="mt-0.5 text-emerald-500">✓</span>
+                <span>Verified agents get more job opportunities</span>
               </li>
             </ul>
           </div>
@@ -914,18 +1202,40 @@ export default function AgentOnboardingPage() {
             </button>
           ) : (
             <button
-              onClick={() => (currentStep === 'account' ? handleAccountSubmit() : goNext())}
+              onClick={() => {
+                if (currentStep === 'account') {
+                  if (authMethod === 'phone') {
+                    if (otpSent) {
+                      handleVerifyOtp();
+                    } else {
+                      handleSendOtp();
+                    }
+                  } else {
+                    handleAccountSubmit();
+                  }
+                } else {
+                  goNext();
+                }
+              }}
               disabled={(currentStep === 'account' ? authLoading : false) || !canProceed()}
               className="rounded-lg bg-emerald-600 px-6 py-2 text-sm font-semibold text-white transition hover:bg-emerald-700 disabled:bg-slate-300"
             >
               {currentStep === 'account'
                 ? authLoading
-                  ? authMode === 'signup'
-                    ? 'Creating...'
-                    : 'Signing in...'
-                  : authMode === 'signup'
-                    ? 'Create account & continue'
-                    : 'Sign in & continue'
+                  ? authMethod === 'phone'
+                    ? otpSent
+                      ? 'Verifying...'
+                      : 'Sending code...'
+                    : authMode === 'signup'
+                      ? 'Creating...'
+                      : 'Signing in...'
+                  : authMethod === 'phone'
+                    ? otpSent
+                      ? 'Verify & Continue'
+                      : 'Send Code'
+                    : authMode === 'signup'
+                      ? 'Create account & continue'
+                      : 'Sign in & continue'
                 : 'Continue'}
             </button>
           )}
