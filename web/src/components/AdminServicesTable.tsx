@@ -111,23 +111,27 @@ export default function AdminServicesTable({ initial }: { initial: Service[] }) 
 
   return (
     <div className="grid gap-4">
-      {error && <p className="rounded-md bg-rose-50 px-3 py-2 text-sm text-rose-800">{error}</p>}
+      {error && (
+        <p className="rounded-md bg-rose-50 px-3 py-2 text-sm text-rose-800 dark:bg-rose-950/40 dark:text-rose-200">
+          {error}
+        </p>
+      )}
 
       {/* Add Service Button / Form */}
       {!showAddForm ? (
         <button
           onClick={() => setShowAddForm(true)}
-          className="flex items-center gap-2 rounded-lg border border-dashed border-slate-300 bg-white px-4 py-3 text-sm font-medium text-slate-600 transition hover:border-indigo-300 hover:text-indigo-600"
+          className="flex items-center gap-2 rounded-lg border border-dashed border-slate-300 bg-white px-4 py-3 text-sm font-medium text-slate-600 transition hover:border-indigo-300 hover:text-indigo-600 dark:border-slate-700 dark:bg-slate-900 dark:text-slate-300 dark:hover:border-indigo-400 dark:hover:text-indigo-300"
         >
           <span className="text-lg">+</span> Add New Service
         </button>
       ) : (
-        <div className="rounded-xl border border-slate-200 bg-white p-5 shadow-sm">
+        <div className="rounded-xl border border-slate-200 bg-white p-5 shadow-sm dark:border-slate-700 dark:bg-slate-900">
           <div className="flex items-center justify-between">
-            <h3 className="text-lg font-semibold text-slate-900">Add New Service</h3>
+            <h3 className="text-lg font-semibold text-slate-900 dark:text-slate-100">Add New Service</h3>
             <button
               onClick={() => setShowAddForm(false)}
-              className="rounded-lg p-1 text-slate-400 hover:bg-slate-100 hover:text-slate-600"
+              className="rounded-lg p-1 text-slate-400 hover:bg-slate-100 hover:text-slate-600 dark:hover:bg-slate-800 dark:hover:text-slate-200"
             >
               <svg className="h-5 w-5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
                 <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M6 18L18 6M6 6l12 12" />
@@ -137,67 +141,67 @@ export default function AdminServicesTable({ initial }: { initial: Service[] }) 
 
           <div className="mt-4 grid gap-4 md:grid-cols-2">
             <div>
-              <label className="block text-sm font-medium text-slate-700">Service ID</label>
+              <label className="block text-sm font-medium text-slate-700 dark:text-slate-200">Service ID</label>
               <input
                 type="text"
                 placeholder="e.g., pool_cleaning"
                 value={newService.id}
                 onChange={(e) => setNewService((p) => ({ ...p, id: e.target.value }))}
-                className="mt-1 w-full rounded-lg border border-slate-300 px-3 py-2 font-mono text-sm focus:border-indigo-500 focus:outline-none focus:ring-1 focus:ring-indigo-500"
+                className="mt-1 w-full rounded-lg border border-slate-300 bg-white px-3 py-2 font-mono text-sm text-slate-900 placeholder:text-slate-400 focus:border-indigo-500 focus:outline-none focus:ring-1 focus:ring-indigo-500 dark:border-slate-700 dark:bg-slate-950 dark:text-slate-100 dark:placeholder:text-slate-500"
               />
             </div>
             <div>
-              <label className="block text-sm font-medium text-slate-700">Display Name</label>
+              <label className="block text-sm font-medium text-slate-700 dark:text-slate-200">Display Name</label>
               <input
                 type="text"
                 placeholder="e.g., Pool Cleaning"
                 value={newService.name ?? ''}
                 onChange={(e) => setNewService((p) => ({ ...p, name: e.target.value }))}
-                className="mt-1 w-full rounded-lg border border-slate-300 px-3 py-2 text-sm focus:border-indigo-500 focus:outline-none focus:ring-1 focus:ring-indigo-500"
+                className="mt-1 w-full rounded-lg border border-slate-300 bg-white px-3 py-2 text-sm text-slate-900 placeholder:text-slate-400 focus:border-indigo-500 focus:outline-none focus:ring-1 focus:ring-indigo-500 dark:border-slate-700 dark:bg-slate-950 dark:text-slate-100 dark:placeholder:text-slate-500"
               />
             </div>
             <div>
-              <label className="block text-sm font-medium text-slate-700">Category</label>
+              <label className="block text-sm font-medium text-slate-700 dark:text-slate-200">Category</label>
               <input
                 type="text"
                 placeholder="e.g., outdoor"
                 value={newService.category ?? ''}
                 onChange={(e) => setNewService((p) => ({ ...p, category: e.target.value }))}
-                className="mt-1 w-full rounded-lg border border-slate-300 px-3 py-2 text-sm focus:border-indigo-500 focus:outline-none focus:ring-1 focus:ring-indigo-500"
+                className="mt-1 w-full rounded-lg border border-slate-300 bg-white px-3 py-2 text-sm text-slate-900 placeholder:text-slate-400 focus:border-indigo-500 focus:outline-none focus:ring-1 focus:ring-indigo-500 dark:border-slate-700 dark:bg-slate-950 dark:text-slate-100 dark:placeholder:text-slate-500"
               />
             </div>
             <div>
-              <label className="block text-sm font-medium text-slate-700">General Skill</label>
+              <label className="block text-sm font-medium text-slate-700 dark:text-slate-200">General Skill</label>
               <input
                 type="text"
                 placeholder="e.g., plumbing"
                 value={newService.general_skill ?? ''}
                 onChange={(e) => setNewService((p) => ({ ...p, general_skill: e.target.value }))}
-                className="mt-1 w-full rounded-lg border border-slate-300 px-3 py-2 text-sm focus:border-indigo-500 focus:outline-none focus:ring-1 focus:ring-indigo-500"
+                className="mt-1 w-full rounded-lg border border-slate-300 bg-white px-3 py-2 text-sm text-slate-900 placeholder:text-slate-400 focus:border-indigo-500 focus:outline-none focus:ring-1 focus:ring-indigo-500 dark:border-slate-700 dark:bg-slate-950 dark:text-slate-100 dark:placeholder:text-slate-500"
               />
             </div>
             <div>
-              <label className="block text-sm font-medium text-slate-700">Icon</label>
+              <label className="block text-sm font-medium text-slate-700 dark:text-slate-200">Icon</label>
               <input
                 type="text"
                 placeholder="Emoji icon"
                 value={newService.icon ?? ''}
                 onChange={(e) => setNewService((p) => ({ ...p, icon: e.target.value }))}
-                className="mt-1 w-full rounded-lg border border-slate-300 px-3 py-2 text-sm focus:border-indigo-500 focus:outline-none focus:ring-1 focus:ring-indigo-500"
+                className="mt-1 w-full rounded-lg border border-slate-300 bg-white px-3 py-2 text-sm text-slate-900 placeholder:text-slate-400 focus:border-indigo-500 focus:outline-none focus:ring-1 focus:ring-indigo-500 dark:border-slate-700 dark:bg-slate-950 dark:text-slate-100 dark:placeholder:text-slate-500"
               />
             </div>
             <div>
-              <label className="block text-sm font-medium text-slate-700">Base Minutes</label>
+              <label className="block text-sm font-medium text-slate-700 dark:text-slate-200">Base Minutes</label>
               <input
                 type="number"
                 min={15}
                 value={newService.base_minutes ?? 60}
                 onChange={(e) => setNewService((p) => ({ ...p, base_minutes: Number(e.target.value) }))}
-                className="mt-1 w-full rounded-lg border border-slate-300 px-3 py-2 text-sm focus:border-indigo-500 focus:outline-none focus:ring-1 focus:ring-indigo-500"
+                className="mt-1 w-full rounded-lg border border-slate-300 bg-white px-3 py-2 text-sm text-slate-900 focus:border-indigo-500 focus:outline-none focus:ring-1 focus:ring-indigo-500 dark:border-slate-700 dark:bg-slate-950 dark:text-slate-100"
               />
             </div>
             <div>
-              <label className="block text-sm font-medium text-slate-700">Price ($)</label>
+              <label className="block text-sm font-medium text-slate-700 dark:text-slate-200">Price ($)</label>
               <input
                 type="text"
                 inputMode="decimal"
@@ -208,7 +212,7 @@ export default function AdminServicesTable({ initial }: { initial: Service[] }) 
                   const cents = val ? Math.round(parseFloat(val) * 100) : null;
                   setNewService((p) => ({ ...p, price_cents: cents ?? null }));
                 }}
-                className="mt-1 w-full rounded-lg border border-slate-300 px-3 py-2 text-sm focus:border-indigo-500 focus:outline-none focus:ring-1 focus:ring-indigo-500"
+                className="mt-1 w-full rounded-lg border border-slate-300 bg-white px-3 py-2 text-sm text-slate-900 placeholder:text-slate-400 focus:border-indigo-500 focus:outline-none focus:ring-1 focus:ring-indigo-500 dark:border-slate-700 dark:bg-slate-950 dark:text-slate-100 dark:placeholder:text-slate-500"
               />
             </div>
           </div>
@@ -216,14 +220,14 @@ export default function AdminServicesTable({ initial }: { initial: Service[] }) 
           <div className="mt-4 flex justify-end gap-2">
             <button
               onClick={() => setShowAddForm(false)}
-              className="rounded-lg border border-slate-300 px-4 py-2 text-sm font-medium text-slate-700 hover:bg-slate-50"
+              className="rounded-lg border border-slate-300 px-4 py-2 text-sm font-medium text-slate-700 hover:bg-slate-50 dark:border-slate-600 dark:text-slate-200 dark:hover:bg-slate-800"
             >
               Cancel
             </button>
             <button
               onClick={addService}
               disabled={savingId === 'new'}
-              className="rounded-lg bg-indigo-600 px-4 py-2 text-sm font-semibold text-white hover:bg-indigo-700 disabled:bg-slate-300"
+              className="rounded-lg bg-indigo-600 px-4 py-2 text-sm font-semibold text-white hover:bg-indigo-700 disabled:bg-slate-300 dark:disabled:bg-slate-700"
             >
               {savingId === 'new' ? 'Adding...' : 'Add Service'}
             </button>
@@ -237,22 +241,22 @@ export default function AdminServicesTable({ initial }: { initial: Service[] }) 
         if (categoryServices.length === 0) return null;
 
         return (
-          <div key={category} className="rounded-xl border border-slate-200 bg-white shadow-sm">
-            <div className="border-b border-slate-100 px-5 py-3">
-              <h3 className="text-sm font-semibold uppercase tracking-wide text-slate-500">
+          <div key={category} className="rounded-xl border border-slate-200 bg-white shadow-sm dark:border-slate-700 dark:bg-slate-900">
+            <div className="border-b border-slate-100 px-5 py-3 dark:border-slate-800">
+              <h3 className="text-sm font-semibold uppercase tracking-wide text-slate-500 dark:text-slate-400">
                 {category}
               </h3>
             </div>
-            <div className="divide-y divide-slate-100">
+            <div className="divide-y divide-slate-100 dark:divide-slate-800">
               {categoryServices.map((svc) => (
                 <div
                   key={svc.id}
-                  className={`flex items-center gap-4 px-5 py-3 ${
+                  className={`flex flex-col gap-4 px-5 py-3 sm:flex-row sm:items-center ${
                     svc.is_active === false ? 'opacity-50' : ''
                   }`}
                 >
                   {/* Icon */}
-                  <div className="flex h-10 w-10 items-center justify-center rounded-lg bg-slate-100 text-xl">
+                  <div className="flex h-10 w-10 items-center justify-center rounded-lg bg-slate-100 text-xl dark:bg-slate-800">
                     {svc.icon || '🔧'}
                   </div>
 
@@ -268,15 +272,15 @@ export default function AdminServicesTable({ initial }: { initial: Service[] }) 
                           }
                         }}
                         disabled={savingId === svc.id}
-                        className="w-full max-w-xs rounded border border-transparent px-2 py-1 text-sm font-medium text-slate-900 hover:border-slate-200 focus:border-indigo-500 focus:outline-none"
+                        className="w-full rounded border border-transparent px-2 py-1 text-sm font-medium text-slate-900 hover:border-slate-200 focus:border-indigo-500 focus:outline-none dark:text-slate-100 dark:hover:border-slate-700 dark:focus:border-indigo-400 sm:max-w-xs"
                       />
                       {svc.is_active === false && (
-                        <span className="rounded bg-slate-100 px-2 py-0.5 text-xs font-medium text-slate-500">
+                        <span className="rounded bg-slate-100 px-2 py-0.5 text-xs font-medium text-slate-500 dark:bg-slate-800 dark:text-slate-400">
                           Inactive
                         </span>
                       )}
                     </div>
-                    <p className="text-xs font-mono text-slate-400">{svc.id}</p>
+                    <p className="text-xs font-mono text-slate-400 dark:text-slate-500">{svc.id}</p>
                     <input
                       type="text"
                       defaultValue={svc.general_skill ?? ''}
@@ -287,12 +291,12 @@ export default function AdminServicesTable({ initial }: { initial: Service[] }) 
                       }}
                       disabled={savingId === svc.id}
                       placeholder="General skill"
-                      className="mt-2 w-full max-w-xs rounded border border-slate-200 px-2 py-1 text-xs text-slate-600 focus:border-indigo-500 focus:outline-none"
+                      className="mt-2 w-full rounded border border-slate-200 bg-white px-2 py-1 text-xs text-slate-600 placeholder:text-slate-400 focus:border-indigo-500 focus:outline-none dark:border-slate-700 dark:bg-slate-950 dark:text-slate-300 dark:placeholder:text-slate-500 sm:max-w-xs"
                     />
                   </div>
 
                   {/* Minutes */}
-                  <div className="w-20">
+                  <div className="w-full sm:w-20">
                     <input
                       type="number"
                       min={15}
@@ -304,15 +308,15 @@ export default function AdminServicesTable({ initial }: { initial: Service[] }) 
                         }
                       }}
                       disabled={savingId === svc.id}
-                      className="w-full rounded border border-slate-200 px-2 py-1 text-center text-sm focus:border-indigo-500 focus:outline-none"
+                      className="w-full rounded border border-slate-200 bg-white px-2 py-1 text-center text-sm text-slate-900 focus:border-indigo-500 focus:outline-none dark:border-slate-700 dark:bg-slate-950 dark:text-slate-100"
                     />
-                    <p className="text-center text-xs text-slate-400">min</p>
+                    <p className="text-center text-xs text-slate-400 dark:text-slate-500">min</p>
                   </div>
 
                   {/* Price */}
-                  <div className="w-24">
+                  <div className="w-full sm:w-24">
                     <div className="relative">
-                      <span className="absolute left-2 top-1/2 -translate-y-1/2 text-sm text-slate-400">$</span>
+                      <span className="absolute left-2 top-1/2 -translate-y-1/2 text-sm text-slate-400 dark:text-slate-500">$</span>
                       <input
                         type="text"
                         inputMode="decimal"
@@ -325,21 +329,21 @@ export default function AdminServicesTable({ initial }: { initial: Service[] }) 
                           }
                         }}
                         disabled={savingId === svc.id}
-                        className="w-full rounded border border-slate-200 py-1 pl-6 pr-2 text-right text-sm focus:border-indigo-500 focus:outline-none"
+                        className="w-full rounded border border-slate-200 bg-white py-1 pl-6 pr-2 text-right text-sm text-slate-900 focus:border-indigo-500 focus:outline-none dark:border-slate-700 dark:bg-slate-950 dark:text-slate-100"
                         placeholder="0.00"
                       />
                     </div>
                   </div>
 
                   {/* Actions */}
-                  <div className="flex items-center gap-2">
+                  <div className="flex flex-wrap items-center gap-2">
                     <button
                       onClick={() => toggleActive(svc.id, svc.is_active !== false)}
                       disabled={savingId === svc.id}
                       className={`rounded-lg px-3 py-1.5 text-xs font-medium transition ${
                         svc.is_active === false
-                          ? 'border border-emerald-200 text-emerald-700 hover:bg-emerald-50'
-                          : 'border border-slate-200 text-slate-600 hover:bg-slate-50'
+                          ? 'border border-emerald-200 text-emerald-700 hover:bg-emerald-50 dark:border-emerald-500/40 dark:text-emerald-300 dark:hover:bg-emerald-500/10'
+                          : 'border border-slate-200 text-slate-600 hover:bg-slate-50 dark:border-slate-600 dark:text-slate-300 dark:hover:bg-slate-800'
                       }`}
                     >
                       {svc.is_active === false ? 'Activate' : 'Deactivate'}
@@ -347,12 +351,12 @@ export default function AdminServicesTable({ initial }: { initial: Service[] }) 
                     <button
                       onClick={() => removeService(svc.id)}
                       disabled={savingId === svc.id}
-                      className="rounded-lg border border-rose-200 px-3 py-1.5 text-xs font-medium text-rose-600 hover:bg-rose-50 disabled:opacity-50"
+                      className="rounded-lg border border-rose-200 px-3 py-1.5 text-xs font-medium text-rose-600 hover:bg-rose-50 disabled:opacity-50 dark:border-rose-500/40 dark:text-rose-300 dark:hover:bg-rose-500/10"
                     >
                       Delete
                     </button>
                     {savingId === svc.id && (
-                      <span className="text-xs text-slate-400">Saving...</span>
+                      <span className="text-xs text-slate-400 dark:text-slate-500">Saving...</span>
                     )}
                   </div>
                 </div>
@@ -363,8 +367,10 @@ export default function AdminServicesTable({ initial }: { initial: Service[] }) 
       })}
 
       {services.length === 0 && (
-        <div className="rounded-xl border border-dashed border-slate-200 bg-white px-5 py-8 text-center">
-          <p className="text-sm text-slate-500">No services in catalog. Add your first service above.</p>
+        <div className="rounded-xl border border-dashed border-slate-200 bg-white px-5 py-8 text-center dark:border-slate-700 dark:bg-slate-900">
+          <p className="text-sm text-slate-500 dark:text-slate-400">
+            No services in catalog. Add your first service above.
+          </p>
         </div>
       )}
     </div>

@@ -259,10 +259,10 @@ export default function AdminRequestsTableEnhanced({ initial, onRefresh, lastUpd
   const renderStatusDivider = (status: string) => {
     const style = getStatusStyle(status);
     return (
-      <div className="flex items-center gap-3 rounded-lg border border-slate-200 bg-slate-50 px-3 py-2 text-xs font-semibold uppercase tracking-wide text-slate-600">
+      <div className="flex items-center gap-3 rounded-lg border border-slate-200 bg-slate-50 px-3 py-2 text-xs font-semibold uppercase tracking-wide text-slate-600 dark:border-slate-700 dark:bg-slate-900/60 dark:text-slate-300">
         <span className={`h-2.5 w-2.5 rounded-full ${style.dot}`} />
         <span className="flex-1">{style.label}</span>
-        <span className="text-slate-400">{statusCounts[status] || 0}</span>
+        <span className="text-slate-400 dark:text-slate-500">{statusCounts[status] || 0}</span>
       </div>
     );
   };
