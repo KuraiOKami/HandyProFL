@@ -79,7 +79,7 @@ export async function GET(
     .select(`
       id,
       status,
-      payout_cents,
+      agent_payout_cents,
       created_at,
       completed_at,
       service_requests (
@@ -95,6 +95,14 @@ export async function GET(
     .order("created_at", { ascending: false })
     .limit(20);
 
+  // Fallback: requests assigned to agent (even if no job_assignment exists yet)
+  const { data: assignedRequests } = await adminSupabase
+    .from("service_requests")
+    .select("id, service_type, preferred_date, preferred_time, status, total_price_cents, created_at, assigned_agent_id")
+    .eq("assigned_agent_id", agentId)
+    .order("created_at", { ascending: false })
+    .limit(20);
+
   // Get recent payouts if table exists
   let payouts: { id: string; amount_cents: number; status: string; created_at: string; method: string }[] = [];
   try {
@@ -107,6 +115,40 @@ export async function GET(
     payouts = payoutData || [];
   } catch {
     // Table might not exist yet
+  }
+
+  // Get reviews/ratings for this agent
+  let reviews: { id: string; rating: number; review: string | null; created_at: string; job_assignment_id: string | null; rater_name: string }[] = [];
+  try {
+    const { data: ratingsData } = await adminSupabase
+      .from("ratings")
+      .select(`
+        id,
+        rating,
+        review,
+        created_at,
+        job_assignment_id,
+        rater:profiles!ratings_rater_id_fkey ( first_name, last_name )
+      `)
+      .eq("ratee_id", agentId)
+      .eq("rater_type", "client")
+      .order("created_at", { ascending: false })
+      .limit(25);
+
+    reviews =
+      ratingsData?.map((r) => {
+        const raterProfile = Array.isArray(r.rater) ? r.rater[0] : r.rater;
+        return {
+          id: r.id,
+          rating: r.rating,
+          review: r.review,
+          created_at: r.created_at,
+          job_assignment_id: r.job_assignment_id || null,
+          rater_name: [raterProfile?.first_name, raterProfile?.last_name].filter(Boolean).join(" ") || "Client",
+        };
+      }) || [];
+  } catch {
+    // ratings table may not exist
   }
 
   // Format skills with service details
@@ -135,11 +177,30 @@ export async function GET(
       request_status: req?.status || null,
       job_status: j.status,
       total_price_cents: req?.total_price_cents || 0,
-      payout_cents: j.payout_cents || 0,
+      payout_cents: j.agent_payout_cents || 0,
       created_at: j.created_at,
       completed_at: j.completed_at,
     };
   });
+
+  const fallbackJobs =
+    assignedRequests?.map((req) => ({
+      id: req.id,
+      request_id: req.id,
+      service_type: req.service_type || "Unknown",
+      preferred_date: req.preferred_date || null,
+      preferred_time: req.preferred_time || null,
+      request_status: req.status || null,
+      job_status: req.status || "assigned",
+      total_price_cents: req.total_price_cents || 0,
+      payout_cents: Math.round((req.total_price_cents || 0) * 0.7),
+      created_at: req.created_at || new Date().toISOString(),
+      completed_at: null,
+    })) || [];
+
+  const allJobs = [...(formattedJobs || []), ...fallbackJobs].sort(
+    (a, b) => new Date(b.created_at).getTime() - new Date(a.created_at).getTime()
+  );
 
   return NextResponse.json({
     agent: {
@@ -153,8 +214,8 @@ export async function GET(
       selfie_url: agentProfile.selfie_url || null,
       status: agentProfile.status || "pending_approval",
       tier: agentProfile.tier || "bronze",
-      rating: agentProfile.rating || 5.0,
-      rating_count: agentProfile.rating_count || 0,
+      rating: agentProfile.agent_rating ?? agentProfile.rating ?? 5.0,
+      rating_count: agentProfile.agent_rating_count ?? agentProfile.rating_count ?? 0,
       total_jobs: agentProfile.total_jobs || 0,
       total_earnings_cents: agentProfile.total_earnings_cents || 0,
       service_area_miles: agentProfile.service_area_miles || 25,
@@ -177,8 +238,9 @@ export async function GET(
       updated_at: agentProfile.updated_at || null,
     },
     skills: formattedSkills,
-    jobs: formattedJobs,
+    jobs: allJobs,
     payouts,
+    reviews,
   });
 }
 

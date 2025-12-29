@@ -66,13 +66,22 @@ type Payout = {
   method: string;
 };
 
-type Tab = 'profile' | 'activity' | 'documents' | 'messaging' | 'notes';
+type Review = {
+  id: string;
+  rating: number;
+  review: string | null;
+  created_at: string;
+  job_assignment_id: string | null;
+  rater_name: string;
+};
+type Tab = 'profile' | 'activity' | 'reviews' | 'documents' | 'messaging' | 'notes' | 'support';
 
 export default function AgentProfileContent({ agentId }: { agentId: string }) {
   const [agent, setAgent] = useState<Agent | null>(null);
   const [skills, setSkills] = useState<Skill[]>([]);
   const [jobs, setJobs] = useState<Job[]>([]);
   const [payouts, setPayouts] = useState<Payout[]>([]);
+  const [reviews, setReviews] = useState<Review[]>([]);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
   const [activeTab, setActiveTab] = useState<Tab>('profile');
@@ -100,6 +109,7 @@ export default function AgentProfileContent({ agentId }: { agentId: string }) {
       setSkills(data.skills || []);
       setJobs(data.jobs || []);
       setPayouts(data.payouts || []);
+      setReviews(data.reviews || []);
       setNotes(data.agent.admin_notes || '');
     } catch (err) {
       setError(err instanceof Error ? err.message : 'Failed to load agent');
@@ -234,7 +244,9 @@ export default function AgentProfileContent({ agentId }: { agentId: string }) {
       completed: 'bg-emerald-100 text-emerald-700',
       in_progress: 'bg-blue-100 text-blue-700',
       accepted: 'bg-indigo-100 text-indigo-700',
+      assigned: 'bg-indigo-100 text-indigo-700',
       cancelled: 'bg-rose-100 text-rose-700',
+      pending: 'bg-amber-100 text-amber-700',
     };
     return (
       <span className={`rounded-full px-2 py-0.5 text-xs font-medium ${colors[status] || 'bg-slate-100 text-slate-600'}`}>
@@ -270,9 +282,11 @@ export default function AgentProfileContent({ agentId }: { agentId: string }) {
   const tabs: { id: Tab; label: string; icon: string }[] = [
     { id: 'profile', label: 'Profile', icon: '👤' },
     { id: 'activity', label: 'Activity', icon: '📋' },
+    { id: 'reviews', label: 'Reviews', icon: '⭐' },
     { id: 'documents', label: 'Documents', icon: '📄' },
     { id: 'messaging', label: 'Messages', icon: '💬' },
     { id: 'notes', label: 'Notes', icon: '📝' },
+    { id: 'support', label: 'Support', icon: '🛠️' },
   ];
 
   return (
@@ -544,7 +558,16 @@ export default function AgentProfileContent({ agentId }: { agentId: string }) {
                             <p className="text-sm text-slate-900">{formatDate(job.preferred_date)}</p>
                             <p className="text-xs text-slate-500">{formatTime(job.preferred_time)}</p>
                           </td>
-                          <td className="px-3 py-3">{getJobStatusBadge(job.job_status)}</td>
+                          <td className="px-3 py-3">
+                            <div className="flex flex-col gap-1">
+                              {getJobStatusBadge(job.job_status)}
+                              {job.request_status && (
+                                <span className="rounded-full bg-slate-100 px-2 py-0.5 text-[11px] font-medium text-slate-600">
+                                  Request: {job.request_status}
+                                </span>
+                              )}
+                            </div>
+                          </td>
                           <td className="px-3 py-3 text-right">
                             <p className="text-sm font-medium text-slate-900">{formatCurrency(job.payout_cents)}</p>
                           </td>
@@ -574,6 +597,48 @@ export default function AgentProfileContent({ agentId }: { agentId: string }) {
                       }`}>
                         {payout.status}
                       </span>
+                    </div>
+                  ))}
+                </div>
+              )}
+            </div>
+          </div>
+        )}
+
+        {/* Reviews Tab */}
+        {activeTab === 'reviews' && (
+          <div className="grid gap-4">
+            <div className="rounded-xl border border-slate-200 bg-white p-5 shadow-sm">
+              <div className="flex flex-wrap items-center justify-between gap-3">
+                <div>
+                  <p className="text-xs font-medium uppercase tracking-wide text-slate-500">Average Rating</p>
+                  <p className="text-2xl font-bold text-slate-900">
+                    <span className="text-yellow-500">⭐</span> {agent.rating.toFixed(1)}
+                    <span className="text-sm font-normal text-slate-500"> ({agent.rating_count} reviews)</span>
+                  </p>
+                </div>
+              </div>
+            </div>
+
+            <div className="rounded-xl border border-slate-200 bg-white p-5 shadow-sm">
+              <h3 className="text-lg font-semibold text-slate-900">Client Reviews</h3>
+              {reviews.length === 0 ? (
+                <p className="mt-3 text-sm text-slate-500">No reviews yet.</p>
+              ) : (
+                <div className="mt-4 space-y-3">
+                  {reviews.map((review) => (
+                    <div key={review.id} className="rounded-lg border border-slate-100 bg-slate-50 p-4">
+                      <div className="flex flex-wrap items-center justify-between gap-2">
+                        <div className="flex items-center gap-2">
+                          <span className="text-lg text-yellow-500">⭐</span>
+                          <span className="text-sm font-semibold text-slate-900">{review.rating.toFixed(1)}</span>
+                        </div>
+                        <span className="text-xs text-slate-500">
+                          {formatDate(review.created_at)} {review.job_assignment_id ? `· Job ${review.job_assignment_id.slice(0, 8)}` : ''}
+                        </span>
+                      </div>
+                      {review.review && <p className="mt-2 text-sm text-slate-700">{review.review}</p>}
+                      <p className="mt-1 text-xs text-slate-500">From: {review.rater_name}</p>
                     </div>
                   ))}
                 </div>
@@ -659,6 +724,48 @@ export default function AgentProfileContent({ agentId }: { agentId: string }) {
               <button className="mt-4 rounded-lg bg-indigo-600 px-4 py-2 text-sm font-medium text-white hover:bg-indigo-700">
                 Open Messages
               </button>
+            </div>
+          </div>
+        )}
+
+        {/* Support Tab */}
+        {activeTab === 'support' && (
+          <div className="grid gap-4 lg:grid-cols-2">
+            <div className="rounded-xl border border-slate-200 bg-white p-5 shadow-sm">
+              <h3 className="text-lg font-semibold text-slate-900">Agent Care</h3>
+              <p className="mt-2 text-sm text-slate-500">
+                Quick actions to help this agent when they reach out with questions.
+              </p>
+              <div className="mt-4 space-y-3 text-sm text-slate-700">
+                <a className="block rounded-lg border border-slate-200 px-4 py-3 hover:bg-slate-50" href={`mailto:${agent.email}?subject=Support%20for%20${encodeURIComponent(agent.first_name + ' ' + agent.last_name)}`}>
+                  Email agent ({agent.email})
+                </a>
+                {agent.phone && (
+                  <a className="block rounded-lg border border-slate-200 px-4 py-3 hover:bg-slate-50" href={`tel:${agent.phone}`}>
+                    Call agent ({agent.phone})
+                  </a>
+                )}
+                <a className="block rounded-lg border border-slate-200 px-4 py-3 hover:bg-slate-50" href={`/admin?tab=messages&agent=${agent.id}`}>
+                  Open admin messages
+                </a>
+              </div>
+            </div>
+            <div className="rounded-xl border border-slate-200 bg-white p-5 shadow-sm">
+              <h3 className="text-lg font-semibold text-slate-900">Client Care & Escalations</h3>
+              <p className="mt-2 text-sm text-slate-500">
+                Use when the agent needs help with a client or job.
+              </p>
+              <div className="mt-4 space-y-3 text-sm text-slate-700">
+                <a className="block rounded-lg border border-slate-200 px-4 py-3 hover:bg-slate-50" href={`mailto:support@handyprofl.com?subject=Agent%20Escalation%20${encodeURIComponent(agent.first_name + ' ' + agent.last_name)}`}>
+                  Email agent care (support@handyprofl.com)
+                </a>
+                <a className="block rounded-lg border border-slate-200 px-4 py-3 hover:bg-slate-50" href={`/admin?tab=requests&agent=${agent.id}`}>
+                  View agent’s jobs/requests
+                </a>
+                <div className="rounded-lg border border-dashed border-slate-300 px-4 py-3 text-xs text-slate-600">
+                  Tip: log summaries of calls/chats in Notes for future context.
+                </div>
+              </div>
             </div>
           </div>
         )}
