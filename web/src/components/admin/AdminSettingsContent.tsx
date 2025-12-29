@@ -46,10 +46,12 @@ function Badge({ ok, label }: { ok: boolean; label: string }) {
   return (
     <span
       className={`inline-flex items-center gap-2 rounded-full px-3 py-1 text-xs font-semibold ${
-        ok ? 'bg-green-50 text-green-800 ring-1 ring-green-200' : 'bg-amber-50 text-amber-800 ring-1 ring-amber-200'
+        ok
+          ? 'bg-green-50 text-green-800 ring-1 ring-green-200 dark:bg-emerald-500/10 dark:text-emerald-200 dark:ring-emerald-500/30'
+          : 'bg-amber-50 text-amber-800 ring-1 ring-amber-200 dark:bg-amber-500/10 dark:text-amber-200 dark:ring-amber-500/30'
       }`}
     >
-      <span className={`h-2 w-2 rounded-full ${ok ? 'bg-green-500' : 'bg-amber-500'}`} />
+      <span className={`h-2 w-2 rounded-full ${ok ? 'bg-green-500 dark:bg-emerald-400' : 'bg-amber-500 dark:bg-amber-400'}`} />
       {label}
     </span>
   );
@@ -157,25 +159,25 @@ export default function AdminSettingsContent() {
   };
 
   const renderPerson = (p: Profile, cta: 'promote' | 'demote') => (
-    <div key={p.id} className="rounded-lg border border-slate-200 bg-white p-3 shadow-sm">
+    <div key={p.id} className="rounded-lg border border-slate-200 bg-white p-3 shadow-sm dark:border-slate-700 dark:bg-slate-900">
       <div className="flex flex-wrap items-center justify-between gap-2">
         <div>
-          <p className="text-sm font-semibold text-slate-900">
+          <p className="text-sm font-semibold text-slate-900 dark:text-slate-100">
             {[p.first_name, p.middle_initial, p.last_name].filter(Boolean).join(' ') || 'Unknown'}
           </p>
-          <p className="text-xs text-slate-600">
+          <p className="text-xs text-slate-600 dark:text-slate-400">
             {p.email || 'No email'} · {p.phone || 'No phone'}
           </p>
         </div>
         <div className="flex items-center gap-2">
-          <span className="rounded-full bg-slate-100 px-2.5 py-1 text-[11px] font-semibold uppercase tracking-wide text-slate-700">
+          <span className="rounded-full bg-slate-100 px-2.5 py-1 text-[11px] font-semibold uppercase tracking-wide text-slate-700 dark:bg-slate-800 dark:text-slate-300">
             {p.role || 'client'}
           </span>
           {cta === 'promote' && (
             <button
               onClick={() => updateRole(p.id, 'admin')}
               disabled={roleSavingId === p.id}
-              className="rounded-lg border border-indigo-200 px-3 py-1.5 text-xs font-semibold text-indigo-700 hover:bg-indigo-50 disabled:cursor-not-allowed disabled:opacity-60"
+              className="rounded-lg border border-indigo-200 px-3 py-1.5 text-xs font-semibold text-indigo-700 hover:bg-indigo-50 disabled:cursor-not-allowed disabled:opacity-60 dark:border-indigo-400/40 dark:text-indigo-300 dark:hover:bg-indigo-500/10"
             >
               Promote to admin
             </button>
@@ -184,7 +186,7 @@ export default function AdminSettingsContent() {
             <button
               onClick={() => updateRole(p.id, 'client')}
               disabled={roleSavingId === p.id}
-              className="rounded-lg border border-rose-200 px-3 py-1.5 text-xs font-semibold text-rose-700 hover:bg-rose-50 disabled:cursor-not-allowed disabled:opacity-60"
+              className="rounded-lg border border-rose-200 px-3 py-1.5 text-xs font-semibold text-rose-700 hover:bg-rose-50 disabled:cursor-not-allowed disabled:opacity-60 dark:border-rose-500/40 dark:text-rose-300 dark:hover:bg-rose-500/10"
             >
               Remove admin
             </button>
@@ -197,24 +199,24 @@ export default function AdminSettingsContent() {
   return (
     <section className="grid gap-5">
       <div>
-        <p className="text-xs uppercase tracking-[0.2em] text-indigo-700">Admin</p>
-        <h2 className="text-xl font-semibold text-slate-900">Settings</h2>
-        <p className="text-sm text-slate-600">Company info, roles, and integrations.</p>
+        <p className="text-xs uppercase tracking-[0.2em] text-indigo-700 dark:text-indigo-300">Admin</p>
+        <h2 className="text-xl font-semibold text-slate-900 dark:text-slate-100">Settings</h2>
+        <p className="text-sm text-slate-600 dark:text-slate-400">Company info, roles, and integrations.</p>
       </div>
 
       {/* Appearance */}
-      <div className="rounded-xl border border-slate-200 bg-white p-5 shadow-sm">
+      <div className="rounded-xl border border-slate-200 bg-white p-5 shadow-sm dark:border-slate-700 dark:bg-slate-900">
         <div className="flex flex-col gap-3 sm:flex-row sm:items-center sm:justify-between">
           <div>
-            <h3 className="text-lg font-semibold text-slate-900">Appearance</h3>
-            <p className="text-sm text-slate-500">Switch between light and dark mode</p>
+            <h3 className="text-lg font-semibold text-slate-900 dark:text-slate-100">Appearance</h3>
+            <p className="text-sm text-slate-500 dark:text-slate-400">Switch between light and dark mode</p>
           </div>
-          <div className="flex rounded-full border border-slate-200 bg-slate-50 p-1 text-xs font-semibold text-slate-700">
+          <div className="flex rounded-full border border-slate-200 bg-slate-50 p-1 text-xs font-semibold text-slate-700 dark:border-slate-700 dark:bg-slate-800 dark:text-slate-300">
             {(['light', 'dark', 'system'] as const).map((value) => (
               <button
                 key={value}
                 className={`rounded-full px-3 py-1 transition ${
-                  theme === value ? 'bg-white shadow-sm ring-1 ring-slate-200' : ''
+                  theme === value ? 'bg-white shadow-sm ring-1 ring-slate-200 dark:bg-slate-900 dark:ring-slate-600' : ''
                 }`}
                 onClick={() => setTheme(value)}
               >
@@ -226,52 +228,52 @@ export default function AdminSettingsContent() {
       </div>
 
       {/* Company profile */}
-      <div className="grid gap-4 rounded-xl border border-slate-200 bg-white p-5 shadow-sm">
+      <div className="grid gap-4 rounded-xl border border-slate-200 bg-white p-5 shadow-sm dark:border-slate-700 dark:bg-slate-900">
         <div>
-          <h3 className="text-lg font-semibold text-slate-900">Company profile</h3>
-          <p className="text-sm text-slate-600">Visible to clients in emails and confirmations.</p>
+          <h3 className="text-lg font-semibold text-slate-900 dark:text-slate-100">Company profile</h3>
+          <p className="text-sm text-slate-600 dark:text-slate-400">Visible to clients in emails and confirmations.</p>
         </div>
         <div className="grid gap-3 md:grid-cols-2">
           <div>
-            <label className="text-xs font-semibold uppercase tracking-[0.12em] text-slate-700">Brand name</label>
+            <label className="text-xs font-semibold uppercase tracking-[0.12em] text-slate-700 dark:text-slate-300">Brand name</label>
             <input
               value={company.name}
               onChange={(e) => setCompany((prev) => ({ ...prev, name: e.target.value }))}
-              className="mt-1 w-full rounded-lg border border-slate-300 px-3 py-2 text-sm text-slate-900 shadow-inner shadow-slate-100 focus:border-indigo-600 focus:outline-none focus:ring-2 focus:ring-indigo-100"
+              className="mt-1 w-full rounded-lg border border-slate-300 bg-white px-3 py-2 text-sm text-slate-900 shadow-inner shadow-slate-100 focus:border-indigo-600 focus:outline-none focus:ring-2 focus:ring-indigo-100 dark:border-slate-700 dark:bg-slate-950 dark:text-slate-100 dark:shadow-none dark:focus:ring-indigo-500/30"
             />
           </div>
           <div>
-            <label className="text-xs font-semibold uppercase tracking-[0.12em] text-slate-700">Support email</label>
+            <label className="text-xs font-semibold uppercase tracking-[0.12em] text-slate-700 dark:text-slate-300">Support email</label>
             <input
               value={company.supportEmail}
               onChange={(e) => setCompany((prev) => ({ ...prev, supportEmail: e.target.value }))}
-              className="mt-1 w-full rounded-lg border border-slate-300 px-3 py-2 text-sm text-slate-900 shadow-inner shadow-slate-100 focus:border-indigo-600 focus:outline-none focus:ring-2 focus:ring-indigo-100"
+              className="mt-1 w-full rounded-lg border border-slate-300 bg-white px-3 py-2 text-sm text-slate-900 shadow-inner shadow-slate-100 focus:border-indigo-600 focus:outline-none focus:ring-2 focus:ring-indigo-100 dark:border-slate-700 dark:bg-slate-950 dark:text-slate-100 dark:shadow-none dark:focus:ring-indigo-500/30"
             />
           </div>
           <div>
-            <label className="text-xs font-semibold uppercase tracking-[0.12em] text-slate-700">Support phone</label>
+            <label className="text-xs font-semibold uppercase tracking-[0.12em] text-slate-700 dark:text-slate-300">Support phone</label>
             <input
               value={company.supportPhone}
               onChange={(e) => setCompany((prev) => ({ ...prev, supportPhone: e.target.value }))}
-              className="mt-1 w-full rounded-lg border border-slate-300 px-3 py-2 text-sm text-slate-900 shadow-inner shadow-slate-100 focus:border-indigo-600 focus:outline-none focus:ring-2 focus:ring-indigo-100"
+              className="mt-1 w-full rounded-lg border border-slate-300 bg-white px-3 py-2 text-sm text-slate-900 shadow-inner shadow-slate-100 focus:border-indigo-600 focus:outline-none focus:ring-2 focus:ring-indigo-100 dark:border-slate-700 dark:bg-slate-950 dark:text-slate-100 dark:shadow-none dark:focus:ring-indigo-500/30"
             />
           </div>
           <div>
-            <label className="text-xs font-semibold uppercase tracking-[0.12em] text-slate-700">Timezone</label>
+            <label className="text-xs font-semibold uppercase tracking-[0.12em] text-slate-700 dark:text-slate-300">Timezone</label>
             <input
               value={company.timezone}
               onChange={(e) => setCompany((prev) => ({ ...prev, timezone: e.target.value }))}
               placeholder="America/New_York"
-              className="mt-1 w-full rounded-lg border border-slate-300 px-3 py-2 text-sm text-slate-900 shadow-inner shadow-slate-100 focus:border-indigo-600 focus:outline-none focus:ring-2 focus:ring-indigo-100"
+              className="mt-1 w-full rounded-lg border border-slate-300 bg-white px-3 py-2 text-sm text-slate-900 shadow-inner shadow-slate-100 focus:border-indigo-600 focus:outline-none focus:ring-2 focus:ring-indigo-100 dark:border-slate-700 dark:bg-slate-950 dark:text-slate-100 dark:shadow-none dark:focus:ring-indigo-500/30"
             />
           </div>
           <div className="md:col-span-2">
-            <label className="text-xs font-semibold uppercase tracking-[0.12em] text-slate-700">Service area</label>
+            <label className="text-xs font-semibold uppercase tracking-[0.12em] text-slate-700 dark:text-slate-300">Service area</label>
             <input
               value={company.serviceArea}
               onChange={(e) => setCompany((prev) => ({ ...prev, serviceArea: e.target.value }))}
               placeholder="City + counties covered"
-              className="mt-1 w-full rounded-lg border border-slate-300 px-3 py-2 text-sm text-slate-900 shadow-inner shadow-slate-100 focus:border-indigo-600 focus:outline-none focus:ring-2 focus:ring-indigo-100"
+              className="mt-1 w-full rounded-lg border border-slate-300 bg-white px-3 py-2 text-sm text-slate-900 shadow-inner shadow-slate-100 focus:border-indigo-600 focus:outline-none focus:ring-2 focus:ring-indigo-100 dark:border-slate-700 dark:bg-slate-950 dark:text-slate-100 dark:shadow-none dark:focus:ring-indigo-500/30"
             />
           </div>
         </div>
@@ -283,16 +285,16 @@ export default function AdminSettingsContent() {
           >
             Save
           </button>
-          {companyMessage && <span className="text-xs font-semibold text-green-700">{companyMessage}</span>}
+          {companyMessage && <span className="text-xs font-semibold text-green-700 dark:text-green-300">{companyMessage}</span>}
         </div>
       </div>
 
       {/* Admin roles */}
-      <div className="grid gap-3 rounded-xl border border-slate-200 bg-white p-5 shadow-sm">
+      <div className="grid gap-3 rounded-xl border border-slate-200 bg-white p-5 shadow-sm dark:border-slate-700 dark:bg-slate-900">
         <div className="flex flex-wrap items-center justify-between gap-3">
           <div>
-            <h3 className="text-lg font-semibold text-slate-900">Admin roles</h3>
-            <p className="text-sm text-slate-600">Promote or demote users to admin access.</p>
+            <h3 className="text-lg font-semibold text-slate-900 dark:text-slate-100">Admin roles</h3>
+            <p className="text-sm text-slate-600 dark:text-slate-400">Promote or demote users to admin access.</p>
           </div>
           <button
             onClick={async () => {
@@ -313,19 +315,23 @@ export default function AdminSettingsContent() {
                 setRolesLoading(false);
               }
             }}
-            className="rounded-lg border border-slate-300 px-3 py-1.5 text-xs font-semibold text-slate-800 hover:border-indigo-600 hover:text-indigo-700 disabled:cursor-not-allowed disabled:opacity-60"
+            className="rounded-lg border border-slate-300 px-3 py-1.5 text-xs font-semibold text-slate-800 hover:border-indigo-600 hover:text-indigo-700 disabled:cursor-not-allowed disabled:opacity-60 dark:border-slate-600 dark:text-slate-200 dark:hover:border-indigo-400 dark:hover:text-indigo-300"
             disabled={rolesLoading}
           >
             {rolesLoading ? 'Refreshing...' : 'Refresh'}
           </button>
         </div>
-        {rolesError && <p className="rounded-md bg-rose-50 px-3 py-2 text-sm text-rose-800">{rolesError}</p>}
+        {rolesError && (
+          <p className="rounded-md bg-rose-50 px-3 py-2 text-sm text-rose-800 dark:bg-rose-950/40 dark:text-rose-200">
+            {rolesError}
+          </p>
+        )}
 
         <div className="grid gap-2">
-          <p className="text-xs font-semibold uppercase tracking-[0.12em] text-slate-700">Admins</p>
-          {rolesLoading && <p className="text-sm text-slate-600">Loading admins...</p>}
+          <p className="text-xs font-semibold uppercase tracking-[0.12em] text-slate-700 dark:text-slate-300">Admins</p>
+          {rolesLoading && <p className="text-sm text-slate-600 dark:text-slate-400">Loading admins...</p>}
           {!rolesLoading && !admins.length && (
-            <p className="rounded-lg border border-dashed border-slate-200 bg-slate-50 p-3 text-sm text-slate-700">
+            <p className="rounded-lg border border-dashed border-slate-200 bg-slate-50 p-3 text-sm text-slate-700 dark:border-slate-700 dark:bg-slate-800/50 dark:text-slate-300">
               No admins found.
             </p>
           )}
@@ -333,9 +339,9 @@ export default function AdminSettingsContent() {
         </div>
 
         <div className="grid gap-2">
-          <p className="text-xs font-semibold uppercase tracking-[0.12em] text-slate-700">Team / clients</p>
+          <p className="text-xs font-semibold uppercase tracking-[0.12em] text-slate-700 dark:text-slate-300">Team / clients</p>
           {!rolesLoading && team.length === 0 && (
-            <p className="rounded-lg border border-dashed border-slate-200 bg-slate-50 p-3 text-sm text-slate-700">
+            <p className="rounded-lg border border-dashed border-slate-200 bg-slate-50 p-3 text-sm text-slate-700 dark:border-slate-700 dark:bg-slate-800/50 dark:text-slate-300">
               No other users found.
             </p>
           )}
@@ -344,11 +350,11 @@ export default function AdminSettingsContent() {
       </div>
 
       {/* Integrations */}
-      <div className="grid gap-3 rounded-xl border border-slate-200 bg-white p-5 shadow-sm">
+      <div className="grid gap-3 rounded-xl border border-slate-200 bg-white p-5 shadow-sm dark:border-slate-700 dark:bg-slate-900">
         <div className="flex flex-wrap items-center justify-between gap-3">
           <div>
-            <h3 className="text-lg font-semibold text-slate-900">Integrations</h3>
-            <p className="text-sm text-slate-600">Status of connected services.</p>
+            <h3 className="text-lg font-semibold text-slate-900 dark:text-slate-100">Integrations</h3>
+            <p className="text-sm text-slate-600 dark:text-slate-400">Status of connected services.</p>
           </div>
           <button
             onClick={async () => {
@@ -366,39 +372,41 @@ export default function AdminSettingsContent() {
                 setIntegrationError('Failed to load integration status');
               }
             }}
-            className="rounded-lg border border-slate-300 px-3 py-1.5 text-xs font-semibold text-slate-800 hover:border-indigo-600 hover:text-indigo-700"
+            className="rounded-lg border border-slate-300 px-3 py-1.5 text-xs font-semibold text-slate-800 hover:border-indigo-600 hover:text-indigo-700 dark:border-slate-600 dark:text-slate-200 dark:hover:border-indigo-400 dark:hover:text-indigo-300"
           >
             Re-check
           </button>
         </div>
         {integrationError && (
-          <p className="rounded-md bg-rose-50 px-3 py-2 text-sm text-rose-800">{integrationError}</p>
+          <p className="rounded-md bg-rose-50 px-3 py-2 text-sm text-rose-800 dark:bg-rose-950/40 dark:text-rose-200">
+            {integrationError}
+          </p>
         )}
         <div className="grid gap-3 md:grid-cols-2">
-          <div className="rounded-lg border border-slate-200 bg-slate-50 p-3">
-            <p className="text-xs font-semibold uppercase tracking-[0.12em] text-slate-700">Supabase</p>
+          <div className="rounded-lg border border-slate-200 bg-slate-50 p-3 dark:border-slate-700 dark:bg-slate-800/50">
+            <p className="text-xs font-semibold uppercase tracking-[0.12em] text-slate-700 dark:text-slate-300">Supabase</p>
             <div className="mt-2 flex flex-wrap gap-2">
               <Badge ok={Boolean(integrationStatus?.supabaseUrl)} label="URL" />
               <Badge ok={Boolean(integrationStatus?.supabaseAnonKey)} label="Anon key" />
               <Badge ok={Boolean(integrationStatus?.supabaseServiceRoleKey)} label="Service role" />
             </div>
           </div>
-          <div className="rounded-lg border border-slate-200 bg-slate-50 p-3">
-            <p className="text-xs font-semibold uppercase tracking-[0.12em] text-slate-700">Stripe</p>
+          <div className="rounded-lg border border-slate-200 bg-slate-50 p-3 dark:border-slate-700 dark:bg-slate-800/50">
+            <p className="text-xs font-semibold uppercase tracking-[0.12em] text-slate-700 dark:text-slate-300">Stripe</p>
             <div className="mt-2 flex flex-wrap gap-2">
               <Badge ok={Boolean(integrationStatus?.stripeSecretKey)} label="Secret key" />
               <Badge ok={Boolean(integrationStatus?.stripeWebhookSecret)} label="Webhook" />
             </div>
           </div>
-          <div className="rounded-lg border border-slate-200 bg-slate-50 p-3">
-            <p className="text-xs font-semibold uppercase tracking-[0.12em] text-slate-700">Messaging</p>
+          <div className="rounded-lg border border-slate-200 bg-slate-50 p-3 dark:border-slate-700 dark:bg-slate-800/50">
+            <p className="text-xs font-semibold uppercase tracking-[0.12em] text-slate-700 dark:text-slate-300">Messaging</p>
             <div className="mt-2 flex flex-wrap gap-2">
               <Badge ok={Boolean(integrationStatus?.twilioAuthToken)} label="Twilio" />
               <Badge ok={Boolean(integrationStatus?.resendApiKey)} label="Resend" />
             </div>
           </div>
-          <div className="rounded-lg border border-slate-200 bg-slate-50 p-3">
-            <p className="text-xs font-semibold uppercase tracking-[0.12em] text-slate-700">Hosting</p>
+          <div className="rounded-lg border border-slate-200 bg-slate-50 p-3 dark:border-slate-700 dark:bg-slate-800/50">
+            <p className="text-xs font-semibold uppercase tracking-[0.12em] text-slate-700 dark:text-slate-300">Hosting</p>
             <div className="mt-2 flex flex-wrap gap-2">
               <Badge ok={Boolean(integrationStatus?.netlifySiteId)} label="Netlify" />
             </div>
