@@ -64,6 +64,12 @@ export default function AdminRequestsTableEnhanced({ initial, onRefresh, lastUpd
     setRequests(initial);
   }, [initial]);
 
+  useEffect(() => {
+    if (window.innerWidth < 768) {
+      setViewMode('list');
+    }
+  }, []);
+
   // Load client names
   useEffect(() => {
     const loadClients = async () => {
@@ -107,12 +113,31 @@ export default function AdminRequestsTableEnhanced({ initial, onRefresh, lastUpd
     });
   }, [requests, searchQuery, statusFilter, clients]);
 
+  const statusCounts = useMemo(() => {
+    const counts: Record<string, number> = {};
+    statuses.forEach((status) => { counts[status] = 0; });
+    filteredRequests.forEach((req) => {
+      const status = req.status || 'pending';
+      counts[status] = (counts[status] || 0) + 1;
+    });
+    return counts;
+  }, [filteredRequests]);
+
+  const orderedRequests = useMemo(() => {
+    const statusOrder = new Map(statuses.map((status, index) => [status, index]));
+    return [...filteredRequests].sort((a, b) => {
+      const aStatus = a.status || 'pending';
+      const bStatus = b.status || 'pending';
+      return (statusOrder.get(aStatus) ?? 0) - (statusOrder.get(bStatus) ?? 0);
+    });
+  }, [filteredRequests]);
+
   // Pagination
-  const totalPages = Math.ceil(filteredRequests.length / ITEMS_PER_PAGE);
+  const totalPages = Math.ceil(orderedRequests.length / ITEMS_PER_PAGE);
   const paginatedRequests = useMemo(() => {
     const start = (currentPage - 1) * ITEMS_PER_PAGE;
-    return filteredRequests.slice(start, start + ITEMS_PER_PAGE);
-  }, [filteredRequests, currentPage]);
+    return orderedRequests.slice(start, start + ITEMS_PER_PAGE);
+  }, [orderedRequests, currentPage]);
 
   // Group by status for Kanban
   const groupedByStatus = useMemo(() => {
@@ -229,6 +254,17 @@ export default function AdminRequestsTableEnhanced({ initial, onRefresh, lastUpd
     if (diffDays > 0 && diffDays <= 7) return `In ${diffDays} days`;
     if (diffDays < 0 && diffDays >= -7) return `${Math.abs(diffDays)} days ago`;
     return formatDate(dateStr);
+  };
+
+  const renderStatusDivider = (status: string) => {
+    const style = getStatusStyle(status);
+    return (
+      <div className="flex items-center gap-3 rounded-lg border border-slate-200 bg-slate-50 px-3 py-2 text-xs font-semibold uppercase tracking-wide text-slate-600">
+        <span className={`h-2.5 w-2.5 rounded-full ${style.dot}`} />
+        <span className="flex-1">{style.label}</span>
+        <span className="text-slate-400">{statusCounts[status] || 0}</span>
+      </div>
+    );
   };
 
   // Stats - count active work vs completed
@@ -457,9 +493,18 @@ export default function AdminRequestsTableEnhanced({ initial, onRefresh, lastUpd
       {viewMode === 'list' && (
         <>
           <div className="grid gap-3">
-            {paginatedRequests.map((req) => (
-              <RequestCard key={req.id} req={req} />
-            ))}
+            {paginatedRequests.map((req, index) => {
+              const status = req.status || 'pending';
+              const previousStatus = paginatedRequests[index - 1]?.status || 'pending';
+              const showDivider = index === 0 || status !== previousStatus;
+
+              return (
+                <div key={req.id} className="grid gap-3">
+                  {showDivider && renderStatusDivider(status)}
+                  <RequestCard req={req} />
+                </div>
+              );
+            })}
             {paginatedRequests.length === 0 && (
               <div className="rounded-xl border border-dashed border-slate-200 p-8 text-center">
                 <p className="text-sm text-slate-500">No requests match your filters</p>
