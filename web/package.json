@@ -1,0 +1,37 @@
+{
+  "name": "web",
+  "version": "0.7.0",
+  "private": true,
+  "scripts": {
+    "dev": "next dev --turbopack",
+    "build": "next build",
+    "start": "next start",
+    "lint": "next lint"
+  },
+  "dependencies": {
+    "@sentry/nextjs": "^10.30.0",
+    "@stripe/connect-js": "^3.3.31",
+    "@stripe/react-stripe-js": "^5.4.1",
+    "@stripe/stripe-js": "^8.5.3",
+    "@supabase/ssr": "^0.5.0",
+    "@supabase/supabase-js": "^2.78.0",
+    "googleapis": "^167.0.0",
+    "next": "^15.1.9",
+    "react": "^19.0.0",
+    "react-dom": "^19.0.0",
+    "stripe": "^20.1.0",
+    "twilio": "^5.11.1"
+  },
+  "devDependencies": {
+    "@eslint/eslintrc": "^3",
+    "@netlify/plugin-nextjs": "^5.15.1",
+    "@types/node": "^20",
+    "@types/react": "^19",
+    "@types/react-dom": "^19",
+    "eslint": "^9",
+    "eslint-config-next": "^15.1.9",
+    "postcss": "^8",
+    "tailwindcss": "^3.4.1",
+    "typescript": "^5"
+  }
+}

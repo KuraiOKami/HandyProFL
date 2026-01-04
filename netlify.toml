@@ -1,0 +1,17 @@
+[build]
+  base = "web"
+  command = "npm run build"
+  publish = ".next"
+
+[build.environment]
+# NEXT_PUBLIC_* keys are intentionally public and will be in the client bundle.
+# Tell Netlify's secrets scanner to ignore them to avoid false positives.
+  SECRETS_SCAN_OMIT_KEYS = "NEXT_PUBLIC_SUPABASE_URL,NEXT_PUBLIC_SUPABASE_ANON_KEY,NEXT_PUBLIC_STRIPE_PUBLISHABLE_KEY"
+
+[[plugins]]
+  package = "@netlify/plugin-nextjs"
+
+[[redirects]]
+  from = "/api/requests/:id/cancel"
+  to = "/api/requests/cancel?id=:id"
+  status = 307

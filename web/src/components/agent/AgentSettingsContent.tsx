@@ -1,0 +1,959 @@
+'use client';
+
+import { useEffect, useMemo, useRef, useState } from 'react';
+import { useThemePreference } from '@/hooks/useThemePreference';
+import { loadConnectAndInitialize } from '@stripe/connect-js';
+import WalletSettings from '@/components/WalletSettings';
+
+type AgentProfile = {
+  id: string;
+  first_name: string;
+  last_name: string;
+  email: string;
+  phone: string;
+  bio: string;
+  photo_url: string | null;
+  skills: string[];
+  service_area_miles: number;
+  status: string;
+  stripe_account_id: string | null;
+  stripe_account_status: string;
+  stripe_payouts_enabled: boolean;
+  location_latitude: number | null;
+  location_longitude: number | null;
+  auto_booking_enabled: boolean;
+};
+
+type ServiceCatalogItem = {
+  id: string;
+  name: string;
+  category: string;
+  general_skill?: string | null;
+  description: string;
+  icon: string;
+};
+
+const GENERAL_SKILL_META: Record<string, { label: string; icon: string }> = {
+  assembly: { label: 'Furniture Assembly', icon: '🪑' },
+  tv_mount: { label: 'TV Mounting', icon: '📺' },
+  electrical: { label: 'Electrical & Lighting', icon: '💡' },
+  smart_home: { label: 'Smart Home', icon: '🏠' },
+  plumbing: { label: 'Plumbing', icon: '🔧' },
+  doors_hardware: { label: 'Doors & Hardware', icon: '🚪' },
+  repairs: { label: 'Repairs & Patching', icon: '🔨' },
+  exterior: { label: 'Exterior Work', icon: '🏡' },
+  tech: { label: 'Tech & Networking', icon: '📡' },
+  general: { label: 'General Handyman', icon: '🧰' },
+};
+
+const formatSkillLabel = (value: string) =>
+  value
+    .replace(/_/g, ' ')
+    .replace(/\b\w/g, (c) => c.toUpperCase());
+
+export default function AgentSettingsContent() {
+  const [profile, setProfile] = useState<AgentProfile | null>(null);
+  const [loading, setLoading] = useState(true);
+  const [saving, setSaving] = useState(false);
+  const [error, setError] = useState<string | null>(null);
+  const [success, setSuccess] = useState<string | null>(null);
+  const [payoutStatus, setPayoutStatus] = useState<string | null>(null);
+  const [payoutError, setPayoutError] = useState<string | null>(null);
+  const [payoutLoading, setPayoutLoading] = useState(false);
+  const [activeComponent, setActiveComponent] = useState<'onboarding' | 'management' | null>(null);
+  const { theme, setTheme } = useThemePreference();
+  const mountedComponentRef = useRef<(HTMLElement & { unmount?: () => void }) | null>(null);
+  const embedContainerRef = useRef<HTMLDivElement | null>(null);
+
+  // Service catalog state
+  const [serviceCatalog, setServiceCatalog] = useState<ServiceCatalogItem[]>([]);
+
+  // Form state
+  const [firstName, setFirstName] = useState('');
+  const [lastName, setLastName] = useState('');
+  const [phone, setPhone] = useState('');
+  const [bio, setBio] = useState('');
+  const [skills, setSkills] = useState<string[]>([]);
+  const [serviceArea, setServiceArea] = useState(25);
+  const [locationLatitude, setLocationLatitude] = useState<number | null>(null);
+  const [locationLongitude, setLocationLongitude] = useState<number | null>(null);
+  const [gettingLocation, setGettingLocation] = useState(false);
+  const [locationError, setLocationError] = useState<string | null>(null);
+  const [autoBookingEnabled, setAutoBookingEnabled] = useState(false);
+
+  // Service suggestion modal state
+  const [showSuggestionModal, setShowSuggestionModal] = useState(false);
+  const [suggestionName, setSuggestionName] = useState('');
+  const [suggestionCategory, setSuggestionCategory] = useState('');
+  const [suggestionDescription, setSuggestionDescription] = useState('');
+  const [suggestionWhy, setSuggestionWhy] = useState('');
+  const [submittingSuggestion, setSubmittingSuggestion] = useState(false);
+  const [suggestionError, setSuggestionError] = useState<string | null>(null);
+  const [suggestionSuccess, setSuggestionSuccess] = useState(false);
+
+  // Expanded skill groups state
+  const [expandedSkillGroups, setExpandedSkillGroups] = useState<string[]>([]);
+
+  const groupedSkills = useMemo(() => {
+    return serviceCatalog.reduce<Record<string, ServiceCatalogItem[]>>((acc, service) => {
+      const key = (service.general_skill || service.category || 'general').toLowerCase();
+      if (!acc[key]) acc[key] = [];
+      acc[key].push(service);
+      return acc;
+    }, {});
+  }, [serviceCatalog]);
+
+  const skillGroups = useMemo(
+    () =>
+      Object.entries(groupedSkills).sort(([a], [b]) => a.localeCompare(b)),
+    [groupedSkills]
+  );
+
+  useEffect(() => {
+    loadProfile();
+    loadServiceCatalog();
+  }, []);
+
+  const loadServiceCatalog = async () => {
+    try {
+      const res = await fetch('/api/catalog/services');
+      const data = await res.json();
+      if (res.ok && data.services) {
+        setServiceCatalog(data.services);
+      }
+    } catch (err) {
+      console.error('Failed to load service catalog:', err);
+    }
+  };
+
+  const handleSubmitSuggestion = async () => {
+    if (!suggestionName.trim()) {
+      setSuggestionError('Service name is required');
+      return;
+    }
+
+    setSubmittingSuggestion(true);
+    setSuggestionError(null);
+
+    try {
+      const res = await fetch('/api/agent/suggest-service', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({
+          name: suggestionName,
+          category: suggestionCategory,
+          description: suggestionDescription,
+          why_needed: suggestionWhy,
+        }),
+      });
+
+      const data = await res.json();
+
+      if (!res.ok) {
+        throw new Error(data.error || 'Failed to submit suggestion');
+      }
+
+      setSuggestionSuccess(true);
+      setSuggestionName('');
+      setSuggestionCategory('');
+      setSuggestionDescription('');
+      setSuggestionWhy('');
+
+      // Close modal after 2 seconds
+      setTimeout(() => {
+        setShowSuggestionModal(false);
+        setSuggestionSuccess(false);
+      }, 2000);
+    } catch (err) {
+      setSuggestionError(err instanceof Error ? err.message : 'Failed to submit suggestion');
+    } finally {
+      setSubmittingSuggestion(false);
+    }
+  };
+
+  useEffect(() => {
+    loadPayoutStatus();
+    return () => {
+      // Cleanup embedded component when unmounting
+      if (mountedComponentRef.current?.unmount) {
+        mountedComponentRef.current.unmount();
+      }
+    };
+  }, []);
+
+  const loadProfile = async () => {
+    setLoading(true);
+    setError(null);
+
+    try {
+      const res = await fetch('/api/agent/profile');
+      const data = await res.json();
+
+      if (!res.ok) {
+        throw new Error(data.error || 'Failed to load profile');
+      }
+
+      const p = data.profile;
+      setProfile(p);
+      setFirstName(p.first_name || '');
+      setLastName(p.last_name || '');
+      setPhone(p.phone || '');
+      setBio(p.bio || '');
+      setSkills(p.skills || []);
+      setServiceArea(p.service_area_miles || 25);
+      setLocationLatitude(p.location_latitude || null);
+      setLocationLongitude(p.location_longitude || null);
+      setAutoBookingEnabled(p.auto_booking_enabled || false);
+    } catch (err) {
+      setError(err instanceof Error ? err.message : 'Failed to load profile');
+    } finally {
+      setLoading(false);
+    }
+  };
+
+  const handleSaveProfile = async () => {
+    setSaving(true);
+    setError(null);
+    setSuccess(null);
+
+    try {
+      const res = await fetch('/api/agent/profile', {
+        method: 'PUT',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({
+          first_name: firstName,
+          last_name: lastName,
+          phone,
+          bio,
+          skills,
+          service_area_miles: serviceArea,
+          location_latitude: locationLatitude,
+          location_longitude: locationLongitude,
+          auto_booking_enabled: autoBookingEnabled,
+        }),
+      });
+
+      const data = await res.json();
+
+      if (!res.ok) {
+        throw new Error(data.error || 'Failed to save profile');
+      }
+
+      setSuccess('Profile updated successfully');
+      await loadProfile();
+    } catch (err) {
+      setError(err instanceof Error ? err.message : 'Failed to save profile');
+    } finally {
+      setSaving(false);
+    }
+  };
+
+  const toggleSkillGroup = (serviceIds: string[]) => {
+    setSkills((prev) => {
+      const allSelected = serviceIds.every((id) => prev.includes(id));
+      if (allSelected) {
+        return prev.filter((id) => !serviceIds.includes(id));
+      }
+      const next = new Set(prev);
+      serviceIds.forEach((id) => next.add(id));
+      return Array.from(next);
+    });
+  };
+
+  const toggleSingleService = (serviceId: string) => {
+    setSkills((prev) => {
+      if (prev.includes(serviceId)) {
+        return prev.filter((id) => id !== serviceId);
+      }
+      return [...prev, serviceId];
+    });
+  };
+
+  const toggleExpandedGroup = (skillKey: string) => {
+    setExpandedSkillGroups((prev) => {
+      if (prev.includes(skillKey)) {
+        return prev.filter((key) => key !== skillKey);
+      }
+      return [...prev, skillKey];
+    });
+  };
+
+  const handleGetLocation = () => {
+    if (!navigator.geolocation) {
+      setLocationError('Geolocation is not supported by your browser');
+      return;
+    }
+
+    setGettingLocation(true);
+    setLocationError(null);
+
+    navigator.geolocation.getCurrentPosition(
+      (position) => {
+        setLocationLatitude(position.coords.latitude);
+        setLocationLongitude(position.coords.longitude);
+        setGettingLocation(false);
+      },
+      (error) => {
+        setGettingLocation(false);
+        switch (error.code) {
+          case error.PERMISSION_DENIED:
+            setLocationError('Location permission denied. Please enable location access.');
+            break;
+          case error.POSITION_UNAVAILABLE:
+            setLocationError('Location information is unavailable.');
+            break;
+          case error.TIMEOUT:
+            setLocationError('Location request timed out.');
+            break;
+          default:
+            setLocationError('An unknown error occurred.');
+        }
+      },
+      { enableHighAccuracy: true, timeout: 10000, maximumAge: 0 }
+    );
+  };
+
+  const clearLocation = () => {
+    setLocationLatitude(null);
+    setLocationLongitude(null);
+  };
+
+  const loadPayoutStatus = async () => {
+    setPayoutLoading(true);
+    setPayoutError(null);
+    try {
+      const res = await fetch('/api/agent/bank-account');
+      const data = await res.json();
+      if (!res.ok) {
+        throw new Error(data.error || 'Failed to load payout status');
+      }
+      const statusLabel = data.payouts_enabled
+        ? 'Payouts enabled'
+        : data.status === 'pending'
+          ? 'Pending verification'
+          : 'Not connected';
+      setPayoutStatus(statusLabel);
+    } catch (err) {
+      setPayoutError(err instanceof Error ? err.message : 'Failed to load payout status');
+    } finally {
+      setPayoutLoading(false);
+    }
+  };
+
+  const startEmbeddedConnect = async (mode: 'onboarding' | 'management') => {
+    setPayoutError(null);
+    setPayoutLoading(true);
+
+    try {
+      if (!embedContainerRef.current) {
+        throw new Error('Payout setup container not ready');
+      }
+
+      const res = await fetch('/api/agent/connect/session', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ mode }),
+      });
+
+      const data = await res.json();
+      if (!res.ok || !data.client_secret) {
+        throw new Error(data.error || 'Unable to start payout setup');
+      }
+
+      if (!process.env.NEXT_PUBLIC_STRIPE_PUBLISHABLE_KEY) {
+        throw new Error('Missing NEXT_PUBLIC_STRIPE_PUBLISHABLE_KEY');
+      }
+
+      // Tear down any existing component
+      if (mountedComponentRef.current?.unmount) {
+        mountedComponentRef.current.unmount();
+      } else if (mountedComponentRef.current && embedContainerRef.current) {
+        embedContainerRef.current.removeChild(mountedComponentRef.current);
+      }
+      mountedComponentRef.current = null;
+
+      const clientSecret = data.client_secret as string;
+      const connectInstance = loadConnectAndInitialize({
+        publishableKey: process.env.NEXT_PUBLIC_STRIPE_PUBLISHABLE_KEY,
+        fetchClientSecret: async () => clientSecret,
+        appearance: {
+          variables: { colorPrimary: '#0f766e' },
+        },
+      });
+
+      const component = connectInstance.create(
+        mode === 'management' ? 'account-management' : 'account-onboarding'
+      );
+
+      if (embedContainerRef.current) {
+        embedContainerRef.current.appendChild(component);
+      }
+      mountedComponentRef.current = component;
+      setActiveComponent(mode);
+    } catch (err) {
+      setPayoutError(err instanceof Error ? err.message : 'Unable to load payout setup');
+    } finally {
+      setPayoutLoading(false);
+    }
+  };
+
+  const getStatusBadge = () => {
+    if (!profile) return null;
+
+    switch (profile.status) {
+      case 'approved':
+        return <span className="rounded-full bg-emerald-100 px-3 py-1 text-sm font-medium text-emerald-700">Approved</span>;
+      case 'pending_approval':
+        return <span className="rounded-full bg-amber-100 px-3 py-1 text-sm font-medium text-amber-700">Pending Approval</span>;
+      case 'suspended':
+        return <span className="rounded-full bg-rose-100 px-3 py-1 text-sm font-medium text-rose-700">Suspended</span>;
+      default:
+        return null;
+    }
+  };
+
+  if (loading) {
+    return (
+      <div className="flex items-center justify-center py-12">
+        <div className="text-center">
+          <div className="mb-3 inline-block h-8 w-8 animate-spin rounded-full border-4 border-emerald-200 border-t-emerald-700"></div>
+          <p className="text-sm text-slate-600">Loading settings...</p>
+        </div>
+      </div>
+    );
+  }
+
+  return (
+    <div className="mx-auto max-w-3xl space-y-6">
+      {/* Appearance */}
+      <div className="rounded-xl border border-slate-200 bg-white p-5 shadow-sm">
+        <div className="flex items-center justify-between gap-3">
+          <div>
+            <h3 className="text-lg font-semibold text-slate-900">Appearance</h3>
+            <p className="text-sm text-slate-500">Switch between light and dark mode</p>
+          </div>
+          <div className="flex rounded-full border border-slate-200 bg-slate-50 p-1 text-xs font-semibold text-slate-700">
+            {(['light', 'dark', 'system'] as const).map((value) => (
+              <button
+                key={value}
+                className={`rounded-full px-3 py-1 transition ${
+                  theme === value ? 'bg-white shadow-sm ring-1 ring-slate-200' : ''
+                }`}
+                onClick={() => setTheme(value)}
+              >
+                {value === 'system' ? 'System' : value === 'dark' ? 'Dark' : 'Light'}
+              </button>
+            ))}
+          </div>
+        </div>
+      </div>
+
+      {/* Account Status */}
+      <div className="rounded-xl border border-slate-200 bg-white p-5 shadow-sm">
+        <div className="flex items-center justify-between">
+          <div>
+            <h3 className="text-lg font-semibold text-slate-900">Account Status</h3>
+            <p className="text-sm text-slate-500">Your agent account status</p>
+          </div>
+          {getStatusBadge()}
+        </div>
+
+        {profile?.status === 'pending_approval' && (
+          <div className="mt-4 rounded-lg bg-amber-50 px-4 py-3 text-sm text-amber-700">
+            Your account is pending approval. You&apos;ll be able to accept gigs once approved.
+          </div>
+        )}
+      </div>
+
+      {/* Profile Info */}
+      <div className="rounded-xl border border-slate-200 bg-white p-5 shadow-sm">
+        <h3 className="text-lg font-semibold text-slate-900">Profile Information</h3>
+        <p className="text-sm text-slate-500">Update your personal details</p>
+
+        {error && (
+          <div className="mt-4 rounded-lg border border-rose-200 bg-rose-50 px-4 py-3 text-sm text-rose-700">
+            {error}
+          </div>
+        )}
+
+        {success && (
+          <div className="mt-4 rounded-lg border border-emerald-200 bg-emerald-50 px-4 py-3 text-sm text-emerald-700">
+            {success}
+          </div>
+        )}
+
+        <div className="mt-6 space-y-4">
+          <div className="grid gap-4 sm:grid-cols-2">
+            <div>
+              <label className="block text-sm font-medium text-slate-700">First Name</label>
+              <input
+                type="text"
+                value={firstName}
+                onChange={(e) => setFirstName(e.target.value)}
+                className="mt-1 w-full rounded-lg border border-slate-300 px-3 py-2 text-sm focus:border-emerald-500 focus:outline-none focus:ring-1 focus:ring-emerald-500"
+              />
+            </div>
+            <div>
+              <label className="block text-sm font-medium text-slate-700">Last Name</label>
+              <input
+                type="text"
+                value={lastName}
+                onChange={(e) => setLastName(e.target.value)}
+                className="mt-1 w-full rounded-lg border border-slate-300 px-3 py-2 text-sm focus:border-emerald-500 focus:outline-none focus:ring-1 focus:ring-emerald-500"
+              />
+            </div>
+          </div>
+
+          <div>
+            <label className="block text-sm font-medium text-slate-700">Email</label>
+            <input
+              type="email"
+              value={profile?.email || ''}
+              disabled
+              className="mt-1 w-full rounded-lg border border-slate-200 bg-slate-50 px-3 py-2 text-sm text-slate-500"
+            />
+            <p className="mt-1 text-xs text-slate-500">Email cannot be changed</p>
+          </div>
+
+          <div>
+            <label className="block text-sm font-medium text-slate-700">Phone</label>
+            <input
+              type="tel"
+              value={phone}
+              onChange={(e) => setPhone(e.target.value)}
+              className="mt-1 w-full rounded-lg border border-slate-300 px-3 py-2 text-sm focus:border-emerald-500 focus:outline-none focus:ring-1 focus:ring-emerald-500"
+            />
+          </div>
+
+          <div>
+            <label className="block text-sm font-medium text-slate-700">Bio</label>
+            <textarea
+              value={bio}
+              onChange={(e) => setBio(e.target.value)}
+              rows={3}
+              placeholder="Tell customers about yourself and your experience..."
+              className="mt-1 w-full rounded-lg border border-slate-300 px-3 py-2 text-sm focus:border-emerald-500 focus:outline-none focus:ring-1 focus:ring-emerald-500"
+            />
+          </div>
+        </div>
+      </div>
+
+      {/* Skills */}
+      <div className="rounded-xl border border-slate-200 bg-white p-5 shadow-sm">
+        <h3 className="text-lg font-semibold text-slate-900">Skills & Services</h3>
+        <p className="text-sm text-slate-500">Select skill groups or expand to choose individual services</p>
+
+        <div className="mt-4 space-y-2">
+          {skillGroups.map(([skillKey, services]) => {
+            const serviceIds = services.map((service) => service.id);
+            const selectedCount = serviceIds.filter((id) => skills.includes(id)).length;
+            const isSelected = selectedCount === serviceIds.length && serviceIds.length > 0;
+            const isPartial = selectedCount > 0 && !isSelected;
+            const isExpanded = expandedSkillGroups.includes(skillKey);
+            const meta = GENERAL_SKILL_META[skillKey] || {
+              label: formatSkillLabel(skillKey),
+              icon: services[0]?.icon || '🧰',
+            };
+
+            return (
+              <div key={skillKey} className="rounded-lg border border-slate-200 overflow-hidden">
+                {/* Group Header */}
+                <div
+                  className={`flex items-center gap-3 px-4 py-3 ${
+                    isSelected
+                      ? 'bg-emerald-50'
+                      : isPartial
+                        ? 'bg-amber-50'
+                        : 'bg-white'
+                  }`}
+                >
+                  {/* Checkbox for group */}
+                  <button
+                    type="button"
+                    onClick={() => toggleSkillGroup(serviceIds)}
+                    className={`flex h-5 w-5 shrink-0 items-center justify-center rounded border-2 transition ${
+                      isSelected
+                        ? 'border-emerald-500 bg-emerald-500 text-white'
+                        : isPartial
+                          ? 'border-amber-500 bg-amber-500 text-white'
+                          : 'border-slate-300 hover:border-slate-400'
+                    }`}
+                  >
+                    {isSelected && (
+                      <svg className="h-3 w-3" fill="currentColor" viewBox="0 0 12 12">
+                        <path d="M10.28 2.28L3.989 8.575 1.695 6.28A1 1 0 00.28 7.695l3 3a1 1 0 001.414 0l7-7A1 1 0 0010.28 2.28z" />
+                      </svg>
+                    )}
+                    {isPartial && <span className="h-2 w-2 rounded-sm bg-white" />}
+                  </button>
+
+                  <span className="text-lg">{meta.icon}</span>
+                  <div className="min-w-0 flex-1">
+                    <p className="text-sm font-medium text-slate-900">{meta.label}</p>
+                    <p className="text-xs text-slate-500">
+                      {selectedCount}/{serviceIds.length} services
+                    </p>
+                  </div>
+
+                  {/* Expand/Collapse button */}
+                  <button
+                    type="button"
+                    onClick={() => toggleExpandedGroup(skillKey)}
+                    className="rounded p-1 text-slate-400 hover:bg-slate-100 hover:text-slate-600"
+                  >
+                    <svg
+                      className={`h-5 w-5 transition-transform ${isExpanded ? 'rotate-180' : ''}`}
+                      fill="none"
+                      viewBox="0 0 24 24"
+                      stroke="currentColor"
+                    >
+                      <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M19 9l-7 7-7-7" />
+                    </svg>
+                  </button>
+                </div>
+
+                {/* Expanded Services List */}
+                {isExpanded && (
+                  <div className="border-t border-slate-200 bg-slate-50 px-4 py-2">
+                    <div className="grid gap-1">
+                      {services.map((service) => {
+                        const isServiceSelected = skills.includes(service.id);
+                        return (
+                          <button
+                            key={service.id}
+                            type="button"
+                            onClick={() => toggleSingleService(service.id)}
+                            className={`flex items-center gap-3 rounded-md px-3 py-2 text-left text-sm transition ${
+                              isServiceSelected
+                                ? 'bg-emerald-100 text-emerald-800'
+                                : 'hover:bg-slate-100 text-slate-700'
+                            }`}
+                          >
+                            <span
+                              className={`flex h-4 w-4 shrink-0 items-center justify-center rounded border ${
+                                isServiceSelected
+                                  ? 'border-emerald-500 bg-emerald-500 text-white'
+                                  : 'border-slate-300'
+                              }`}
+                            >
+                              {isServiceSelected && (
+                                <svg className="h-2.5 w-2.5" fill="currentColor" viewBox="0 0 12 12">
+                                  <path d="M10.28 2.28L3.989 8.575 1.695 6.28A1 1 0 00.28 7.695l3 3a1 1 0 001.414 0l7-7A1 1 0 0010.28 2.28z" />
+                                </svg>
+                              )}
+                            </span>
+                            <span>{service.name}</span>
+                          </button>
+                        );
+                      })}
+                    </div>
+                  </div>
+                )}
+              </div>
+            );
+          })}
+        </div>
+
+        {serviceCatalog.length === 0 && (
+          <p className="mt-4 text-sm text-slate-500">Loading services...</p>
+        )}
+
+        {/* Suggest a Service */}
+        <div className="mt-6 rounded-lg border border-dashed border-slate-300 bg-slate-50 p-4">
+          <div className="flex items-center justify-between">
+            <div>
+              <h4 className="text-sm font-medium text-slate-900">Don&apos;t see your skill?</h4>
+              <p className="text-sm text-slate-500">Suggest a new service to be added</p>
+            </div>
+            <button
+              type="button"
+              onClick={() => setShowSuggestionModal(true)}
+              className="rounded-lg border border-emerald-500 px-3 py-2 text-sm font-medium text-emerald-700 hover:bg-emerald-50"
+            >
+              Suggest Service
+            </button>
+          </div>
+        </div>
+      </div>
+
+      {/* Service Area & Location */}
+      <div className="rounded-xl border border-slate-200 bg-white p-5 shadow-sm">
+        <h3 className="text-lg font-semibold text-slate-900">Service Area & Location</h3>
+        <p className="text-sm text-slate-500">Set your home location and how far you&apos;re willing to travel</p>
+
+        {/* Home Location */}
+        <div className="mt-4 rounded-lg border border-slate-200 bg-slate-50 p-4">
+          <div className="flex items-center justify-between">
+            <div>
+              <h4 className="text-sm font-medium text-slate-900">Your Location</h4>
+              {locationLatitude && locationLongitude ? (
+                <p className="text-sm text-emerald-600">
+                  Location set ({locationLatitude.toFixed(4)}, {locationLongitude.toFixed(4)})
+                </p>
+              ) : (
+                <p className="text-sm text-slate-500">No location set - gigs won&apos;t be filtered by distance</p>
+              )}
+            </div>
+            <div className="flex gap-2">
+              <button
+                type="button"
+                onClick={handleGetLocation}
+                disabled={gettingLocation}
+                className="rounded-lg bg-emerald-600 px-3 py-2 text-sm font-semibold text-white hover:bg-emerald-700 disabled:bg-emerald-400"
+              >
+                {gettingLocation ? 'Getting...' : locationLatitude ? 'Update Location' : 'Use Current Location'}
+              </button>
+              {locationLatitude && (
+                <button
+                  type="button"
+                  onClick={clearLocation}
+                  className="rounded-lg border border-slate-300 px-3 py-2 text-sm font-medium text-slate-700 hover:bg-slate-100"
+                >
+                  Clear
+                </button>
+              )}
+            </div>
+          </div>
+          {locationError && (
+            <p className="mt-2 text-sm text-rose-600">{locationError}</p>
+          )}
+          <p className="mt-2 text-xs text-slate-500">
+            Your location is used to calculate distances to jobs. We only show gigs within your service radius.
+          </p>
+        </div>
+
+        {/* Service Radius */}
+        <div className="mt-4">
+          <label className="block text-sm font-medium text-slate-700">
+            Service Radius: {serviceArea} miles
+          </label>
+          <input
+            type="range"
+            min="5"
+            max="50"
+            step="5"
+            value={serviceArea}
+            onChange={(e) => setServiceArea(parseInt(e.target.value))}
+            className="mt-2 w-full"
+          />
+          <div className="mt-1 flex justify-between text-xs text-slate-500">
+            <span>5 miles</span>
+            <span>50 miles</span>
+          </div>
+        </div>
+
+        {/* Auto-Booking */}
+        <div className="mt-6 rounded-lg border border-slate-200 bg-slate-50 p-4">
+          <div className="flex items-center justify-between">
+            <div>
+              <h4 className="text-sm font-medium text-slate-900">Auto-Booking</h4>
+              <p className="text-sm text-slate-500">Automatically receive job offers based on your skills and area</p>
+            </div>
+            <button
+              type="button"
+              onClick={() => setAutoBookingEnabled(!autoBookingEnabled)}
+              className={`relative inline-flex h-6 w-11 shrink-0 cursor-pointer rounded-full border-2 border-transparent transition-colors duration-200 ease-in-out focus:outline-none focus:ring-2 focus:ring-emerald-500 focus:ring-offset-2 ${
+                autoBookingEnabled ? 'bg-emerald-600' : 'bg-slate-200'
+              }`}
+            >
+              <span
+                className={`pointer-events-none inline-block h-5 w-5 transform rounded-full bg-white shadow ring-0 transition duration-200 ease-in-out ${
+                  autoBookingEnabled ? 'translate-x-5' : 'translate-x-0'
+                }`}
+              />
+            </button>
+          </div>
+          {autoBookingEnabled && (
+            <div className="mt-3 rounded-lg bg-emerald-50 border border-emerald-200 px-3 py-2 text-sm text-emerald-700">
+              <strong>Auto-booking is ON.</strong> You&apos;ll receive priority job offers based on:
+              <ul className="mt-1 list-disc list-inside text-xs">
+                <li>Your referred clients (highest priority)</li>
+                <li>Your rating and proximity to the job</li>
+                <li>Your selected skills</li>
+              </ul>
+            </div>
+          )}
+          {!locationLatitude && autoBookingEnabled && (
+            <p className="mt-2 text-xs text-amber-600">
+              Set your location above for best results with auto-booking.
+            </p>
+          )}
+        </div>
+      </div>
+
+      {/* Save Button */}
+      <div className="flex justify-end">
+        <button
+          onClick={handleSaveProfile}
+          disabled={saving}
+          className="rounded-lg bg-emerald-600 px-6 py-2.5 text-sm font-semibold text-white transition hover:bg-emerald-700 disabled:bg-emerald-400"
+        >
+          {saving ? 'Saving...' : 'Save Changes'}
+        </button>
+      </div>
+
+      {/* Payment Setup */}
+      <div className="rounded-xl border border-slate-200 bg-white p-5 shadow-sm">
+        <h3 className="text-lg font-semibold text-slate-900">Payment Setup</h3>
+        <p className="text-sm text-slate-500">
+          Add or update the bank/card we use for payouts and instant cash out. Managed securely with Stripe embedded components.
+        </p>
+        <div className="mt-4 grid gap-4">
+          <div className="flex flex-wrap items-center justify-between gap-3">
+            <div>
+              <p className="text-sm font-medium text-slate-800">
+                {payoutLoading ? 'Checking payout status...' : payoutStatus || 'Payout status unknown'}
+              </p>
+              {payoutError && <p className="text-sm text-rose-600">{payoutError}</p>}
+            </div>
+            <div className="flex flex-wrap gap-2">
+              <button
+                onClick={() => startEmbeddedConnect('onboarding')}
+                disabled={payoutLoading}
+                className="rounded-lg bg-emerald-600 px-3 py-2 text-sm font-semibold text-white hover:bg-emerald-700 disabled:bg-slate-300"
+              >
+                {activeComponent === 'onboarding' && payoutLoading ? 'Loading...' : 'Start onboarding'}
+              </button>
+              <button
+                onClick={() => startEmbeddedConnect('management')}
+                disabled={payoutLoading}
+                className="rounded-lg border border-slate-200 px-3 py-2 text-sm font-semibold text-slate-800 hover:border-emerald-500 disabled:bg-slate-200"
+              >
+                {activeComponent === 'management' && payoutLoading ? 'Loading...' : 'Manage payouts'}
+              </button>
+              <button
+                onClick={loadPayoutStatus}
+                disabled={payoutLoading}
+                className="rounded-lg border border-slate-200 px-3 py-2 text-sm font-semibold text-slate-700 hover:border-slate-300 disabled:bg-slate-200"
+              >
+                Refresh status
+              </button>
+            </div>
+          </div>
+
+          <div
+            ref={embedContainerRef}
+            className="min-h-[400px] rounded-lg border border-dashed border-slate-300 bg-slate-50 p-4"
+          >
+            {!activeComponent && (
+              <p className="text-sm text-slate-500">
+                Launch onboarding or management to load the embedded payout setup here.
+              </p>
+            )}
+          </div>
+
+          <div className="rounded-lg border border-slate-200 p-4">
+            <h4 className="text-sm font-semibold text-slate-900">Job payment methods</h4>
+            <p className="text-sm text-slate-600">
+              Cards you store for job charges and instant confirmations live in your wallet.
+            </p>
+            <div className="mt-3">
+              <WalletSettings />
+            </div>
+          </div>
+        </div>
+      </div>
+
+      {/* Service Suggestion Modal */}
+      {showSuggestionModal && (
+        <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/50 p-4">
+          <div className="w-full max-w-md rounded-xl bg-white p-6 shadow-xl">
+            {suggestionSuccess ? (
+              <div className="text-center">
+                <div className="mx-auto mb-4 flex h-12 w-12 items-center justify-center rounded-full bg-emerald-100">
+                  <svg className="h-6 w-6 text-emerald-600" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+                    <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M5 13l4 4L19 7" />
+                  </svg>
+                </div>
+                <h3 className="text-lg font-semibold text-slate-900">Suggestion Submitted!</h3>
+                <p className="mt-1 text-sm text-slate-500">We&apos;ll review your suggestion soon.</p>
+              </div>
+            ) : (
+              <>
+                <h3 className="text-lg font-semibold text-slate-900">Suggest a New Service</h3>
+                <p className="mt-1 text-sm text-slate-500">
+                  Tell us about a service you can provide that&apos;s not listed.
+                </p>
+
+                {suggestionError && (
+                  <div className="mt-4 rounded-lg border border-rose-200 bg-rose-50 px-4 py-3 text-sm text-rose-700">
+                    {suggestionError}
+                  </div>
+                )}
+
+                <div className="mt-4 space-y-4">
+                  <div>
+                    <label className="block text-sm font-medium text-slate-700">
+                      Service Name <span className="text-rose-500">*</span>
+                    </label>
+                    <input
+                      type="text"
+                      value={suggestionName}
+                      onChange={(e) => setSuggestionName(e.target.value)}
+                      placeholder="e.g., Pool Cleaning, Fence Repair"
+                      className="mt-1 w-full rounded-lg border border-slate-300 px-3 py-2 text-sm focus:border-emerald-500 focus:outline-none focus:ring-1 focus:ring-emerald-500"
+                    />
+                  </div>
+
+                  <div>
+                    <label className="block text-sm font-medium text-slate-700">Category</label>
+                    <input
+                      type="text"
+                      value={suggestionCategory}
+                      onChange={(e) => setSuggestionCategory(e.target.value)}
+                      placeholder="e.g., Outdoor, Electrical, Plumbing"
+                      className="mt-1 w-full rounded-lg border border-slate-300 px-3 py-2 text-sm focus:border-emerald-500 focus:outline-none focus:ring-1 focus:ring-emerald-500"
+                    />
+                  </div>
+
+                  <div>
+                    <label className="block text-sm font-medium text-slate-700">Description</label>
+                    <textarea
+                      value={suggestionDescription}
+                      onChange={(e) => setSuggestionDescription(e.target.value)}
+                      rows={2}
+                      placeholder="What does this service include?"
+                      className="mt-1 w-full rounded-lg border border-slate-300 px-3 py-2 text-sm focus:border-emerald-500 focus:outline-none focus:ring-1 focus:ring-emerald-500"
+                    />
+                  </div>
+
+                  <div>
+                    <label className="block text-sm font-medium text-slate-700">Why is this service needed?</label>
+                    <textarea
+                      value={suggestionWhy}
+                      onChange={(e) => setSuggestionWhy(e.target.value)}
+                      rows={2}
+                      placeholder="Tell us why customers would want this..."
+                      className="mt-1 w-full rounded-lg border border-slate-300 px-3 py-2 text-sm focus:border-emerald-500 focus:outline-none focus:ring-1 focus:ring-emerald-500"
+                    />
+                  </div>
+                </div>
+
+                <div className="mt-6 flex gap-3">
+                  <button
+                    type="button"
+                    onClick={() => {
+                      setShowSuggestionModal(false);
+                      setSuggestionError(null);
+                    }}
+                    className="flex-1 rounded-lg border border-slate-300 px-4 py-2.5 text-sm font-medium text-slate-700 hover:bg-slate-50"
+                  >
+                    Cancel
+                  </button>
+                  <button
+                    type="button"
+                    onClick={handleSubmitSuggestion}
+                    disabled={submittingSuggestion}
+                    className="flex-1 rounded-lg bg-emerald-600 px-4 py-2.5 text-sm font-semibold text-white hover:bg-emerald-700 disabled:bg-emerald-400"
+                  >
+                    {submittingSuggestion ? 'Submitting...' : 'Submit Suggestion'}
+                  </button>
+                </div>
+              </>
+            )}
+          </div>
+        </div>
+      )}
+    </div>
+  );
+}
