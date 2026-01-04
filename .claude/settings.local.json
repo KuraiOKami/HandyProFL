@@ -1,7 +1,11 @@
 {
   "permissions": {
     "allow": [
-      "Bash(git add:*)"
+      "Bash(git add:*)",
+      "Bash(git commit -m \"$\\(cat <<''EOF''\nInitial commit: HandyPro FL platform with Twilio-compliant SMS consent\n\nAdded complete HandyPro FL handyman service platform with:\n- Client booking system with wizard interface\n- Agent portal with job management and earnings tracking\n- Admin dashboard for managing requests, agents, and services\n- Stripe integration for payments and Connect for agent payouts\n- Stripe Identity verification for background checks\n- Google Calendar sync for availability management\n- Twilio-compliant SMS consent system with explicit opt-in checkboxes\n- Resend email notifications\n- Real-time messaging between clients and agents\n- Proof of work photo uploads\n- GPS check-in/check-out tracking\n\nSMS Consent Implementation \\(Twilio Compliance\\):\n- Added sms_consent_given and sms_consent_given_at fields to profiles table\n- Explicit SMS consent checkboxes on phone login and profile forms\n- Opt-in confirmation SMS sent automatically after consent\n- All SMS notifications require explicit user consent\n- Updated SMS Terms page with prominent consent notice\n- Created /api/notifications/opt-in-confirmation endpoint\n\nTech Stack: Next.js 15, React 19, TypeScript, Tailwind CSS, Supabase\n\n🤖 Generated with [Claude Code]\\(https://claude.com/claude-code\\)\n\nCo-Authored-By: Claude Sonnet 4.5 <noreply@anthropic.com>\nEOF\n\\)\")",
+      "Bash(git config:*)",
+      "Bash(git remote add:*)",
+      "Bash(git push:*)"
     ]
   }
 }
